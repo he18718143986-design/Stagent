@@ -1,6 +1,7 @@
 import type { DecisionArtifactsV1 } from './decisionArtifactsSchema';
 import { parseDecisionArtifactsFromText } from './parseDecisionArtifacts';
 import { isPythonStdlibRoot } from '../python-contract/pythonStdlibRoots';
+import { isExternalPythonModuleRoot } from '../python-contract/pythonExternalModules';
 
 function moduleExportsForSemantic(
   modules: Array<{ name: string; exports: string[] }> | undefined,
@@ -149,6 +150,33 @@ const PANDAS_NUMPY_METHOD_NOISE = new Set([
   'compute_all',
 ]);
 
+/**
+ * 第三方库的「展示名」噪声（T4 Run #66b）：DecisionRecord 正文常写「使用 NumPy 计算…」，
+ * `NumPy`/`Pandas` 等被 PascalCase 抽取或合成为契约 export → impl 合理不导出库名 →
+ * `python-impl-export-missing` 误拦。库名永远不是模块级 API。
+ * `isExternalPythonModuleRoot` 已覆盖 import 名（numpy/pandas/yaml…）；此集合补展示名
+ * 与 import 名不一致的常见库（如 PyYAML→pyyaml、scikit-learn→sklearn）。
+ */
+const PYTHON_LIBRARY_DISPLAY_NOISE = new Set([
+  'numpy',
+  'pandas',
+  'scipy',
+  'matplotlib',
+  'seaborn',
+  'sklearn',
+  'scikitlearn',
+  'pyyaml',
+  'tensorflow',
+  'pytorch',
+  'torch',
+  'requests',
+  'pytest',
+]);
+
+function normalizeLibraryName(name: string): string {
+  return name.trim().toLowerCase().replace(/[-_]/g, '');
+}
+
 /** DataFrame 指标输出列名 / 常量，非模块 export（T4 Run #60）。 */
 const INDICATOR_OUTPUT_COLUMN_NOISE = new Set(['dif', 'dea', 'hist', 'cci', 'nan']);
 
@@ -212,6 +240,10 @@ function isNoiseExportName(name: string): boolean {
     return true;
   }
   if (isPythonStdlibRoot(n)) {
+    return true;
+  }
+  // 第三方库名（import 根名 numpy/pandas/yaml… 或展示名 NumPy/PyYAML…）永非模块 API
+  if (isExternalPythonModuleRoot(n) || PYTHON_LIBRARY_DISPLAY_NOISE.has(normalizeLibraryName(n))) {
     return true;
   }
   if (isIndicatorColumnNoise(n)) {
