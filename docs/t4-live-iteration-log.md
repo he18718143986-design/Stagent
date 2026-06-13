@@ -13,6 +13,48 @@
 
 ---
 
+## 运行 #66 — 2026-06-13（behaviorSpec 拒绝挂死 + NumPy export 噪声根治 → strict delivery ✅ GREEN）
+
+| 字段 | 值 |
+|------|-----|
+| 命令 | `node scripts/headless/run.mjs --live --scenario execute --live-tier 4 --keep --workspace /tmp/t4-run/task` |
+| 模型 | main `deepseek-v4-flash` / test-write+integration `deepseek-v4-pro`（异族出题人 + Run #65 integration 路由） |
+| 耗时 | 1323.9s（22min；49 stages；29 calls；in 147860 / out 143484 tok） |
+| headless 判定 | **PASS** `workflowCompleted` · **strict delivery 1/1** |
+| instance | `a692cb2e-…`（run3；run1=behaviorSpec 挂死，run2=NumPy export-missing 早败） |
+
+### 里程碑（史上首次 strict delivery GREEN）
+
+| 切片 | test_run |
+|------|----------|
+| indicators / signals / risk / broker / **main** | ✅ 全绿（signals 经 fix + `runtime_replan_fix_signals` 收敛） |
+| smoke_run / write_config / delivery_wrapup | ✅ |
+
+交付物：`config.yaml`（指标参数与需求逐项对齐：MA 5/6/7/8/9/11/20、BOLL 20+2、VOL 3+100、MACD 14+53+60、CCI 89、止损 15 点）、`indicators/`（compute_ma/boll/volume/macd/cci）、`signals/`（check_long/short_signal）、`risk/`（calculate_stop_loss/classify_order/should_stop_loss 四情形对冲）、`broker/`（BrokerAdapter 抽象 + SimBroker）、`main.py`、`tests/`（**复跑 83 passed**）、`DELIVERY.md`。
+
+### RCA（两个确定性引擎根因，先后暴露）
+
+**根因 A（run1 挂死）— 决策拒绝错误面不一致**：decide 阶段两条「批准被拒」路径文案不一致：内容 lint 拒绝恰好携带 `decisionLintRejected`（uiMsg 无 nls 时回退为 key），而 behaviorSpec 硬校验拒绝只发裸中文。AFK 驾驶员用「是否含 `decisionLintRejected`」判定重试 → behaviorSpec 拒绝（signals 缺 `decisionArtifacts.behaviorSpec`）永不重试 → decide stage 停 paused → 整轮挂死到 40min timeout。
+
+**根因 B（run2 早败）— 第三方库名被当 export**：`decide_indicators` 合成契约 exports `[calc_ma,calc_boll,calc_vol,calc_macd,calc_cci,NumPy]`，库展示名 `NumPy`（来自正文「使用 NumPy 计算…」）被抽成 export → impl 合理不导出库名 → `python-impl-export-missing` 误拦（与 #59/#60 datetime/index_sh 同类，但 PascalCase 库名漏网）。
+
+### 根治（本轮代码）
+
+| # | 机制 | 落点 |
+|---|------|------|
+| A1 | 决策拒绝 SSOT：`DECISION_LINT_REJECTED_MARKER` + `formatDecisionRejectionError(kind,detail)` + `isDecisionLintRejectedError` + `decisionRejectionKindFromError`；两条拒绝路径统一格式化，错误恒含可机读 marker + kind | `hitl/DecisionRejection.ts`、`hitl/DecisionLintGate.ts` |
+| A2 | `buildBehaviorSpecRetryUserComment()`：behaviorSpec 拒绝注入「补机读行为规格」反馈（而非 I-17 章节）；headless 用 SSOT 谓词 + 按 kind 选反馈 | `DecisionRecordVerify.ts`、`index.ts`、`scripts/headless/run.mjs` |
+| B1 | 第三方库名（import 根名 numpy/pandas/yaml… 或展示名 NumPy/PyYAML）不得作为 export | `commitment/decisionRecordExports.isNoiseExportName`（`isExternalPythonModuleRoot` + 展示名集合） |
+| - | 单测：`decision-rejection.test.ts`（5 例，含 behaviorSpec 拒绝可检测回归）、`decision-record-exports.test.ts`（NumPy/Pandas 剔除）；`@stagent/core` **907 pass**（3 fail 为预存环境性 ADR 校准种子缺失，详见末节） |
+
+> **判定**：架构按设计「失败单调前移」——run1 卡 signals decide（挂死），根治后 run3 一举推进到全切片 + main + smoke + delivery 全绿。证明主干（DAG + Plan Compiler + Gate/SSOT + fix/replan + 异族出题人 + integration 路由）在真实 T4 任务上可稳定产出高质量可交付 MVP。
+
+### 预存环境性单测缺口（非本轮回归）
+
+`detectAdrCriteria` / `evaluateAdrDetector` / `loadAdrCalibrationQuestions` 读取仓库外 `…/.stagent/charter/calibration/questions.jsonl`（gitignored 本地校准种子），本环境解析到 `/.stagent/…` 不存在 → 3 fail。建议把校准种子纳入仓库使单测自洽（需确认 ground-truth 数据，避免臆造）。
+
+---
+
 ## 运行 #63 — 2026-06-13（全新工作区；signals behavior-spec 与契约 exports 冲突）
 
 | 字段 | 值 |
