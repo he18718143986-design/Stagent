@@ -12,6 +12,7 @@ import {
   STAGE_TOOL_LLM_TEXT,
 } from '../workflow/StageToolKinds';
 import { isTestWriteStageId } from '../workflow/StageIdPatterns';
+import { writeOutputToFileOf } from '../workflow/StageToolConfigAccess';
 import { DELIVERY_WRAPUP_STAGE_ID } from './deliveryWrapupStage';
 import { looksLikeServeCommand, SMOKE_RUN_STAGE_ID } from './smokeStage';
 
@@ -53,7 +54,7 @@ function hasImplDeliverable(stages: Stage[]): boolean {
     (s) =>
       isLlmTextTool(s.tool) &&
       !isTestWriteStageId(s.id) &&
-      !!(s.toolConfig as LlmTextConfig).writeOutputToFile?.trim(),
+      !!writeOutputToFileOf(s),
   );
 }
 

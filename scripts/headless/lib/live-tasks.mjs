@@ -158,6 +158,33 @@ export function prepareT4IterWorkspace(repoRoot, opts = {}) {
 }
 
 /**
+ * --resume：从工作区找 status=running 的 instance，跳过 generate 直接续跑。
+ * @param {string} workspaceRoot
+ * @returns {{ instanceKey: string, workflow: object } | null}
+ */
+export function findResumableInstance(workspaceRoot) {
+  const instRoot = path.join(workspaceRoot, '.stagent', 'instances')
+  if (!fs.existsSync(instRoot)) {
+    return null
+  }
+  for (const key of fs.readdirSync(instRoot)) {
+    const statePath = path.join(instRoot, key, '.wf-state.json')
+    if (!fs.existsSync(statePath)) {
+      continue
+    }
+    try {
+      const state = JSON.parse(fs.readFileSync(statePath, 'utf8'))
+      if (state.status === 'running' && state.definition?.stages?.length) {
+        return { instanceKey: key, workflow: state.definition }
+      }
+    } catch {
+      /* skip corrupt state */
+    }
+  }
+  return null
+}
+
+/**
  * @param {string | number} tier
  */
 export function resolveLiveTiers(tier) {

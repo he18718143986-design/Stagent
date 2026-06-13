@@ -41,6 +41,7 @@ import {
   defaultT4Workspace,
   isT4FamilyTier,
   prepareT4IterWorkspace,
+  findResumableInstance,
   resolveLiveTiers,
 } from './lib/live-tasks.mjs'
 import { MOCK_MODEL_ID, startMockLlmServer } from './lib/mock-llm-server.mjs'
@@ -650,60 +651,91 @@ async function runFullJourney(ctx, spec) {
     const engine = new WorkflowEngine(platform)
     engine.setPreferredModelFamily(`direct:${llm.model}`)
 
-    if (spec.polish) {
-      trace.setPhase('polish')
-      await engine.polishUserTask(spec.userInput, spec.taskType, ws)
-      if (!sent.some((m) => msgType(m) === 'userTaskPolished')) {
-        throw new Error(`polish failed — messages: ${sent.map(msgType).join(', ')}`)
-      }
-    }
+    const resumePayload = ctx.resume ? findResumableInstance(ws) : null
+    let workflow
+    let instanceKey
+    let stageCount = 0
 
-    trace.setPhase('generate')
-    const maxGenAttempts = spec.generationAttempts ?? 1
-    let gen
-    for (let attempt = 1; attempt <= maxGenAttempts; attempt++) {
-      if (attempt > 1) {
-        trace.log('generate_retry', { attempt, maxGenAttempts })
-        await sleep(4000)
+    if (resumePayload) {
+      trace.setPhase('resume')
+      trace.log('resume_instance', { instanceKey: resumePayload.instanceKey })
+      workflow = { ...resumePayload.workflow }
+      if (!workflow.meta) {
+        workflow.meta = {}
       }
-      await engine.generateWorkflow(spec.userInput, spec.taskType, ws)
-
-      const genFailed = sent.find((m) => msgType(m) === 'workflowFailed')
-      if (genFailed && typeof genFailed === 'object' && genFailed !== null) {
-        const reason = 'reason' in genFailed ? String(genFailed.reason) : 'unknown'
-        if (attempt < maxGenAttempts) continue
-        throw new Error(`generate failed: ${reason}`)
-      }
-
-      gen = [...sent].reverse().find((m) => msgType(m) === 'workflowGenerated')
-      if (!gen || typeof gen !== 'object' || gen === null) {
-        const tail = sent.map(msgType).slice(-8).join(', ')
-        if (attempt < maxGenAttempts) continue
-        throw new Error(`generate missing — last messages: ${tail}`)
-      }
-      if ('blocked' in gen && gen.blocked) {
-        const reasons =
-          'blockReasons' in gen && Array.isArray(gen.blockReasons) ? gen.blockReasons : []
-        if (attempt < maxGenAttempts) {
-          trace.log('generate_blocked_retry', { attempt, reasons })
-          continue
+      workflow.meta.taskWorkspacePath = path.resolve(ws)
+      instanceKey = resumePayload.instanceKey
+      stageCount = Array.isArray(workflow.stages) ? workflow.stages.length : 0
+    } else {
+      if (spec.polish) {
+        trace.setPhase('polish')
+        await engine.polishUserTask(spec.userInput, spec.taskType, ws)
+        if (!sent.some((m) => msgType(m) === 'userTaskPolished')) {
+          throw new Error(`polish failed — messages: ${sent.map(msgType).join(', ')}`)
         }
-        throw new Error(`workflow blocked: ${reasons.join('; ')}`)
       }
-      break
-    }
-    if (!gen || typeof gen !== 'object' || gen === null) {
-      throw new Error('generate missing after retries')
-    }
 
-    const stageCount =
-      'workflow' in gen &&
-      typeof gen.workflow === 'object' &&
-      gen.workflow !== null &&
-      'stages' in gen.workflow &&
-      Array.isArray(gen.workflow.stages)
-        ? gen.workflow.stages.length
-        : 0
+      trace.setPhase('generate')
+      const maxGenAttempts = spec.generationAttempts ?? 1
+      let gen
+      for (let attempt = 1; attempt <= maxGenAttempts; attempt++) {
+        if (attempt > 1) {
+          trace.log('generate_retry', { attempt, maxGenAttempts })
+          await sleep(4000)
+        }
+        await engine.generateWorkflow(spec.userInput, spec.taskType, ws)
+
+        const genFailed = sent.find((m) => msgType(m) === 'workflowFailed')
+        if (genFailed && typeof genFailed === 'object' && genFailed !== null) {
+          const reason = 'reason' in genFailed ? String(genFailed.reason) : 'unknown'
+          if (attempt < maxGenAttempts) continue
+          throw new Error(`generate failed: ${reason}`)
+        }
+
+        gen = [...sent].reverse().find((m) => msgType(m) === 'workflowGenerated')
+        if (!gen || typeof gen !== 'object' || gen === null) {
+          const tail = sent.map(msgType).slice(-8).join(', ')
+          if (attempt < maxGenAttempts) continue
+          throw new Error(`generate missing — last messages: ${tail}`)
+        }
+        if ('blocked' in gen && gen.blocked) {
+          const reasons =
+            'blockReasons' in gen && Array.isArray(gen.blockReasons) ? gen.blockReasons : []
+          if (attempt < maxGenAttempts) {
+            trace.log('generate_blocked_retry', { attempt, reasons })
+            continue
+          }
+          throw new Error(`workflow blocked: ${reasons.join('; ')}`)
+        }
+        break
+      }
+      if (!gen || typeof gen !== 'object' || gen === null) {
+        throw new Error('generate missing after retries')
+      }
+
+      stageCount =
+        'workflow' in gen &&
+        typeof gen.workflow === 'object' &&
+        gen.workflow !== null &&
+        'stages' in gen.workflow &&
+        Array.isArray(gen.workflow.stages)
+          ? gen.workflow.stages.length
+          : 0
+
+      workflow =
+        'workflow' in gen && typeof gen.workflow === 'object' && gen.workflow !== null
+          ? { ...gen.workflow }
+          : undefined
+      if (!workflow) {
+        throw new Error('workflowGenerated missing workflow payload')
+      }
+      if (!workflow.meta) {
+        workflow.meta = {}
+      }
+      workflow.meta.taskWorkspacePath = path.resolve(ws)
+      instanceKey =
+        'instanceKey' in gen && gen.instanceKey ? String(gen.instanceKey) : undefined
+    }
 
     if (spec.pass?.minStages && stageCount < spec.pass.minStages) {
       throw new Error(`stage count ${stageCount} < min ${spec.pass.minStages}`)
@@ -711,20 +743,6 @@ async function runFullJourney(ctx, spec) {
     if (spec.pass?.maxStages && stageCount > spec.pass.maxStages) {
       throw new Error(`stage count ${stageCount} > max ${spec.pass.maxStages}`)
     }
-
-    const workflow =
-      'workflow' in gen && typeof gen.workflow === 'object' && gen.workflow !== null
-        ? { ...gen.workflow }
-        : undefined
-    if (!workflow) {
-      throw new Error('workflowGenerated missing workflow payload')
-    }
-    if (!workflow.meta) {
-      workflow.meta = {}
-    }
-    workflow.meta.taskWorkspacePath = path.resolve(ws)
-    const instanceKey =
-      'instanceKey' in gen && gen.instanceKey ? String(gen.instanceKey) : undefined
 
     trace.setPhase('start_execution')
     await engine.startExecution(workflow, instanceKey)

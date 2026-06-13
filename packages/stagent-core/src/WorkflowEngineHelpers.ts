@@ -49,7 +49,7 @@ export function hoistStageWriteOutputToToolConfig(wf: WorkflowDefinition): Workf
       writePathBase?: ToolPathBase;
     };
     if (typeof top.writeOutputToFile === 'string' && top.writeOutputToFile.trim()) {
-      if (!tc.writeOutputToFile?.trim()) {
+      if (typeof tc.writeOutputToFile !== 'string' || !tc.writeOutputToFile.trim()) {
         tc.writeOutputToFile = top.writeOutputToFile.trim();
       }
       delete top.writeOutputToFile;
@@ -60,7 +60,7 @@ export function hoistStageWriteOutputToToolConfig(wf: WorkflowDefinition): Workf
       }
       delete top.writePathBase;
     }
-    if (tc.writeOutputToFile?.trim() && !tc.writePathBase) {
+    if (typeof tc.writeOutputToFile === 'string' && tc.writeOutputToFile.trim() && !tc.writePathBase) {
       tc.writePathBase = DEFAULT_TOOL_PATH_BASE;
     }
   }

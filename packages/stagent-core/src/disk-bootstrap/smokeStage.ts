@@ -12,6 +12,7 @@ import {
   STAGE_TOOL_CODE_RUNNER,
 } from '../workflow/StageToolKinds';
 import { isTestRunStageId } from '../workflow/StageIdPatterns';
+import { writeOutputToFileOf } from '../workflow/StageToolConfigAccess';
 import { DELIVERY_WRAPUP_STAGE_ID } from './deliveryWrapupStage';
 
 /** B-Q1 有界 smoke 阶段固定 id。 */
@@ -76,7 +77,7 @@ function deriveStartFromEntry(stages: Stage[]): DerivedStart | null {
     if (!isLlmTextTool(s.tool)) {
       continue;
     }
-    const out = (s.toolConfig as LlmTextConfig).writeOutputToFile?.trim();
+    const out = writeOutputToFileOf(s);
     if (out) {
       files.push(out.replace(/\\/g, '/'));
     }

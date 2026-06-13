@@ -13,6 +13,35 @@
 
 ---
 
+## 运行 #62 — 2026-06-13（#61 export gate 切片 scope 修复后；进程中断后续跑）
+
+| 字段 | 值 |
+|------|-----|
+| 耗时 | ~17min（**中断** @ broker test_write） |
+| headless 判定 | **中断**（非 FAIL；`--resume` 续跑） |
+| instance | `2d3c7864-84af-4dda-b08b-039b99ae8fc9` |
+
+### 里程碑
+
+| 阶段 | 状态 |
+|------|------|
+| indicators | ✅ test_run 绿 |
+| signals | ✅ test_run 绿 |
+| **risk** | ✅ **test_run 绿**（fix 1 次后通过；**#61 切片 scope 修复生效**） |
+| broker | ⏸ test_write 进行中（LLM 流式输出时进程被杀） |
+
+### 验证
+
+- `stage_test_run_risk` 前置 export gate **仅扫** `tests/test_risk.py`，不再误拦 signals
+- risk 首次 impl 红 → fix 1 次 → 二次 test_run exit 0
+
+### 附带修复
+
+- 补 `scripts/headless/lib/demo-delivery-acceptance.mjs`（Run #62 启动时缺模块）
+- Resume 续跑：`findResumableInstance` 跳过 generate；`writeOutputToFile` 非 string 时 disk-bootstrap 不再 `.trim()` 崩溃
+
+---
+
 ## 运行 #61 — 2026-06-13（#60 列名噪声修复后；risk test_run 全局 export gate 误伤 signals）
 
 | 字段 | 值 |

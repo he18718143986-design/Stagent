@@ -2,6 +2,7 @@ import type { Stage, SkipCondition } from '../WorkflowDefinition';
 import type { LlmTextConfig } from '../workflow-types/StageTypes';
 import { isLlmTextTool, STAGE_TOOL_LLM_TEXT } from '../workflow/StageToolKinds';
 import { isTestWriteStageId } from '../workflow/StageIdPatterns';
+import { writeOutputToFileOf } from '../workflow/StageToolConfigAccess';
 import { DELIVERY_WRAPUP_TEXT } from '../generated/PromptFragments';
 
 /** 交付收口阶段固定 id（末尾追加，幂等）。 */
@@ -20,7 +21,7 @@ export function collectDeliverableFilePaths(stages: Stage[]): string[] {
     if (!isLlmTextTool(s.tool)) {
       continue;
     }
-    const out = (s.toolConfig as LlmTextConfig).writeOutputToFile?.trim();
+    const out = writeOutputToFileOf(s);
     if (out) {
       paths.push(out);
     }
@@ -52,7 +53,7 @@ export function injectDeliveryWrapupStage(stages: Stage[]): Stage[] {
     (s) =>
       isLlmTextTool(s.tool) &&
       !isTestWriteStageId(s.id) &&
-      !!(s.toolConfig as LlmTextConfig).writeOutputToFile?.trim(),
+      !!writeOutputToFileOf(s),
   );
   if (!hasImplDeliverable) {
     return stages;
