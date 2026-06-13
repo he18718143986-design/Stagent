@@ -1,0 +1,44 @@
+{
+  "id": "wf_fixture_pass",
+  "version": "2.0",
+  "meta": {
+    "title": "fixture pass",
+    "taskType": "software",
+    "userInput": "fixture",
+    "createdAt": "2026-05-08T00:00:00.000Z"
+  },
+  "stages": [
+    {
+      "id": "stage_decide_sidebar",
+      "title": "decide sidebar",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "decision" },
+      "input": {
+        "sources": [{ "type": "user-input", "label": "需求" }],
+        "mergeStrategy": "concat"
+      },
+      "outputs": [{ "key": "decisionRecord", "format": "markdown" }],
+      "pauseAfter": true,
+      "isDecisionStage": true
+    },
+    {
+      "id": "stage_impl_sidebar",
+      "title": "impl sidebar",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "严格按照已确认的决策清单实现，不得偏离。如发现清单中存在矛盾，在代码注释中标注。" },
+      "input": {
+        "sources": [
+          {
+            "type": "stage-output",
+            "stageId": "stage_decide_sidebar",
+            "outputKey": "decisionRecord",
+            "label": "已确认的决策清单"
+          }
+        ],
+        "mergeStrategy": "concat"
+      },
+      "outputs": [{ "key": "code", "format": "text" }],
+      "pauseAfter": false
+    }
+  ]
+}

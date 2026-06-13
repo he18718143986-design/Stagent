@@ -1,0 +1,23 @@
+{
+  "timestamp": "2026-06-13T00:00:00.000Z",
+  "commit": "test-commit",
+  "scenarios": [
+    {
+      "id": "t4",
+      "status": "fail",
+      "failurePhase": "stage_test_run_signals",
+      "lastGoodPhase": "stage_impl_signals",
+      "error": "fix chain exhausted @ signals pytest exit 1",
+      "elapsedMs": 364953,
+      "workspace": "/tmp/T4/.headless-iter",
+      "instanceKey": "test-instance",
+      "stageCount": 42,
+      "llmUsage": {
+        "calls": 12,
+        "promptTokens": 45000,
+        "completionTokens": 8000,
+        "estimatedCalls": 0
+      }
+    }
+  ]
+}

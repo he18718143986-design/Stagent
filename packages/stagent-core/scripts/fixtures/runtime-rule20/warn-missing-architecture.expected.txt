@@ -1,0 +1,15 @@
+# 开关 ON 时 workflowGenerated.warnings 预期值
+# 即 Rule20RuntimeGate.buildGeneratorWarnings() 返回值
+[
+  "rule20-soft:software-missing-global-architecture-decision:workflow"
+]
+
+# 解读：
+# - 阶段数 16 < 45：无 stage_count_near_limit
+# - 8 个 stage_impl_* > 5：触发 Rule 20 §7.8.2 全局架构决策检查
+# - workflow 中**无**任何匹配 /^stage_decide_(architecture_overview|architecture|global_|...)/ 的决策阶段
+#   → verifyRule20 推入 warnings: software-missing-global-architecture-decision
+# - 每个 impl 都有 decide pair / decisionRecord source / 约束 prompt → 无 violations
+# - 无 stage_test_run_* → to-issues 专项规则不触发
+# - 开关 OFF（显式 false）：workflowGenerated.warnings === [] —— 该 warning 被静默；
+#   开关 ON：用户在确认页 #wf-warn 行能看到 "警告：rule20-soft:software-missing-global-architecture-decision:workflow"

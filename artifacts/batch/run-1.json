@@ -1,0 +1,28 @@
+{
+  "timestamp": "2026-06-10T22:48:04.001Z",
+  "commit": "cba1747c",
+  "mode": "mock",
+  "scenarios": [
+    {
+      "id": "generate",
+      "status": "pass",
+      "elapsedMs": 27,
+      "workspace": "/var/folders/xg/n2h4n38946xf0gvl0_4gcrt00000gn/T/stagent-feedback-XcUhHy/task",
+      "instanceKey": "5cc25ee1-c87b-482a-9ff0-097cce9016de",
+      "stageCount": 4,
+      "messageTypes": [
+        "generationProgress",
+        "generationProgress",
+        "streamChunk",
+        "generationProgress",
+        "generationProgress",
+        "workflowGenerated"
+      ]
+    }
+  ],
+  "summary": {
+    "passed": 1,
+    "failed": 0,
+    "total": 1
+  }
+}

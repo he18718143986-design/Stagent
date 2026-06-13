@@ -1,0 +1,164 @@
+{
+  "id": "wf_runtime_warn_arch",
+  "version": "2.0",
+  "meta": {
+    "title": "VS Code TODO 管理器（多模块缺架构决策）",
+    "taskType": "software",
+    "userInput": "实现一个 VS Code TODO 注释管理器插件",
+    "createdAt": "2026-05-12T00:00:00.000Z"
+  },
+  "stages": [
+    {
+      "id": "stage_decide_scanner",
+      "title": "decide scanner",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "decision" },
+      "input": { "sources": [{ "type": "user-input", "label": "需求" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "decisionRecord", "format": "markdown" }],
+      "pauseAfter": true,
+      "isDecisionStage": true
+    },
+    {
+      "id": "stage_impl_scanner",
+      "title": "impl scanner",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "严格按照已确认的决策清单实现，不得偏离。" },
+      "input": { "sources": [{ "type": "stage-output", "stageId": "stage_decide_scanner", "outputKey": "decisionRecord", "label": "决策" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "code", "format": "text" }],
+      "pauseAfter": false
+    },
+    {
+      "id": "stage_decide_treeview",
+      "title": "decide treeview",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "decision" },
+      "input": { "sources": [{ "type": "user-input", "label": "需求" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "decisionRecord", "format": "markdown" }],
+      "pauseAfter": true,
+      "isDecisionStage": true
+    },
+    {
+      "id": "stage_impl_treeview",
+      "title": "impl treeview",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "严格按照已确认的决策清单实现，不得偏离。" },
+      "input": { "sources": [{ "type": "stage-output", "stageId": "stage_decide_treeview", "outputKey": "decisionRecord", "label": "决策" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "code", "format": "text" }],
+      "pauseAfter": false
+    },
+    {
+      "id": "stage_decide_activation",
+      "title": "decide activation",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "decision" },
+      "input": { "sources": [{ "type": "user-input", "label": "需求" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "decisionRecord", "format": "markdown" }],
+      "pauseAfter": true,
+      "isDecisionStage": true
+    },
+    {
+      "id": "stage_impl_activation",
+      "title": "impl activation",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "严格按照已确认的决策清单实现，不得偏离。" },
+      "input": { "sources": [{ "type": "stage-output", "stageId": "stage_decide_activation", "outputKey": "decisionRecord", "label": "决策" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "code", "format": "text" }],
+      "pauseAfter": false
+    },
+    {
+      "id": "stage_decide_refresh",
+      "title": "decide refresh",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "decision" },
+      "input": { "sources": [{ "type": "user-input", "label": "需求" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "decisionRecord", "format": "markdown" }],
+      "pauseAfter": true,
+      "isDecisionStage": true
+    },
+    {
+      "id": "stage_impl_refresh",
+      "title": "impl refresh",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "严格按照已确认的决策清单实现，不得偏离。" },
+      "input": { "sources": [{ "type": "stage-output", "stageId": "stage_decide_refresh", "outputKey": "decisionRecord", "label": "决策" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "code", "format": "text" }],
+      "pauseAfter": false
+    },
+    {
+      "id": "stage_decide_commands",
+      "title": "decide commands",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "decision" },
+      "input": { "sources": [{ "type": "user-input", "label": "需求" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "decisionRecord", "format": "markdown" }],
+      "pauseAfter": true,
+      "isDecisionStage": true
+    },
+    {
+      "id": "stage_impl_commands",
+      "title": "impl commands",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "严格按照已确认的决策清单实现，不得偏离。" },
+      "input": { "sources": [{ "type": "stage-output", "stageId": "stage_decide_commands", "outputKey": "decisionRecord", "label": "决策" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "code", "format": "text" }],
+      "pauseAfter": false
+    },
+    {
+      "id": "stage_decide_packaging",
+      "title": "decide packaging",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "decision" },
+      "input": { "sources": [{ "type": "user-input", "label": "需求" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "decisionRecord", "format": "markdown" }],
+      "pauseAfter": true,
+      "isDecisionStage": true
+    },
+    {
+      "id": "stage_impl_packaging",
+      "title": "impl packaging",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "严格按照已确认的决策清单实现，不得偏离。" },
+      "input": { "sources": [{ "type": "stage-output", "stageId": "stage_decide_packaging", "outputKey": "decisionRecord", "label": "决策" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "code", "format": "text" }],
+      "pauseAfter": false
+    },
+    {
+      "id": "stage_decide_readme",
+      "title": "decide readme",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "decision" },
+      "input": { "sources": [{ "type": "user-input", "label": "需求" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "decisionRecord", "format": "markdown" }],
+      "pauseAfter": true,
+      "isDecisionStage": true
+    },
+    {
+      "id": "stage_impl_readme",
+      "title": "impl readme",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "严格按照已确认的决策清单实现，不得偏离。" },
+      "input": { "sources": [{ "type": "stage-output", "stageId": "stage_decide_readme", "outputKey": "decisionRecord", "label": "决策" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "code", "format": "text" }],
+      "pauseAfter": false
+    },
+    {
+      "id": "stage_decide_tsconfig",
+      "title": "decide tsconfig",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "decision" },
+      "input": { "sources": [{ "type": "user-input", "label": "需求" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "decisionRecord", "format": "markdown" }],
+      "pauseAfter": true,
+      "isDecisionStage": true
+    },
+    {
+      "id": "stage_impl_tsconfig",
+      "title": "impl tsconfig",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "严格按照已确认的决策清单实现，不得偏离。" },
+      "input": { "sources": [{ "type": "stage-output", "stageId": "stage_decide_tsconfig", "outputKey": "decisionRecord", "label": "决策" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "code", "format": "text" }],
+      "pauseAfter": false
+    }
+  ]
+}

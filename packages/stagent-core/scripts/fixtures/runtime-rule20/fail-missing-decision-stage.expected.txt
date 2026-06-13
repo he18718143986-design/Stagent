@@ -1,0 +1,21 @@
+# 开关 ON 时 workflowGenerated.warnings 预期值
+# 即 Rule20RuntimeGate.buildGeneratorWarnings() 返回值
+[
+  "rule20:missing-decision-stage:stage_impl_treeview",
+  "rule20:missing-decisionRecord-source:stage_impl_treeview",
+  "rule20:missing-constraint-prompt:stage_impl_treeview"
+]
+
+# 解读：
+# - stage_impl_treeview 同时违反 3 条 Rule 20 硬性约束：
+#   (1) 找不到同 semanticName 的 stage_decide_treeview（也没声明 exposeAssumptions=true 豁免）
+#   (2) input.sources 无 stage-output + outputKey=decisionRecord + stageId 形如 stage_decide_*
+#   (3) systemPrompt 不含"严格按照已确认的决策清单实现"约束
+# - 注意：当前 verifyRule20 把这三类都归为 violations 而非 warnings。
+#   M14.4 灰度承诺"只暴露不阻断"：即使 verifyRule20.passed=false，引擎仍照常推 workflowGenerated；
+#   用户在确认页 #wf-warn 看到 3 条 rule20:* 行，但可以选择继续运行（升 HARD 拦截路径见 v2.8.1）。
+# - 开关 OFF（显式 `stagent.enableRuntimeRule20Verify: false`）：workflowGenerated.warnings === [] —— 用户看不到这些严重信号，与 v2.7 行为字节级等价。
+#
+# 实测建议：
+# - 实跑测试时如果 AI 输出了类似形态（impl 无对应 decide），把实际 .warnings 行截图，
+#   对照本 expected.txt 验证 M14.4 链路确实串通。

@@ -1,0 +1,25 @@
+{
+  "$schema": "stagent/change-manifest/v1",
+  "targetRun": 54,
+  "createdAt": "2026-06-13",
+  "evidence": "Run #53 草稿基准；失败 @ stage_test_run_signals；fix chain exhausted @ signals pytest exit 1",
+  "rootCause": "例：testfix replan 未注入 behaviorSpec edge_rules",
+  "changes": [
+    {
+      "id": "chg-1",
+      "files": [
+        "packages/stagent-core/src/..."
+      ],
+      "what": "例：buildBehaviorSpecPromptSuffix 接入 testfix",
+      "failurePattern": "例：signals testfix 边界假红"
+    }
+  ],
+  "predictedFixes": [
+    "例：signals test_run exit 0",
+    "例：Run #45 类 _set_ideal_* 顺序假红不再复现"
+  ],
+  "predictedRegressions": [
+    "例：indicators module-contract 漂移",
+    "例：plan generate parse_failed_retry"
+  ]
+}

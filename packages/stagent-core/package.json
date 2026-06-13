@@ -1,0 +1,12 @@
+{
+  "name": "@stagent/core",
+  "version": "0.7.0",
+  "private": true,
+  "description": "Stagent decision-first workflow engine — platform-neutral core (no vscode).",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "test": "npm run build && node --test dist/test/*.test.js"
+  }
+}

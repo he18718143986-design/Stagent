@@ -1,0 +1,52 @@
+{
+  "id": "wf_debug_warn_missing_verification",
+  "version": "2.0",
+  "meta": {
+    "title": "Debug Missing Verification",
+    "taskType": "debug",
+    "userInput": "排查内存泄漏",
+    "createdAt": "2026-05-09T10:12:00.000Z"
+  },
+  "stages": [
+    {
+      "id": "stage_decide_debug_scope",
+      "title": "决策调试范围",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "明确范围" },
+      "input": { "sources": [{ "type": "user-input", "label": "故障描述" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "decisionRecord", "format": "markdown" }],
+      "pauseAfter": true,
+      "isDecisionStage": true
+    },
+    {
+      "id": "stage_reproduce_debug_case",
+      "title": "复现故障",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "描述复现步骤与观测结果" },
+      "input": { "sources": [{ "type": "stage-output", "stageId": "stage_decide_debug_scope", "outputKey": "decisionRecord", "label": "决策" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "reproduceReport", "format": "markdown" }],
+      "pauseAfter": false
+    },
+    {
+      "id": "stage_hypothesis_debug_root_cause",
+      "title": "根因假设",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "输出根因假设" },
+      "input": { "sources": [{ "type": "stage-output", "stageId": "stage_reproduce_debug_case", "outputKey": "reproduceReport", "label": "复现结果" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "hypothesis", "format": "markdown" }],
+      "pauseAfter": false
+    },
+    {
+      "id": "stage_impl_debug_fix",
+      "title": "实现修复",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "按假设修复" },
+      "input": {
+        "sources": [{ "type": "stage-output", "stageId": "stage_hypothesis_debug_root_cause", "outputKey": "hypothesis", "label": "根因假设" }],
+        "mergeStrategy": "concat"
+      },
+      "outputs": [{ "key": "fixPatch", "format": "markdown" }],
+      "pauseAfter": false
+    }
+  ]
+}

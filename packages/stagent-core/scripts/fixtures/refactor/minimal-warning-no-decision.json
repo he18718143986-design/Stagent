@@ -1,0 +1,39 @@
+{
+  "id": "wf_refactor_warning_no_decision",
+  "version": "2.0",
+  "meta": {
+    "title": "Refactor Logger Pipeline",
+    "taskType": "refactor",
+    "userInput": "重构日志流水线，保持外部行为兼容",
+    "createdAt": "2026-05-09T07:31:00.000Z"
+  },
+  "stages": [
+    {
+      "id": "stage_test_write_logger_pipeline",
+      "title": "编写回归测试",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "编写测试" },
+      "input": { "sources": [{ "type": "user-input", "label": "需求" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "testPlan", "format": "markdown" }],
+      "pauseAfter": false
+    },
+    {
+      "id": "stage_impl_logger_pipeline",
+      "title": "实现日志流水线重构",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "严格按照已确认的决策清单实现，不得偏离。" },
+      "input": { "sources": [{ "type": "user-input", "label": "上下文" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "implPatch", "format": "markdown" }],
+      "pauseAfter": false
+    },
+    {
+      "id": "stage_test_run_logger_pipeline",
+      "title": "运行测试",
+      "tool": "code-runner",
+      "toolConfig": { "type": "code-runner", "command": "npm run test -- logger-pipeline", "captureOutput": true },
+      "input": { "sources": [{ "type": "stage-output", "stageId": "stage_impl_logger_pipeline", "outputKey": "implPatch", "label": "实现结果" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "report", "format": "markdown" }],
+      "pauseAfter": false
+    }
+  ]
+}

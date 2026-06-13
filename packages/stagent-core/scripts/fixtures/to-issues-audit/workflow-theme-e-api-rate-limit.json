@@ -1,0 +1,74 @@
+{
+  "id": "workflow_api_rate_limit_guard",
+  "version": "2.0",
+  "meta": {
+    "title": "API Rate Limit Guard",
+    "taskType": "software",
+    "userInput": "为公开 API 增加限流与退避策略，防止突发流量导致下游服务雪崩。",
+    "createdAt": "2026-05-09T14:50:00.000Z",
+    "isGreenfield": false
+  },
+  "stages": [
+    {
+      "id": "stage_zoom_out",
+      "title": "读取模块地图",
+      "tool": "file-read",
+      "toolConfig": { "type": "file-read", "filePath": "package.json" },
+      "input": { "sources": [{ "type": "user-input", "label": "需求" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "moduleMap", "format": "markdown" }],
+      "pauseAfter": false
+    },
+    {
+      "id": "stage_decide_rate_limit_guard",
+      "title": "决策限流守卫模块",
+      "isDecisionStage": true,
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "产出限流守卫决策清单，覆盖令牌桶参数、降级策略、告警阈值。" },
+      "input": {
+        "sources": [{ "type": "stage-output", "stageId": "stage_zoom_out", "outputKey": "moduleMap", "label": "模块映射" }],
+        "mergeStrategy": "concat"
+      },
+      "outputs": [{ "key": "decisionRecord", "format": "markdown" }],
+      "pauseAfter": true
+    },
+    {
+      "id": "stage_test_write_rate_limit_guard",
+      "title": "编写限流守卫测试",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "按稳态、突发、回退路径输出 rate_limit_guard 测试。" },
+      "input": {
+        "sources": [{ "type": "stage-output", "stageId": "stage_decide_rate_limit_guard", "outputKey": "decisionRecord", "label": "决策清单" }],
+        "mergeStrategy": "concat"
+      },
+      "outputs": [{ "key": "testPlan", "format": "markdown" }],
+      "pauseAfter": false
+    },
+    {
+      "id": "stage_impl_rate_limit_guard",
+      "title": "实现限流守卫",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "严格按照已确认的决策清单实现，不得偏离。如发现清单中存在矛盾，在代码注释中标注。" },
+      "input": {
+        "sources": [
+          { "type": "stage-output", "stageId": "stage_decide_rate_limit_guard", "outputKey": "decisionRecord", "label": "已确认的决策清单" },
+          { "type": "stage-output", "stageId": "stage_test_write_rate_limit_guard", "outputKey": "testPlan", "label": "测试计划" }
+        ],
+        "mergeStrategy": "concat"
+      },
+      "outputs": [{ "key": "implPatch", "format": "markdown" }],
+      "pauseAfter": false
+    },
+    {
+      "id": "stage_test_run_rate_limit_guard",
+      "title": "运行限流守卫测试",
+      "tool": "code-runner",
+      "toolConfig": { "type": "code-runner", "command": "npm run test -- rate-limit-guard", "captureOutput": true },
+      "input": {
+        "sources": [{ "type": "stage-output", "stageId": "stage_impl_rate_limit_guard", "outputKey": "implPatch", "label": "实现结果" }],
+        "mergeStrategy": "concat"
+      },
+      "outputs": [{ "key": "testReport", "format": "markdown" }],
+      "pauseAfter": false
+    }
+  ]
+}

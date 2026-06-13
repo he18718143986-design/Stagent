@@ -1,0 +1,118 @@
+{
+  "id": "wf_warn_global_arch",
+  "version": "2.0",
+  "meta": {
+    "title": "warn missing §7.8 global architecture",
+    "taskType": "software",
+    "userInput": "构建多模块订单与用户中心服务",
+    "createdAt": "2026-05-11T00:00:00.000Z"
+  },
+  "stages": [
+    {
+      "id": "stage_decide_order",
+      "title": "decide order slice",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "decision" },
+      "input": { "sources": [{ "type": "user-input", "label": "需求" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "decisionRecord", "format": "markdown" }],
+      "pauseAfter": true,
+      "isDecisionStage": true
+    },
+    {
+      "id": "stage_test_write_order",
+      "title": "tests order",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "write tests" },
+      "input": {
+        "sources": [
+          { "type": "stage-output", "stageId": "stage_decide_order", "outputKey": "decisionRecord", "label": "决策" }
+        ],
+        "mergeStrategy": "concat"
+      },
+      "outputs": [{ "key": "tests", "format": "markdown" }],
+      "pauseAfter": false
+    },
+    {
+      "id": "stage_impl_order",
+      "title": "impl order",
+      "tool": "llm-text",
+      "toolConfig": {
+        "type": "llm-text",
+        "systemPrompt": "严格按照已确认的决策清单实现，不得偏离。如发现清单中存在矛盾，在代码注释中标注。"
+      },
+      "input": {
+        "sources": [
+          { "type": "stage-output", "stageId": "stage_decide_order", "outputKey": "decisionRecord", "label": "已确认的决策清单" }
+        ],
+        "mergeStrategy": "concat"
+      },
+      "outputs": [{ "key": "code", "format": "text" }],
+      "pauseAfter": false
+    },
+    {
+      "id": "stage_test_run_order",
+      "title": "run order tests",
+      "tool": "code-runner",
+      "toolConfig": { "type": "code-runner", "command": "npm run test -- order-svc", "captureOutput": true },
+      "input": {
+        "sources": [{ "type": "stage-output", "stageId": "stage_impl_order", "outputKey": "code", "label": "实现" }],
+        "mergeStrategy": "concat"
+      },
+      "outputs": [{ "key": "report", "format": "markdown" }],
+      "pauseAfter": false
+    },
+    {
+      "id": "stage_decide_user",
+      "title": "decide user slice",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "decision" },
+      "input": { "sources": [{ "type": "user-input", "label": "需求" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "decisionRecord", "format": "markdown" }],
+      "pauseAfter": true,
+      "isDecisionStage": true
+    },
+    {
+      "id": "stage_test_write_user",
+      "title": "tests user",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "write tests" },
+      "input": {
+        "sources": [
+          { "type": "stage-output", "stageId": "stage_decide_user", "outputKey": "decisionRecord", "label": "决策" }
+        ],
+        "mergeStrategy": "concat"
+      },
+      "outputs": [{ "key": "tests", "format": "markdown" }],
+      "pauseAfter": false
+    },
+    {
+      "id": "stage_impl_user",
+      "title": "impl user",
+      "tool": "llm-text",
+      "toolConfig": {
+        "type": "llm-text",
+        "systemPrompt": "严格按照已确认的决策清单实现，不得偏离。如发现清单中存在矛盾，在代码注释中标注。"
+      },
+      "input": {
+        "sources": [
+          { "type": "stage-output", "stageId": "stage_decide_user", "outputKey": "decisionRecord", "label": "已确认的决策清单" }
+        ],
+        "mergeStrategy": "concat"
+      },
+      "outputs": [{ "key": "code", "format": "text" }],
+      "pauseAfter": false
+    },
+    {
+      "id": "stage_test_run_user",
+      "title": "run user tests",
+      "tool": "code-runner",
+      "toolConfig": { "type": "code-runner", "command": "npm run test -- user-svc", "captureOutput": true },
+      "input": {
+        "sources": [{ "type": "stage-output", "stageId": "stage_impl_user", "outputKey": "code", "label": "实现" }],
+        "mergeStrategy": "concat"
+      },
+      "outputs": [{ "key": "report", "format": "markdown" }],
+      "pauseAfter": false
+    }
+  ]
+}

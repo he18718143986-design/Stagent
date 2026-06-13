@@ -1,0 +1,1959 @@
+{
+ "source": "T4 Live Run #52 (instance 3ca5c7d3, 2026-06) — sanitize 后真实 plan；decide_signals 未产出 behaviorSpec（仅 warning）；smoke_run 因 LLM 402 中断",
+ "definition": {
+  "id": "wf_skeleton_75f09a97-7582-4914-978a-e57278f13414",
+  "version": "2.0",
+  "meta": {
+   "title": "在南华期货场景下开发「期货自动下单」软件（Python）。",
+   "taskType": "software",
+   "userInput": "在南华期货场景下开发「期货自动下单」软件（Python）。\n\n工作区已有需求文档 `需求分析-南华期货自动下单.md`，请以其为真源实现首版 MVP。\n\n核心能力：\n1. 指标：K线均线 5+6+7+8+9+11+20；BOLL 20+2；VOL 3+100；MACD 14+53+60；CCI 89\n2. 空信号（3分钟）：前五线并拢<2点后穿20日线；布林带横盘不做；VOL白线升+绿柱倍量；MACD近零轴绿柱加长；CCI二次下穿0轴；1分钟同向下穿20日线；上证+深证均在20日线下\n3. 多信号（3分钟）：前五线并拢<2点后穿20日线；横盘不做；VOL白线升+红柱倍量；MACD零轴上近零轴红柱加长；CCI半小时内二次上穿0轴；1分钟上穿20日线且1/3分钟带白点；上证+深证均在20日线上\n4. 止损15点：区分昨日对冲单与当日开单的多空对冲规则（详见需求文档第四节）\n5. 交付：config.yaml、indicators/、signals/、risk/、broker/（SimBroker+BrokerAdapter抽象）、main/cli、pytest、DELIVERY.md\n6. 首版不接实盘，仅模拟券商适配器；指数可用 mock/CSV\n\ntaskType 按 software 组织：多切片、完整交付；先架构决策，再 indicators/ signals/ risk/ broker/ 垂直切片实现与验证。",
+   "createdAt": "2026-06-12T08:18:14.601Z",
+   "isGreenfield": true,
+   "taskWorkspacePath": "/Users/tina/Documents/auto_skills/T4/.headless-iter",
+   "engineAutoInsertedGlobalArchitectureStageId": "stage_decide_architecture_overview",
+   "_lastRequirementsPipHash": "pytest\nnumpy\npandas\npyyaml\n"
+  },
+  "globalConfig": {
+   "language": "python",
+   "stackProfile": "python"
+  },
+  "stages": [
+   {
+    "id": "stage_decide_architecture_overview",
+    "title": "全局架构决策",
+    "description": "全局架构决策",
+    "tool": "llm-text",
+    "toolConfig": {
+     "type": "llm-text",
+     "systemPrompt": "你正在进行南华期货场景下的「期货自动下单」软件架构决策。基于需求文档 `需求分析-南华期货自动下单.md`，输出全局架构 DecisionRecord Markdown 正文。在正文之后，另起一行输出标记行 `## decisionArtifacts`，然后输出 JSON sidecar，其中必须包含 key `configContent`（内容为 config.yaml 的完整内容）和 `modules` 数组（包含全部五个模块的接口表）。每个模块接口表格式为 `{\"name\":\"<模块名>\",\"exports\":[\"符号1\",...]}`。领域约束：南华期货量化交易环境，支持K线均线、布林带、VOL、MACD、CCI指标；多空信号规则基于3分钟K线；止损15点规则区分昨日对冲单与当日开单。确保接口定义清晰，模块间依赖合理。\n\n\n\n\n\n===== 决策质量自检（在输出决策清单之前必须完成以下三项检查）=====\n\n【检查 1 - 边界压力测试】\n列出 2 个具体场景来压力测试你的设计方案。每个场景格式如下：\n\"当 <具体边界条件或极端情况> 时，本设计的行为是：<预期结果>。\n 若此行为不可接受，则需要修改决策：<需要调整的部分>\"\n这两个场景必须写入决策清单的\"边界压力测试\"节。\n\n【检查 2 - 隐含假设审计】\n对于每个关键设计决策，识别它依赖的隐含假设（那些你认为理所当然但用户可能不同意的前提）。\n每个假设格式如下：\n\"假设 <X> 成立。若 <X> 不成立，则需要改变：<受影响的设计决策>\"\n这些假设必须写入\"AI 无法验证的假设\"节。\n\n【检查 3 - 代码库冲突检测】\n仅当 input.sources 包含已有代码文件时执行：\n检查本决策是否与已有接口声明、类型定义、或现有模块的公开 API 存在矛盾。\n- 若发现矛盾：在决策清单最顶部插入 \"⚠️ 潜在冲突：<冲突描述>\"\n- 若无矛盾：在\"AI 无法验证的假设\"节末尾附加 \"已检查：与现有接口 <接口名列表> 无明显冲突\"\n若 input.sources 不包含已有代码：跳过此检查。\n\n完成三项检查后，输出符合 §4.4 格式的完整决策清单。\n===== 决策质量自检结束 =====\n\n\n【输出硬约束（必须满足）】\n你必须输出 DecisionRecord（Markdown），且只能使用以下四个二级标题（不得替换标题名）：\n### 职责边界\n### 关键设计决策\n### ★ 边界压力测试\n### AI 无法验证的假设\n\n额外要求：\n1) 不包含任何代码块（禁止 ```）。\n2) 总字数 <= 800。\n3) “关键设计决策”中每条都要写“为什么不选备选方案”。\n4) “★ 边界压力测试”至少 2 个场景，且每个场景必须写成**行首顶层**列表项（行首直接以 “- ”、“* ” 或编号 “1.”/“1)” 开头）；禁止用表格或纯段落承载，禁止写成缩进的子条目，否则内容校验按 0 计数并阻断批准。\n5) “AI 无法验证的假设”至少 1 条，同样每条写成**行首顶层**列表项（“- ”/“* ”/“1.” 均可；禁止表格、纯段落或缩进子条目）。\n6) 输出只包含该 DecisionRecord，不要教学说明、前后寒暄或额外小节。\n\n\n\n【决策机读 sidecar（decisionArtifacts）】\n在 DecisionRecord Markdown 正文之后，另起一行输出标记行：\n<!-- decisionArtifacts:json -->\n随后输出**唯一**一个 JSON 对象（不要用 markdown 围栏），结构：\n{\"version\":1,\"files\":[{\"key\":\"configContent\",\"path\":\"config.yaml\",\"format\":\"yaml\",\"content\":\"...\"}],\"modules\":[{\"name\":\"indicators\",\"exports\":[\"compute\"]}],\"dependencies\":[\"pytest\",\"numpy\",\"pandas\"],\"testStack\":\"pytest\"}\n- files[].key 供下游 file-write 的 sourceOutputKey 引用；content 为完整文件正文。\n- modules[]：全项目模块接口契约（name=Python 包名/切片语义名，exports=允许 test/impl 引用的公开符号）。\n- dependencies[]：允许 impl/fix 使用的第三方包根名（如 numpy、pandas）；未声明的包不得在代码中 import。\n- 全局架构决策须列出**全部**切片模块的 modules[]；若无额外落盘文件，files 可为 []。\n- DecisionRecord 正文仍禁止代码块；JSON sidecar 不受此限。\n\n===== 决策质量自检（在输出决策清单之前必须完成以下三项检查）=====\n\n【检查 1 - 边界压力测试】\n列出 2 个具体场景来压力测试你的设计方案。每个场景格式如下：\n\"当 <具体边界条件或极端情况> 时，本设计的行为是：<预期结果>。\n 若此行为不可接受，则需要修改决策：<需要调整的部分>\"\n这两个场景必须写入决策清单的\"边界压力测试\"节。\n\n【检查 2 - 隐含假设审计】\n对于每个关键设计决策，识别它依赖的隐含假设（那些你认为理所当然但用户可能不同意的前提）。\n每个假设格式如下：\n\"假设 <X> 成立。若 <X> 不成立，则需要改变：<受影响的设计决策>\"\n这些假设必须写入\"AI 无法验证的假设\"节。\n\n【检查 3 - 代码库冲突检测】\n仅当 input.sources 包含已有代码文件时执行：\n检查本决策是否与已有接口声明、类型定义、或现有模块的公开 API 存在矛盾。\n- 若发现矛盾：在决策清单最顶部插入 \"⚠️ 潜在冲突：<冲突描述>\"\n- 若无矛盾：在\"AI 无法验证的假设\"节末尾附加 \"已检查：与现有接口 <接口名列表> 无明显冲突\"\n若 input.sources 不包含已有代码：跳过此检查。\n\n完成三项检查后，输出符合 §4.4 格式的完整决策清单。\n===== 决策质量自检结束 =====\n",
+     "writePathBase": "workspace"
+    },
+    "input": {
+     "sources": [
+      {
+       "type": "user-input",
+       "label": "用户需求"
+      }
+     ],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "decisionRecord",
+      "format": "markdown"
+     },
+     {
+      "key": "decisionArtifacts",
+      "format": "json"
+     }
+    ],
+    "pauseAfter": true,
+    "isDecisionStage": true
+   },
+   {
+    "id": "stage_decide_indicators",
+    "title": "决策 · indicators",
+    "description": "决策 · indicators",
+    "tool": "llm-text",
+    "toolConfig": {
+     "type": "llm-text",
+     "systemPrompt": "你正在决策模块 `indicators` 的边界与接口合约。基于需求文档和全局架构决策，输出本模块的 DecisionRecord Markdown 正文。在正文之后，输出 JSON sidecar，其中 `modules` 数组包含恰好一条记录：`{\"name\":\"indicators\",\"exports\":[\"calculate_ma\",\"calculate_boll\",\"calculate_vol\",\"calculate_macd\",\"calculate_cci\"]}`。确保接口函数参数和返回值符合量化计算标准，支持南华期货的K线数据格式。\n\n\n\n\n\n===== 决策质量自检（在输出决策清单之前必须完成以下三项检查）=====\n\n【检查 1 - 边界压力测试】\n列出 2 个具体场景来压力测试你的设计方案。每个场景格式如下：\n\"当 <具体边界条件或极端情况> 时，本设计的行为是：<预期结果>。\n 若此行为不可接受，则需要修改决策：<需要调整的部分>\"\n这两个场景必须写入决策清单的\"边界压力测试\"节。\n\n【检查 2 - 隐含假设审计】\n对于每个关键设计决策，识别它依赖的隐含假设（那些你认为理所当然但用户可能不同意的前提）。\n每个假设格式如下：\n\"假设 <X> 成立。若 <X> 不成立，则需要改变：<受影响的设计决策>\"\n这些假设必须写入\"AI 无法验证的假设\"节。\n\n【检查 3 - 代码库冲突检测】\n仅当 input.sources 包含已有代码文件时执行：\n检查本决策是否与已有接口声明、类型定义、或现有模块的公开 API 存在矛盾。\n- 若发现矛盾：在决策清单最顶部插入 \"⚠️ 潜在冲突：<冲突描述>\"\n- 若无矛盾：在\"AI 无法验证的假设\"节末尾附加 \"已检查：与现有接口 <接口名列表> 无明显冲突\"\n若 input.sources 不包含已有代码：跳过此检查。\n\n完成三项检查后，输出符合 §4.4 格式的完整决策清单。\n===== 决策质量自检结束 =====\n\n\n【输出硬约束（必须满足）】\n你必须输出 DecisionRecord（Markdown），且只能使用以下四个二级标题（不得替换标题名）：\n### 职责边界\n### 关键设计决策\n### ★ 边界压力测试\n### AI 无法验证的假设\n\n额外要求：\n1) 不包含任何代码块（禁止 ```）。\n2) 总字数 <= 800。\n3) “关键设计决策”中每条都要写“为什么不选备选方案”。\n4) “★ 边界压力测试”至少 2 个场景，且每个场景必须写成**行首顶层**列表项（行首直接以 “- ”、“* ” 或编号 “1.”/“1)” 开头）；禁止用表格或纯段落承载，禁止写成缩进的子条目，否则内容校验按 0 计数并阻断批准。\n5) “AI 无法验证的假设”至少 1 条，同样每条写成**行首顶层**列表项（“- ”/“* ”/“1.” 均可；禁止表格、纯段落或缩进子条目）。\n6) 输出只包含该 DecisionRecord，不要教学说明、前后寒暄或额外小节。\n\n\n\n【决策机读 sidecar（decisionArtifacts）】\n在 DecisionRecord Markdown 正文之后，另起一行输出标记行：\n<!-- decisionArtifacts:json -->\n随后输出**唯一**一个 JSON 对象（不要用 markdown 围栏），结构：\n{\"version\":1,\"files\":[{\"key\":\"configContent\",\"path\":\"config.yaml\",\"format\":\"yaml\",\"content\":\"...\"}],\"modules\":[{\"name\":\"indicators\",\"exports\":[\"compute\"]}],\"dependencies\":[\"pytest\",\"numpy\",\"pandas\"],\"testStack\":\"pytest\"}\n- files[].key 供下游 file-write 的 sourceOutputKey 引用；content 为完整文件正文。\n- modules[]：全项目模块接口契约（name=Python 包名/切片语义名，exports=允许 test/impl 引用的公开符号）。\n- dependencies[]：允许 impl/fix 使用的第三方包根名（如 numpy、pandas）；未声明的包不得在代码中 import。\n- 全局架构决策须列出**全部**切片模块的 modules[]；若无额外落盘文件，files 可为 []。\n- DecisionRecord 正文仍禁止代码块；JSON sidecar 不受此限。\n\n===== 决策质量自检（在输出决策清单之前必须完成以下三项检查）=====\n\n【检查 1 - 边界压力测试】\n列出 2 个具体场景来压力测试你的设计方案。每个场景格式如下：\n\"当 <具体边界条件或极端情况> 时，本设计的行为是：<预期结果>。\n 若此行为不可接受，则需要修改决策：<需要调整的部分>\"\n这两个场景必须写入决策清单的\"边界压力测试\"节。\n\n【检查 2 - 隐含假设审计】\n对于每个关键设计决策，识别它依赖的隐含假设（那些你认为理所当然但用户可能不同意的前提）。\n每个假设格式如下：\n\"假设 <X> 成立。若 <X> 不成立，则需要改变：<受影响的设计决策>\"\n这些假设必须写入\"AI 无法验证的假设\"节。\n\n【检查 3 - 代码库冲突检测】\n仅当 input.sources 包含已有代码文件时执行：\n检查本决策是否与已有接口声明、类型定义、或现有模块的公开 API 存在矛盾。\n- 若发现矛盾：在决策清单最顶部插入 \"⚠️ 潜在冲突：<冲突描述>\"\n- 若无矛盾：在\"AI 无法验证的假设\"节末尾附加 \"已检查：与现有接口 <接口名列表> 无明显冲突\"\n若 input.sources 不包含已有代码：跳过此检查。\n\n完成三项检查后，输出符合 §4.4 格式的完整决策清单。\n===== 决策质量自检结束 =====\n",
+     "writePathBase": "workspace"
+    },
+    "input": {
+     "sources": [
+      {
+       "type": "user-input",
+       "label": "用户需求"
+      }
+     ],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "decisionRecord",
+      "format": "markdown"
+     },
+     {
+      "key": "decisionArtifacts",
+      "format": "json"
+     }
+    ],
+    "pauseAfter": true,
+    "isDecisionStage": true,
+    "dependsOn": [
+     "stage_decide_architecture_overview"
+    ]
+   },
+   {
+    "id": "stage_materialize_stub_indicators",
+    "title": "物化 stub · indicators",
+    "description": "从 decide decisionArtifacts 生成 NotImplementedError stub 模块，供 RED 链 verify_imports --strict。",
+    "tool": "code-runner",
+    "toolConfig": {
+     "type": "code-runner",
+     "command": "node \"/Users/tina/Documents/auto_skills/autoAI/packages/stagent-core/scripts/materialize-python-module-stub.mjs\" indicators",
+     "captureOutput": true,
+     "pathBase": "workspace",
+     "workingDir": "."
+    },
+    "input": {
+     "sources": [],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "verifyOut",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false,
+    "dependsOn": [
+     "stage_decide_indicators"
+    ],
+    "meta": {
+     "executionMode": "deterministic"
+    }
+   },
+   {
+    "id": "stage_test_write_indicators",
+    "title": "写测试 · indicators",
+    "description": "写测试 · indicators",
+    "tool": "llm-text",
+    "toolConfig": {
+     "type": "llm-text",
+     "systemPrompt": "你正在为模块 `indicators` 编写 pytest 测试（RED 阶段）。测试应仅测行为，不测实现。只引入契约 exports 中已声明的符号：`from indicators import calculate_ma, calculate_boll, calculate_vol, calculate_macd, calculate_cci`。编写至少 3 个测试用例覆盖正常和边界情况，使用 pytest 框架。不要引入任何未在 exports 中声明的符号。\n\n严格按照 decisionArtifacts.modules 中本模块的 exports 编写测试：仅 from <模块名> import <已声明符号>；禁止发明未在契约 exports 中的符号。",
+     "writePathBase": "workspace",
+     "writeOutputToFile": "tests/test_indicators.py"
+    },
+    "input": {
+     "sources": [
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_architecture_overview",
+       "outputKey": "decisionArtifacts",
+       "label": "全局模块接口表"
+      },
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_architecture_overview",
+       "outputKey": "decisionRecord",
+       "label": "全局架构决策"
+      },
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_indicators",
+       "outputKey": "decisionArtifacts",
+       "label": "模块接口契约"
+      },
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_indicators",
+       "outputKey": "decisionRecord",
+       "label": "模块决策"
+      },
+      {
+       "type": "user-input",
+       "label": "用户需求"
+      }
+     ],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "code",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false,
+    "dependsOn": [
+     "stage_materialize_stub_indicators"
+    ]
+   },
+   {
+    "id": "stage_verify_imports_indicators",
+    "title": "验证 Python 测试 import（indicators）",
+    "description": "pre-impl strict：校验测试文件与项目内模块存在（stub 物化后）。",
+    "tool": "code-runner",
+    "toolConfig": {
+     "type": "code-runner",
+     "command": "node \"/Users/tina/Documents/auto_skills/autoAI/packages/stagent-core/scripts/verify-python-test-imports.mjs\" --strict tests/test_indicators.py",
+     "captureOutput": true,
+     "pathBase": "workspace",
+     "workingDir": "."
+    },
+    "dependsOn": [
+     "stage_test_write_indicators"
+    ],
+    "input": {
+     "sources": [],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "verifyOut",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false,
+    "meta": {
+     "executionMode": "deterministic"
+    }
+   },
+   {
+    "id": "stage_impl_indicators",
+    "title": "实现 · indicators",
+    "description": "实现 · indicators",
+    "tool": "llm-text",
+    "toolConfig": {
+     "type": "llm-text",
+     "systemPrompt": "你正在实现模块 `indicators`（GREEN 阶段）。遵循已批准的 DecisionRecord。仅实现契约 exports 中声明的五个函数：`calculate_ma`, `calculate_boll`, `calculate_vol`, `calculate_macd`, `calculate_cci`。实现细节应基于南华期货量化交易标准，使用 numpy 或 pandas 等库。唯一落盘路径为 `indicators/__init__.py`，请将全部实现写入此文件。不要创建任何其他文件。\n\n严格按照已确认的决策清单实现，不得偏离。如发现清单中存在矛盾，在代码注释中标注。\n\n【本切片范围 — 引擎注入\n- 本阶段：stage_impl_indicators，垂直切片「indicators」\n- 仅实现本切片验收条件（AC）；落盘文件与测试须与本切片 test_write 一致\n- 禁止实现其他切片行为：「signals」、「risk」、「broker」、「main」\n- 禁止超前实现：不得写入尚未进入本切片 RED 阶段的测试所要求的行为（防 I-25 跨切片写绿）\n】",
+     "writePathBase": "workspace",
+     "writeOutputToFile": "indicators/__init__.py"
+    },
+    "input": {
+     "sources": [
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_architecture_overview",
+       "outputKey": "decisionArtifacts",
+       "label": "全局模块接口表"
+      },
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_indicators",
+       "outputKey": "decisionArtifacts",
+       "label": "模块接口契约"
+      },
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_architecture_overview",
+       "outputKey": "decisionRecord",
+       "label": "全局架构决策"
+      },
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_indicators",
+       "outputKey": "decisionRecord",
+       "label": "模块决策"
+      },
+      {
+       "type": "user-input",
+       "label": "用户需求"
+      }
+     ],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "code",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false,
+    "dependsOn": [
+     "stage_test_write_indicators"
+    ]
+   },
+   {
+    "id": "stage_impl_conftest",
+    "title": "pytest flat-layout bootstrap（conftest.py）",
+    "description": "写入 conftest.py，将项目根加入 sys.path，供 tests/ import 顶层模块。",
+    "tool": "llm-text",
+    "toolConfig": {
+     "type": "llm-text",
+     "systemPrompt": "将以下 conftest.py 原样写入工作区根目录（writeOutputToFile=conftest.py）。\n不要修改内容，不要添加说明。\nimport sys\nfrom pathlib import Path\n\n# Auto-generated by stagent: flat-layout pytest bootstrap\nsys.path.insert(0, str(Path(__file__).resolve().parent))\n\n严格按照已确认的决策清单实现，不得偏离。如发现清单中存在矛盾，在代码注释中标注。\n\n【本切片范围 — 引擎注入\n- 本阶段：stage_impl_conftest，垂直切片「conftest」\n- 仅实现本切片验收条件（AC）；落盘文件与测试须与本切片 test_write 一致\n- 禁止实现其他切片行为：「indicators」、「conftest_stagent_bundle_write」、「indicators_stagent_bundle_write」、「signals」、「signals_stagent_bundle_write」、「risk」、「risk_stagent_bundle_write」、「broker」、「broker_stagent_bundle_write」、「main」、「main_stagent_bundle_write」\n- 禁止超前实现：不得写入尚未进入本切片 RED 阶段的测试所要求的行为（防 I-25 跨切片写绿）\n】",
+     "writeOutputToFile": "conftest.py",
+     "writePathBase": "workspace"
+    },
+    "dependsOn": [
+     "stage_impl_indicators"
+    ],
+    "input": {
+     "sources": [
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_architecture_overview",
+       "outputKey": "decisionArtifacts",
+       "label": "全局模块接口表"
+      },
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_architecture_overview",
+       "outputKey": "decisionRecord",
+       "label": "全局架构决策"
+      }
+     ],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "out",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false,
+    "meta": {
+     "executionMode": "deterministic"
+    }
+   },
+   {
+    "id": "stage_impl_conftest_stagent_bundle_write",
+    "title": "落盘：pytest flat-layout bootstrap（conftest.py）",
+    "description": "将上一实现阶段主输出写入工作区根下 .stagent/generated/，便于查看与 npm test 前人工核对。",
+    "tool": "file-write",
+    "dependsOn": [
+     "stage_impl_conftest"
+    ],
+    "toolConfig": {
+     "type": "file-write",
+     "filePath": ".stagent/generated/stage_impl_conftest.md",
+     "sourceOutputKey": "out",
+     "sourceStageId": "stage_impl_conftest",
+     "pathBase": "workspace"
+    },
+    "input": {
+     "sources": [
+      {
+       "type": "stage-output",
+       "stageId": "stage_impl_conftest",
+       "outputKey": "out",
+       "label": "实现输出"
+      }
+     ],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "writtenPath",
+      "format": "file-path"
+     }
+    ],
+    "pauseAfter": false
+   },
+   {
+    "id": "stage_venv_create",
+    "title": "创建 Python venv",
+    "description": "python3 -m venv .venv，供后续 pip / pytest 使用。",
+    "tool": "code-runner",
+    "toolConfig": {
+     "type": "code-runner",
+     "command": "python3 -m venv .venv",
+     "captureOutput": true,
+     "pathBase": "workspace",
+     "workingDir": "."
+    },
+    "dependsOn": [
+     "stage_impl_conftest"
+    ],
+    "input": {
+     "sources": [],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "verifyOut",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false,
+    "meta": {
+     "executionMode": "deterministic"
+    }
+   },
+   {
+    "id": "stage_ensure_requirements_baseline",
+    "title": "确保 requirements.txt 基线依赖",
+    "description": "合并 pytest / numpy / pandas 到 requirements.txt，供 venv pip 安装。",
+    "tool": "code-runner",
+    "toolConfig": {
+     "type": "code-runner",
+     "command": "node \"/Users/tina/Documents/auto_skills/autoAI/packages/stagent-core/scripts/ensure-python-requirements-baseline.mjs\"",
+     "captureOutput": true,
+     "pathBase": "workspace",
+     "workingDir": "."
+    },
+    "dependsOn": [
+     "stage_venv_create"
+    ],
+    "input": {
+     "sources": [],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "verifyOut",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false,
+    "meta": {
+     "executionMode": "deterministic"
+    }
+   },
+   {
+    "id": "stage_venv_pip_install",
+    "title": "安装 Python 依赖（venv pip）",
+    "description": "在 .venv 内安装 requirements 或 pytest。",
+    "tool": "code-runner",
+    "toolConfig": {
+     "type": "code-runner",
+     "command": ".venv/bin/python -m pip install -r requirements.txt",
+     "captureOutput": true,
+     "pathBase": "workspace",
+     "workingDir": "."
+    },
+    "dependsOn": [
+     "stage_ensure_requirements_baseline"
+    ],
+    "input": {
+     "sources": [],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "verifyOut",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false,
+    "meta": {
+     "executionMode": "deterministic"
+    }
+   },
+   {
+    "id": "stage_venv_import_check",
+    "title": "验证 Python venv 可 import 关键依赖",
+    "description": "venv import check：确认 requirements 中关键包可 import。",
+    "tool": "code-runner",
+    "toolConfig": {
+     "type": "code-runner",
+     "command": ".venv/bin/python -c \"import numpy, pandas; print('Environment ready')\"",
+     "captureOutput": true,
+     "pathBase": "workspace",
+     "workingDir": "."
+    },
+    "dependsOn": [
+     "stage_venv_pip_install"
+    ],
+    "input": {
+     "sources": [],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "verifyOut",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false,
+    "meta": {
+     "executionMode": "deterministic"
+    }
+   },
+   {
+    "id": "stage_impl_indicators_stagent_bundle_write",
+    "title": "落盘：实现 · indicators",
+    "description": "将上一实现阶段主输出写入工作区根下 .stagent/generated/，便于查看与 npm test 前人工核对。",
+    "tool": "file-write",
+    "dependsOn": [
+     "stage_impl_indicators"
+    ],
+    "toolConfig": {
+     "type": "file-write",
+     "filePath": ".stagent/generated/stage_impl_indicators.md",
+     "sourceOutputKey": "code",
+     "sourceStageId": "stage_impl_indicators",
+     "pathBase": "workspace"
+    },
+    "input": {
+     "sources": [
+      {
+       "type": "stage-output",
+       "stageId": "stage_impl_indicators",
+       "outputKey": "code",
+       "label": "实现输出"
+      }
+     ],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "writtenPath",
+      "format": "file-path"
+     }
+    ],
+    "pauseAfter": false
+   },
+   {
+    "id": "stage_test_run_indicators",
+    "title": "跑测试 · indicators",
+    "description": "pytest · indicators",
+    "tool": "code-runner",
+    "toolConfig": {
+     "type": "code-runner",
+     "command": ".venv/bin/python -m pytest -q tests/test_indicators.py",
+     "captureOutput": true,
+     "pathBase": "workspace",
+     "workingDir": "."
+    },
+    "input": {
+     "sources": [
+      {
+       "type": "user-input",
+       "label": "用户需求"
+      }
+     ],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "testLog",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false,
+    "dependsOn": [
+     "stage_impl_indicators"
+    ]
+   },
+   {
+    "id": "stage_fix_if_failed_indicators",
+    "title": "修复失败测试（indicators）",
+    "description": "pytest 失败后：根据测试输出修复 Python 代码与依赖。",
+    "tool": "llm-text",
+    "toolConfig": {
+     "type": "llm-text",
+     "systemPrompt": "测试阶段 stage_test_run_indicators 失败后执行修复（Python 栈）。\n步骤：1) 阅读 test_run 输出；2) 按 R3b 路由修复 impl 与 requirements.txt；3) 对齐 test 与 impl API。\n可修改文件：indicators/__init__.py、requirements.txt。\n多文件输出格式（必须）：\n--- file: indicators/__init__.py ---\n<impl 全文>\n--- file: requirements.txt ---\n<requirements.txt 全文>\n禁止 Markdown 围栏；禁止静默 import 未在 decisionArtifacts.dependencies 声明的第三方包。",
+     "writeOutputToFile": "indicators/__init__.py",
+     "writePathBase": "workspace",
+     "additionalWriteTargets": [
+      "requirements.txt"
+     ],
+     "multiFileOutputFormat": "delimited"
+    },
+    "dependsOn": [
+     "stage_test_run_indicators"
+    ],
+    "input": {
+     "sources": [
+      {
+       "type": "stage-output",
+       "stageId": "stage_test_run_indicators",
+       "outputKey": "verifyOut",
+       "label": "test_run 输出"
+      }
+     ],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "fixPatch",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false,
+    "skipIf": {
+     "type": "exitCodeZero",
+     "stageId": "stage_test_run_indicators",
+     "outputKey": "_exitCode"
+    }
+   },
+   {
+    "id": "stage_decide_signals",
+    "title": "决策 · signals",
+    "description": "决策 · signals",
+    "tool": "llm-text",
+    "toolConfig": {
+     "type": "llm-text",
+     "systemPrompt": "你正在决策模块 `signals` 的边界与接口合约。基于需求文档和全局架构决策，输出本模块的 DecisionRecord Markdown 正文。在正文之后，输出 JSON sidecar，其中 `modules` 数组包含恰好一条记录：`{\"name\":\"signals\",\"exports\":[\"generate_long_signal\",\"generate_short_signal\"]}`。确保函数接收指标数据和K线数据，输出信号类型（多/空/无）。\n\n\n\n\n\n===== 决策质量自检（在输出决策清单之前必须完成以下三项检查）=====\n\n【检查 1 - 边界压力测试】\n列出 2 个具体场景来压力测试你的设计方案。每个场景格式如下：\n\"当 <具体边界条件或极端情况> 时，本设计的行为是：<预期结果>。\n 若此行为不可接受，则需要修改决策：<需要调整的部分>\"\n这两个场景必须写入决策清单的\"边界压力测试\"节。\n\n【检查 2 - 隐含假设审计】\n对于每个关键设计决策，识别它依赖的隐含假设（那些你认为理所当然但用户可能不同意的前提）。\n每个假设格式如下：\n\"假设 <X> 成立。若 <X> 不成立，则需要改变：<受影响的设计决策>\"\n这些假设必须写入\"AI 无法验证的假设\"节。\n\n【检查 3 - 代码库冲突检测】\n仅当 input.sources 包含已有代码文件时执行：\n检查本决策是否与已有接口声明、类型定义、或现有模块的公开 API 存在矛盾。\n- 若发现矛盾：在决策清单最顶部插入 \"⚠️ 潜在冲突：<冲突描述>\"\n- 若无矛盾：在\"AI 无法验证的假设\"节末尾附加 \"已检查：与现有接口 <接口名列表> 无明显冲突\"\n若 input.sources 不包含已有代码：跳过此检查。\n\n完成三项检查后，输出符合 §4.4 格式的完整决策清单。\n===== 决策质量自检结束 =====\n\n\n【输出硬约束（必须满足）】\n你必须输出 DecisionRecord（Markdown），且只能使用以下四个二级标题（不得替换标题名）：\n### 职责边界\n### 关键设计决策\n### ★ 边界压力测试\n### AI 无法验证的假设\n\n额外要求：\n1) 不包含任何代码块（禁止 ```）。\n2) 总字数 <= 800。\n3) “关键设计决策”中每条都要写“为什么不选备选方案”。\n4) “★ 边界压力测试”至少 2 个场景，且每个场景必须写成**行首顶层**列表项（行首直接以 “- ”、“* ” 或编号 “1.”/“1)” 开头）；禁止用表格或纯段落承载，禁止写成缩进的子条目，否则内容校验按 0 计数并阻断批准。\n5) “AI 无法验证的假设”至少 1 条，同样每条写成**行首顶层**列表项（“- ”/“* ”/“1.” 均可；禁止表格、纯段落或缩进子条目）。\n6) 输出只包含该 DecisionRecord，不要教学说明、前后寒暄或额外小节。\n\n\n\n【决策机读 sidecar（decisionArtifacts）】\n在 DecisionRecord Markdown 正文之后，另起一行输出标记行：\n<!-- decisionArtifacts:json -->\n随后输出**唯一**一个 JSON 对象（不要用 markdown 围栏），结构：\n{\"version\":1,\"files\":[{\"key\":\"configContent\",\"path\":\"config.yaml\",\"format\":\"yaml\",\"content\":\"...\"}],\"modules\":[{\"name\":\"indicators\",\"exports\":[\"compute\"]}],\"dependencies\":[\"pytest\",\"numpy\",\"pandas\"],\"testStack\":\"pytest\"}\n- files[].key 供下游 file-write 的 sourceOutputKey 引用；content 为完整文件正文。\n- modules[]：全项目模块接口契约（name=Python 包名/切片语义名，exports=允许 test/impl 引用的公开符号）。\n- dependencies[]：允许 impl/fix 使用的第三方包根名（如 numpy、pandas）；未声明的包不得在代码中 import。\n- 全局架构决策须列出**全部**切片模块的 modules[]；若无额外落盘文件，files 可为 []。\n- DecisionRecord 正文仍禁止代码块；JSON sidecar 不受此限。\n\n===== 决策质量自检（在输出决策清单之前必须完成以下三项检查）=====\n\n【检查 1 - 边界压力测试】\n列出 2 个具体场景来压力测试你的设计方案。每个场景格式如下：\n\"当 <具体边界条件或极端情况> 时，本设计的行为是：<预期结果>。\n 若此行为不可接受，则需要修改决策：<需要调整的部分>\"\n这两个场景必须写入决策清单的\"边界压力测试\"节。\n\n【检查 2 - 隐含假设审计】\n对于每个关键设计决策，识别它依赖的隐含假设（那些你认为理所当然但用户可能不同意的前提）。\n每个假设格式如下：\n\"假设 <X> 成立。若 <X> 不成立，则需要改变：<受影响的设计决策>\"\n这些假设必须写入\"AI 无法验证的假设\"节。\n\n【检查 3 - 代码库冲突检测】\n仅当 input.sources 包含已有代码文件时执行：\n检查本决策是否与已有接口声明、类型定义、或现有模块的公开 API 存在矛盾。\n- 若发现矛盾：在决策清单最顶部插入 \"⚠️ 潜在冲突：<冲突描述>\"\n- 若无矛盾：在\"AI 无法验证的假设\"节末尾附加 \"已检查：与现有接口 <接口名列表> 无明显冲突\"\n若 input.sources 不包含已有代码：跳过此检查。\n\n完成三项检查后，输出符合 §4.4 格式的完整决策清单。\n===== 决策质量自检结束 =====\n",
+     "writePathBase": "workspace"
+    },
+    "input": {
+     "sources": [
+      {
+       "type": "user-input",
+       "label": "用户需求"
+      }
+     ],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "decisionRecord",
+      "format": "markdown"
+     },
+     {
+      "key": "decisionArtifacts",
+      "format": "json"
+     }
+    ],
+    "pauseAfter": true,
+    "isDecisionStage": true,
+    "dependsOn": [
+     "stage_test_run_indicators"
+    ]
+   },
+   {
+    "id": "stage_materialize_stub_signals",
+    "title": "物化 stub · signals",
+    "description": "从 decide decisionArtifacts 生成 NotImplementedError stub 模块，供 RED 链 verify_imports --strict。",
+    "tool": "code-runner",
+    "toolConfig": {
+     "type": "code-runner",
+     "command": "node \"/Users/tina/Documents/auto_skills/autoAI/packages/stagent-core/scripts/materialize-python-module-stub.mjs\" signals",
+     "captureOutput": true,
+     "pathBase": "workspace",
+     "workingDir": "."
+    },
+    "input": {
+     "sources": [],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "verifyOut",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false,
+    "dependsOn": [
+     "stage_decide_signals"
+    ],
+    "meta": {
+     "executionMode": "deterministic"
+    }
+   },
+   {
+    "id": "stage_test_write_signals",
+    "title": "写测试 · signals",
+    "description": "写测试 · signals",
+    "tool": "llm-text",
+    "toolConfig": {
+     "type": "llm-text",
+     "systemPrompt": "你正在为模块 `signals` 编写 pytest 测试（RED 阶段）。测试应仅测行为，不测实现。只引入契约 exports 中已声明的符号：`from signals import generate_long_signal, generate_short_signal`。编写至少 3 个测试用例覆盖空信号和多信号规则，使用 pytest 框架。不要引入任何未在 exports 中声明的符号。\n\n严格按照 decisionArtifacts.modules 中本模块的 exports 编写测试：仅 from <模块名> import <已声明符号>；禁止发明未在契约 exports 中的符号。",
+     "writePathBase": "workspace",
+     "writeOutputToFile": "tests/test_signals.py"
+    },
+    "input": {
+     "sources": [
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_architecture_overview",
+       "outputKey": "decisionArtifacts",
+       "label": "全局模块接口表"
+      },
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_architecture_overview",
+       "outputKey": "decisionRecord",
+       "label": "全局架构决策"
+      },
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_signals",
+       "outputKey": "decisionArtifacts",
+       "label": "模块接口契约"
+      },
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_signals",
+       "outputKey": "decisionRecord",
+       "label": "模块决策"
+      },
+      {
+       "type": "user-input",
+       "label": "用户需求"
+      }
+     ],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "code",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false,
+    "dependsOn": [
+     "stage_materialize_stub_signals"
+    ]
+   },
+   {
+    "id": "stage_verify_imports_signals",
+    "title": "验证 Python 测试 import（signals）",
+    "description": "pre-impl strict：校验测试文件与项目内模块存在（stub 物化后）。",
+    "tool": "code-runner",
+    "toolConfig": {
+     "type": "code-runner",
+     "command": "node \"/Users/tina/Documents/auto_skills/autoAI/packages/stagent-core/scripts/verify-python-test-imports.mjs\" --strict tests/test_signals.py",
+     "captureOutput": true,
+     "pathBase": "workspace",
+     "workingDir": "."
+    },
+    "dependsOn": [
+     "stage_test_write_signals"
+    ],
+    "input": {
+     "sources": [],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "verifyOut",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false,
+    "meta": {
+     "executionMode": "deterministic"
+    }
+   },
+   {
+    "id": "stage_impl_signals",
+    "title": "实现 · signals",
+    "description": "实现 · signals",
+    "tool": "llm-text",
+    "toolConfig": {
+     "type": "llm-text",
+     "systemPrompt": "你正在实现模块 `signals`（GREEN 阶段）。遵循已批准的 DecisionRecord。仅实现契约 exports 中声明的两个函数：`generate_long_signal`, `generate_short_signal`。实现需依据需求文档中的多空信号规则（前五线并拢、布林带、VOL、MACD、CCI、1分钟同向、上证深证条件等）。唯一落盘路径为 `signals/__init__.py`，请将全部实现写入此文件。\n\n严格按照已确认的决策清单实现，不得偏离。如发现清单中存在矛盾，在代码注释中标注。\n\n【本切片范围 — 引擎注入\n- 本阶段：stage_impl_signals，垂直切片「signals」\n- 仅实现本切片验收条件（AC）；落盘文件与测试须与本切片 test_write 一致\n- 禁止实现其他切片行为：「indicators」、「risk」、「broker」、「main」\n- 禁止超前实现：不得写入尚未进入本切片 RED 阶段的测试所要求的行为（防 I-25 跨切片写绿）\n】",
+     "writePathBase": "workspace",
+     "writeOutputToFile": "signals/__init__.py"
+    },
+    "input": {
+     "sources": [
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_architecture_overview",
+       "outputKey": "decisionArtifacts",
+       "label": "全局模块接口表"
+      },
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_signals",
+       "outputKey": "decisionArtifacts",
+       "label": "模块接口契约"
+      },
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_architecture_overview",
+       "outputKey": "decisionRecord",
+       "label": "全局架构决策"
+      },
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_signals",
+       "outputKey": "decisionRecord",
+       "label": "模块决策"
+      },
+      {
+       "type": "user-input",
+       "label": "用户需求"
+      }
+     ],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "code",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false,
+    "dependsOn": [
+     "stage_test_write_signals"
+    ]
+   },
+   {
+    "id": "stage_impl_signals_stagent_bundle_write",
+    "title": "落盘：实现 · signals",
+    "description": "将上一实现阶段主输出写入工作区根下 .stagent/generated/，便于查看与 npm test 前人工核对。",
+    "tool": "file-write",
+    "dependsOn": [
+     "stage_impl_signals"
+    ],
+    "toolConfig": {
+     "type": "file-write",
+     "filePath": ".stagent/generated/stage_impl_signals.md",
+     "sourceOutputKey": "code",
+     "sourceStageId": "stage_impl_signals",
+     "pathBase": "workspace"
+    },
+    "input": {
+     "sources": [
+      {
+       "type": "stage-output",
+       "stageId": "stage_impl_signals",
+       "outputKey": "code",
+       "label": "实现输出"
+      }
+     ],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "writtenPath",
+      "format": "file-path"
+     }
+    ],
+    "pauseAfter": false
+   },
+   {
+    "id": "stage_test_run_signals",
+    "title": "跑测试 · signals",
+    "description": "pytest · signals",
+    "tool": "code-runner",
+    "toolConfig": {
+     "type": "code-runner",
+     "command": ".venv/bin/python -m pytest -q tests/test_signals.py",
+     "captureOutput": true,
+     "pathBase": "workspace",
+     "workingDir": "."
+    },
+    "input": {
+     "sources": [
+      {
+       "type": "user-input",
+       "label": "用户需求"
+      }
+     ],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "testLog",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false,
+    "dependsOn": [
+     "stage_impl_signals"
+    ]
+   },
+   {
+    "id": "stage_fix_if_failed_signals",
+    "title": "修复失败测试（signals）",
+    "description": "pytest 失败后：根据测试输出修复 Python 代码与依赖。",
+    "tool": "llm-text",
+    "toolConfig": {
+     "type": "llm-text",
+     "systemPrompt": "测试阶段 stage_test_run_signals 失败后执行修复（Python 栈）。\n步骤：1) 阅读 test_run 输出；2) 按 R3b 路由修复 impl 与 requirements.txt；3) 对齐 test 与 impl API。\n可修改文件：signals/__init__.py、requirements.txt。\n多文件输出格式（必须）：\n--- file: signals/__init__.py ---\n<impl 全文>\n--- file: requirements.txt ---\n<requirements.txt 全文>\n禁止 Markdown 围栏；禁止静默 import 未在 decisionArtifacts.dependencies 声明的第三方包。",
+     "writeOutputToFile": "signals/__init__.py",
+     "writePathBase": "workspace",
+     "additionalWriteTargets": [
+      "requirements.txt"
+     ],
+     "multiFileOutputFormat": "delimited"
+    },
+    "dependsOn": [
+     "stage_test_run_signals"
+    ],
+    "input": {
+     "sources": [
+      {
+       "type": "stage-output",
+       "stageId": "stage_test_run_signals",
+       "outputKey": "verifyOut",
+       "label": "test_run 输出"
+      }
+     ],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "fixPatch",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false,
+    "skipIf": {
+     "type": "exitCodeZero",
+     "stageId": "stage_test_run_signals",
+     "outputKey": "_exitCode"
+    }
+   },
+   {
+    "id": "stage_decide_risk",
+    "title": "决策 · risk",
+    "description": "决策 · risk",
+    "tool": "llm-text",
+    "toolConfig": {
+     "type": "llm-text",
+     "systemPrompt": "你正在决策模块 `risk` 的边界与接口合约。基于需求文档和全局架构决策，输出本模块的 DecisionRecord Markdown 正文。在正文之后，输出 JSON sidecar，其中 `modules` 数组包含恰好一条记录：`{\"name\":\"risk\",\"exports\":[\"check_stop_loss\",\"calculate_position_size\"]}`。确保风险控制函数支持止损15点规则，区分昨日对冲单与当日开单。\n\n\n\n\n\n===== 决策质量自检（在输出决策清单之前必须完成以下三项检查）=====\n\n【检查 1 - 边界压力测试】\n列出 2 个具体场景来压力测试你的设计方案。每个场景格式如下：\n\"当 <具体边界条件或极端情况> 时，本设计的行为是：<预期结果>。\n 若此行为不可接受，则需要修改决策：<需要调整的部分>\"\n这两个场景必须写入决策清单的\"边界压力测试\"节。\n\n【检查 2 - 隐含假设审计】\n对于每个关键设计决策，识别它依赖的隐含假设（那些你认为理所当然但用户可能不同意的前提）。\n每个假设格式如下：\n\"假设 <X> 成立。若 <X> 不成立，则需要改变：<受影响的设计决策>\"\n这些假设必须写入\"AI 无法验证的假设\"节。\n\n【检查 3 - 代码库冲突检测】\n仅当 input.sources 包含已有代码文件时执行：\n检查本决策是否与已有接口声明、类型定义、或现有模块的公开 API 存在矛盾。\n- 若发现矛盾：在决策清单最顶部插入 \"⚠️ 潜在冲突：<冲突描述>\"\n- 若无矛盾：在\"AI 无法验证的假设\"节末尾附加 \"已检查：与现有接口 <接口名列表> 无明显冲突\"\n若 input.sources 不包含已有代码：跳过此检查。\n\n完成三项检查后，输出符合 §4.4 格式的完整决策清单。\n===== 决策质量自检结束 =====\n\n\n【输出硬约束（必须满足）】\n你必须输出 DecisionRecord（Markdown），且只能使用以下四个二级标题（不得替换标题名）：\n### 职责边界\n### 关键设计决策\n### ★ 边界压力测试\n### AI 无法验证的假设\n\n额外要求：\n1) 不包含任何代码块（禁止 ```）。\n2) 总字数 <= 800。\n3) “关键设计决策”中每条都要写“为什么不选备选方案”。\n4) “★ 边界压力测试”至少 2 个场景，且每个场景必须写成**行首顶层**列表项（行首直接以 “- ”、“* ” 或编号 “1.”/“1)” 开头）；禁止用表格或纯段落承载，禁止写成缩进的子条目，否则内容校验按 0 计数并阻断批准。\n5) “AI 无法验证的假设”至少 1 条，同样每条写成**行首顶层**列表项（“- ”/“* ”/“1.” 均可；禁止表格、纯段落或缩进子条目）。\n6) 输出只包含该 DecisionRecord，不要教学说明、前后寒暄或额外小节。\n\n\n\n【决策机读 sidecar（decisionArtifacts）】\n在 DecisionRecord Markdown 正文之后，另起一行输出标记行：\n<!-- decisionArtifacts:json -->\n随后输出**唯一**一个 JSON 对象（不要用 markdown 围栏），结构：\n{\"version\":1,\"files\":[{\"key\":\"configContent\",\"path\":\"config.yaml\",\"format\":\"yaml\",\"content\":\"...\"}],\"modules\":[{\"name\":\"indicators\",\"exports\":[\"compute\"]}],\"dependencies\":[\"pytest\",\"numpy\",\"pandas\"],\"testStack\":\"pytest\"}\n- files[].key 供下游 file-write 的 sourceOutputKey 引用；content 为完整文件正文。\n- modules[]：全项目模块接口契约（name=Python 包名/切片语义名，exports=允许 test/impl 引用的公开符号）。\n- dependencies[]：允许 impl/fix 使用的第三方包根名（如 numpy、pandas）；未声明的包不得在代码中 import。\n- 全局架构决策须列出**全部**切片模块的 modules[]；若无额外落盘文件，files 可为 []。\n- DecisionRecord 正文仍禁止代码块；JSON sidecar 不受此限。\n\n===== 决策质量自检（在输出决策清单之前必须完成以下三项检查）=====\n\n【检查 1 - 边界压力测试】\n列出 2 个具体场景来压力测试你的设计方案。每个场景格式如下：\n\"当 <具体边界条件或极端情况> 时，本设计的行为是：<预期结果>。\n 若此行为不可接受，则需要修改决策：<需要调整的部分>\"\n这两个场景必须写入决策清单的\"边界压力测试\"节。\n\n【检查 2 - 隐含假设审计】\n对于每个关键设计决策，识别它依赖的隐含假设（那些你认为理所当然但用户可能不同意的前提）。\n每个假设格式如下：\n\"假设 <X> 成立。若 <X> 不成立，则需要改变：<受影响的设计决策>\"\n这些假设必须写入\"AI 无法验证的假设\"节。\n\n【检查 3 - 代码库冲突检测】\n仅当 input.sources 包含已有代码文件时执行：\n检查本决策是否与已有接口声明、类型定义、或现有模块的公开 API 存在矛盾。\n- 若发现矛盾：在决策清单最顶部插入 \"⚠️ 潜在冲突：<冲突描述>\"\n- 若无矛盾：在\"AI 无法验证的假设\"节末尾附加 \"已检查：与现有接口 <接口名列表> 无明显冲突\"\n若 input.sources 不包含已有代码：跳过此检查。\n\n完成三项检查后，输出符合 §4.4 格式的完整决策清单。\n===== 决策质量自检结束 =====\n",
+     "writePathBase": "workspace"
+    },
+    "input": {
+     "sources": [
+      {
+       "type": "user-input",
+       "label": "用户需求"
+      }
+     ],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "decisionRecord",
+      "format": "markdown"
+     },
+     {
+      "key": "decisionArtifacts",
+      "format": "json"
+     }
+    ],
+    "pauseAfter": true,
+    "isDecisionStage": true,
+    "dependsOn": [
+     "stage_test_run_signals"
+    ]
+   },
+   {
+    "id": "stage_materialize_stub_risk",
+    "title": "物化 stub · risk",
+    "description": "从 decide decisionArtifacts 生成 NotImplementedError stub 模块，供 RED 链 verify_imports --strict。",
+    "tool": "code-runner",
+    "toolConfig": {
+     "type": "code-runner",
+     "command": "node \"/Users/tina/Documents/auto_skills/autoAI/packages/stagent-core/scripts/materialize-python-module-stub.mjs\" risk",
+     "captureOutput": true,
+     "pathBase": "workspace",
+     "workingDir": "."
+    },
+    "input": {
+     "sources": [],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "verifyOut",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false,
+    "dependsOn": [
+     "stage_decide_risk"
+    ],
+    "meta": {
+     "executionMode": "deterministic"
+    }
+   },
+   {
+    "id": "stage_test_write_risk",
+    "title": "写测试 · risk",
+    "description": "写测试 · risk",
+    "tool": "llm-text",
+    "toolConfig": {
+     "type": "llm-text",
+     "systemPrompt": "你正在为模块 `risk` 编写 pytest 测试（RED 阶段）。测试应仅测行为，不测实现。只引入契约 exports 中已声明的符号：`from risk import check_stop_loss, calculate_position_size`。编写至少 3 个测试用例覆盖止损触发、不触发及仓位计算场景，使用 pytest 框架。不要引入任何未在 exports 中声明的符号。\n\n严格按照 decisionArtifacts.modules 中本模块的 exports 编写测试：仅 from <模块名> import <已声明符号>；禁止发明未在契约 exports 中的符号。",
+     "writePathBase": "workspace",
+     "writeOutputToFile": "tests/test_risk.py"
+    },
+    "input": {
+     "sources": [
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_architecture_overview",
+       "outputKey": "decisionArtifacts",
+       "label": "全局模块接口表"
+      },
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_architecture_overview",
+       "outputKey": "decisionRecord",
+       "label": "全局架构决策"
+      },
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_risk",
+       "outputKey": "decisionArtifacts",
+       "label": "模块接口契约"
+      },
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_risk",
+       "outputKey": "decisionRecord",
+       "label": "模块决策"
+      },
+      {
+       "type": "user-input",
+       "label": "用户需求"
+      }
+     ],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "code",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false,
+    "dependsOn": [
+     "stage_materialize_stub_risk"
+    ]
+   },
+   {
+    "id": "stage_verify_imports_risk",
+    "title": "验证 Python 测试 import（risk）",
+    "description": "pre-impl strict：校验测试文件与项目内模块存在（stub 物化后）。",
+    "tool": "code-runner",
+    "toolConfig": {
+     "type": "code-runner",
+     "command": "node \"/Users/tina/Documents/auto_skills/autoAI/packages/stagent-core/scripts/verify-python-test-imports.mjs\" --strict tests/test_risk.py",
+     "captureOutput": true,
+     "pathBase": "workspace",
+     "workingDir": "."
+    },
+    "dependsOn": [
+     "stage_test_write_risk"
+    ],
+    "input": {
+     "sources": [],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "verifyOut",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false,
+    "meta": {
+     "executionMode": "deterministic"
+    }
+   },
+   {
+    "id": "stage_impl_risk",
+    "title": "实现 · risk",
+    "description": "实现 · risk",
+    "tool": "llm-text",
+    "toolConfig": {
+     "type": "llm-text",
+     "systemPrompt": "你正在实现模块 `risk`（GREEN 阶段）。遵循已批准的 DecisionRecord。仅实现契约 exports 中声明的两个函数：`check_stop_loss`, `calculate_position_size`。实现需依据需求文档中的止损15点规则和对冲单区分逻辑。唯一落盘路径为 `risk/__init__.py`，请将全部实现写入此文件。\n\n严格按照已确认的决策清单实现，不得偏离。如发现清单中存在矛盾，在代码注释中标注。\n\n【本切片范围 — 引擎注入\n- 本阶段：stage_impl_risk，垂直切片「risk」\n- 仅实现本切片验收条件（AC）；落盘文件与测试须与本切片 test_write 一致\n- 禁止实现其他切片行为：「indicators」、「signals」、「broker」、「main」\n- 禁止超前实现：不得写入尚未进入本切片 RED 阶段的测试所要求的行为（防 I-25 跨切片写绿）\n】",
+     "writePathBase": "workspace",
+     "writeOutputToFile": "risk/__init__.py"
+    },
+    "input": {
+     "sources": [
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_architecture_overview",
+       "outputKey": "decisionArtifacts",
+       "label": "全局模块接口表"
+      },
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_risk",
+       "outputKey": "decisionArtifacts",
+       "label": "模块接口契约"
+      },
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_architecture_overview",
+       "outputKey": "decisionRecord",
+       "label": "全局架构决策"
+      },
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_risk",
+       "outputKey": "decisionRecord",
+       "label": "模块决策"
+      },
+      {
+       "type": "user-input",
+       "label": "用户需求"
+      }
+     ],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "code",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false,
+    "dependsOn": [
+     "stage_test_write_risk"
+    ]
+   },
+   {
+    "id": "stage_impl_risk_stagent_bundle_write",
+    "title": "落盘：实现 · risk",
+    "description": "将上一实现阶段主输出写入工作区根下 .stagent/generated/，便于查看与 npm test 前人工核对。",
+    "tool": "file-write",
+    "dependsOn": [
+     "stage_impl_risk"
+    ],
+    "toolConfig": {
+     "type": "file-write",
+     "filePath": ".stagent/generated/stage_impl_risk.md",
+     "sourceOutputKey": "code",
+     "sourceStageId": "stage_impl_risk",
+     "pathBase": "workspace"
+    },
+    "input": {
+     "sources": [
+      {
+       "type": "stage-output",
+       "stageId": "stage_impl_risk",
+       "outputKey": "code",
+       "label": "实现输出"
+      }
+     ],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "writtenPath",
+      "format": "file-path"
+     }
+    ],
+    "pauseAfter": false
+   },
+   {
+    "id": "stage_test_run_risk",
+    "title": "跑测试 · risk",
+    "description": "pytest · risk",
+    "tool": "code-runner",
+    "toolConfig": {
+     "type": "code-runner",
+     "command": ".venv/bin/python -m pytest -q tests/test_risk.py",
+     "captureOutput": true,
+     "pathBase": "workspace",
+     "workingDir": "."
+    },
+    "input": {
+     "sources": [
+      {
+       "type": "user-input",
+       "label": "用户需求"
+      }
+     ],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "testLog",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false,
+    "dependsOn": [
+     "stage_impl_risk"
+    ]
+   },
+   {
+    "id": "stage_fix_if_failed_risk",
+    "title": "修复失败测试（risk）",
+    "description": "pytest 失败后：根据测试输出修复 Python 代码与依赖。",
+    "tool": "llm-text",
+    "toolConfig": {
+     "type": "llm-text",
+     "systemPrompt": "测试阶段 stage_test_run_risk 失败后执行修复（Python 栈）。\n步骤：1) 阅读 test_run 输出；2) 按 R3b 路由修复 impl 与 requirements.txt；3) 对齐 test 与 impl API。\n可修改文件：risk/__init__.py、requirements.txt。\n多文件输出格式（必须）：\n--- file: risk/__init__.py ---\n<impl 全文>\n--- file: requirements.txt ---\n<requirements.txt 全文>\n禁止 Markdown 围栏；禁止静默 import 未在 decisionArtifacts.dependencies 声明的第三方包。",
+     "writeOutputToFile": "risk/__init__.py",
+     "writePathBase": "workspace",
+     "additionalWriteTargets": [
+      "requirements.txt"
+     ],
+     "multiFileOutputFormat": "delimited"
+    },
+    "dependsOn": [
+     "stage_test_run_risk"
+    ],
+    "input": {
+     "sources": [
+      {
+       "type": "stage-output",
+       "stageId": "stage_test_run_risk",
+       "outputKey": "verifyOut",
+       "label": "test_run 输出"
+      }
+     ],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "fixPatch",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false,
+    "skipIf": {
+     "type": "exitCodeZero",
+     "stageId": "stage_test_run_risk",
+     "outputKey": "_exitCode"
+    }
+   },
+   {
+    "id": "stage_decide_broker",
+    "title": "决策 · broker",
+    "description": "决策 · broker",
+    "tool": "llm-text",
+    "toolConfig": {
+     "type": "llm-text",
+     "systemPrompt": "你正在决策模块 `broker` 的边界与接口合约。基于需求文档和全局架构决策，输出本模块的 DecisionRecord Markdown 正文。在正文之后，输出 JSON sidecar，其中 `modules` 数组包含恰好一条记录：`{\"name\":\"broker\",\"exports\":[\"BrokerAdapter\",\"SimBroker\"]}`。`BrokerAdapter` 为抽象基类，定义下单、撤单、查询持仓等接口；`SimBroker` 为模拟实现，不接实盘，使用 mock 或 CSV 数据。\n\n\n\n\n\n===== 决策质量自检（在输出决策清单之前必须完成以下三项检查）=====\n\n【检查 1 - 边界压力测试】\n列出 2 个具体场景来压力测试你的设计方案。每个场景格式如下：\n\"当 <具体边界条件或极端情况> 时，本设计的行为是：<预期结果>。\n 若此行为不可接受，则需要修改决策：<需要调整的部分>\"\n这两个场景必须写入决策清单的\"边界压力测试\"节。\n\n【检查 2 - 隐含假设审计】\n对于每个关键设计决策，识别它依赖的隐含假设（那些你认为理所当然但用户可能不同意的前提）。\n每个假设格式如下：\n\"假设 <X> 成立。若 <X> 不成立，则需要改变：<受影响的设计决策>\"\n这些假设必须写入\"AI 无法验证的假设\"节。\n\n【检查 3 - 代码库冲突检测】\n仅当 input.sources 包含已有代码文件时执行：\n检查本决策是否与已有接口声明、类型定义、或现有模块的公开 API 存在矛盾。\n- 若发现矛盾：在决策清单最顶部插入 \"⚠️ 潜在冲突：<冲突描述>\"\n- 若无矛盾：在\"AI 无法验证的假设\"节末尾附加 \"已检查：与现有接口 <接口名列表> 无明显冲突\"\n若 input.sources 不包含已有代码：跳过此检查。\n\n完成三项检查后，输出符合 §4.4 格式的完整决策清单。\n===== 决策质量自检结束 =====\n\n\n【输出硬约束（必须满足）】\n你必须输出 DecisionRecord（Markdown），且只能使用以下四个二级标题（不得替换标题名）：\n### 职责边界\n### 关键设计决策\n### ★ 边界压力测试\n### AI 无法验证的假设\n\n额外要求：\n1) 不包含任何代码块（禁止 ```）。\n2) 总字数 <= 800。\n3) “关键设计决策”中每条都要写“为什么不选备选方案”。\n4) “★ 边界压力测试”至少 2 个场景，且每个场景必须写成**行首顶层**列表项（行首直接以 “- ”、“* ” 或编号 “1.”/“1)” 开头）；禁止用表格或纯段落承载，禁止写成缩进的子条目，否则内容校验按 0 计数并阻断批准。\n5) “AI 无法验证的假设”至少 1 条，同样每条写成**行首顶层**列表项（“- ”/“* ”/“1.” 均可；禁止表格、纯段落或缩进子条目）。\n6) 输出只包含该 DecisionRecord，不要教学说明、前后寒暄或额外小节。\n\n\n\n【决策机读 sidecar（decisionArtifacts）】\n在 DecisionRecord Markdown 正文之后，另起一行输出标记行：\n<!-- decisionArtifacts:json -->\n随后输出**唯一**一个 JSON 对象（不要用 markdown 围栏），结构：\n{\"version\":1,\"files\":[{\"key\":\"configContent\",\"path\":\"config.yaml\",\"format\":\"yaml\",\"content\":\"...\"}],\"modules\":[{\"name\":\"indicators\",\"exports\":[\"compute\"]}],\"dependencies\":[\"pytest\",\"numpy\",\"pandas\"],\"testStack\":\"pytest\"}\n- files[].key 供下游 file-write 的 sourceOutputKey 引用；content 为完整文件正文。\n- modules[]：全项目模块接口契约（name=Python 包名/切片语义名，exports=允许 test/impl 引用的公开符号）。\n- dependencies[]：允许 impl/fix 使用的第三方包根名（如 numpy、pandas）；未声明的包不得在代码中 import。\n- 全局架构决策须列出**全部**切片模块的 modules[]；若无额外落盘文件，files 可为 []。\n- DecisionRecord 正文仍禁止代码块；JSON sidecar 不受此限。\n\n===== 决策质量自检（在输出决策清单之前必须完成以下三项检查）=====\n\n【检查 1 - 边界压力测试】\n列出 2 个具体场景来压力测试你的设计方案。每个场景格式如下：\n\"当 <具体边界条件或极端情况> 时，本设计的行为是：<预期结果>。\n 若此行为不可接受，则需要修改决策：<需要调整的部分>\"\n这两个场景必须写入决策清单的\"边界压力测试\"节。\n\n【检查 2 - 隐含假设审计】\n对于每个关键设计决策，识别它依赖的隐含假设（那些你认为理所当然但用户可能不同意的前提）。\n每个假设格式如下：\n\"假设 <X> 成立。若 <X> 不成立，则需要改变：<受影响的设计决策>\"\n这些假设必须写入\"AI 无法验证的假设\"节。\n\n【检查 3 - 代码库冲突检测】\n仅当 input.sources 包含已有代码文件时执行：\n检查本决策是否与已有接口声明、类型定义、或现有模块的公开 API 存在矛盾。\n- 若发现矛盾：在决策清单最顶部插入 \"⚠️ 潜在冲突：<冲突描述>\"\n- 若无矛盾：在\"AI 无法验证的假设\"节末尾附加 \"已检查：与现有接口 <接口名列表> 无明显冲突\"\n若 input.sources 不包含已有代码：跳过此检查。\n\n完成三项检查后，输出符合 §4.4 格式的完整决策清单。\n===== 决策质量自检结束 =====\n",
+     "writePathBase": "workspace"
+    },
+    "input": {
+     "sources": [
+      {
+       "type": "user-input",
+       "label": "用户需求"
+      }
+     ],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "decisionRecord",
+      "format": "markdown"
+     },
+     {
+      "key": "decisionArtifacts",
+      "format": "json"
+     }
+    ],
+    "pauseAfter": true,
+    "isDecisionStage": true,
+    "dependsOn": [
+     "stage_test_run_risk"
+    ]
+   },
+   {
+    "id": "stage_materialize_stub_broker",
+    "title": "物化 stub · broker",
+    "description": "从 decide decisionArtifacts 生成 NotImplementedError stub 模块，供 RED 链 verify_imports --strict。",
+    "tool": "code-runner",
+    "toolConfig": {
+     "type": "code-runner",
+     "command": "node \"/Users/tina/Documents/auto_skills/autoAI/packages/stagent-core/scripts/materialize-python-module-stub.mjs\" broker",
+     "captureOutput": true,
+     "pathBase": "workspace",
+     "workingDir": "."
+    },
+    "input": {
+     "sources": [],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "verifyOut",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false,
+    "dependsOn": [
+     "stage_decide_broker"
+    ],
+    "meta": {
+     "executionMode": "deterministic"
+    }
+   },
+   {
+    "id": "stage_test_write_broker",
+    "title": "写测试 · broker",
+    "description": "写测试 · broker",
+    "tool": "llm-text",
+    "toolConfig": {
+     "type": "llm-text",
+     "systemPrompt": "你正在为模块 `broker` 编写 pytest 测试（RED 阶段）。测试应仅测行为，不测实现。只引入契约 exports 中已声明的符号：`from broker import BrokerAdapter, SimBroker`。测试 `SimBroker` 的基本功能（下单、查询持仓、撤单），并验证抽象基类接口一致性。使用 pytest 框架。不要引入任何未在 exports 中声明的符号。\n\n严格按照 decisionArtifacts.modules 中本模块的 exports 编写测试：仅 from <模块名> import <已声明符号>；禁止发明未在契约 exports 中的符号。",
+     "writePathBase": "workspace",
+     "writeOutputToFile": "tests/test_broker.py"
+    },
+    "input": {
+     "sources": [
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_architecture_overview",
+       "outputKey": "decisionArtifacts",
+       "label": "全局模块接口表"
+      },
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_architecture_overview",
+       "outputKey": "decisionRecord",
+       "label": "全局架构决策"
+      },
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_broker",
+       "outputKey": "decisionArtifacts",
+       "label": "模块接口契约"
+      },
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_broker",
+       "outputKey": "decisionRecord",
+       "label": "模块决策"
+      },
+      {
+       "type": "user-input",
+       "label": "用户需求"
+      }
+     ],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "code",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false,
+    "dependsOn": [
+     "stage_materialize_stub_broker"
+    ]
+   },
+   {
+    "id": "stage_verify_imports_broker",
+    "title": "验证 Python 测试 import（broker）",
+    "description": "pre-impl strict：校验测试文件与项目内模块存在（stub 物化后）。",
+    "tool": "code-runner",
+    "toolConfig": {
+     "type": "code-runner",
+     "command": "node \"/Users/tina/Documents/auto_skills/autoAI/packages/stagent-core/scripts/verify-python-test-imports.mjs\" --strict tests/test_broker.py",
+     "captureOutput": true,
+     "pathBase": "workspace",
+     "workingDir": "."
+    },
+    "dependsOn": [
+     "stage_test_write_broker"
+    ],
+    "input": {
+     "sources": [],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "verifyOut",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false,
+    "meta": {
+     "executionMode": "deterministic"
+    }
+   },
+   {
+    "id": "stage_impl_broker",
+    "title": "实现 · broker",
+    "description": "实现 · broker",
+    "tool": "llm-text",
+    "toolConfig": {
+     "type": "llm-text",
+     "systemPrompt": "你正在实现模块 `broker`（GREEN 阶段）。遵循已批准的 DecisionRecord。仅实现契约 exports 中声明的两个类：`BrokerAdapter`（ABC）和 `SimBroker`（实现）。`SimBroker` 模拟券商接口，响应速度模拟，不连接真实市场。唯一落盘路径为 `broker/__init__.py`，请将全部实现写入此文件。\n\n严格按照已确认的决策清单实现，不得偏离。如发现清单中存在矛盾，在代码注释中标注。\n\n【本切片范围 — 引擎注入\n- 本阶段：stage_impl_broker，垂直切片「broker」\n- 仅实现本切片验收条件（AC）；落盘文件与测试须与本切片 test_write 一致\n- 禁止实现其他切片行为：「indicators」、「signals」、「risk」、「main」\n- 禁止超前实现：不得写入尚未进入本切片 RED 阶段的测试所要求的行为（防 I-25 跨切片写绿）\n】",
+     "writePathBase": "workspace",
+     "writeOutputToFile": "broker/__init__.py"
+    },
+    "input": {
+     "sources": [
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_architecture_overview",
+       "outputKey": "decisionArtifacts",
+       "label": "全局模块接口表"
+      },
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_broker",
+       "outputKey": "decisionArtifacts",
+       "label": "模块接口契约"
+      },
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_architecture_overview",
+       "outputKey": "decisionRecord",
+       "label": "全局架构决策"
+      },
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_broker",
+       "outputKey": "decisionRecord",
+       "label": "模块决策"
+      },
+      {
+       "type": "user-input",
+       "label": "用户需求"
+      }
+     ],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "code",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false,
+    "dependsOn": [
+     "stage_test_write_broker"
+    ]
+   },
+   {
+    "id": "stage_impl_broker_stagent_bundle_write",
+    "title": "落盘：实现 · broker",
+    "description": "将上一实现阶段主输出写入工作区根下 .stagent/generated/，便于查看与 npm test 前人工核对。",
+    "tool": "file-write",
+    "dependsOn": [
+     "stage_impl_broker"
+    ],
+    "toolConfig": {
+     "type": "file-write",
+     "filePath": ".stagent/generated/stage_impl_broker.md",
+     "sourceOutputKey": "code",
+     "sourceStageId": "stage_impl_broker",
+     "pathBase": "workspace"
+    },
+    "input": {
+     "sources": [
+      {
+       "type": "stage-output",
+       "stageId": "stage_impl_broker",
+       "outputKey": "code",
+       "label": "实现输出"
+      }
+     ],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "writtenPath",
+      "format": "file-path"
+     }
+    ],
+    "pauseAfter": false
+   },
+   {
+    "id": "stage_test_run_broker",
+    "title": "跑测试 · broker",
+    "description": "pytest · broker",
+    "tool": "code-runner",
+    "toolConfig": {
+     "type": "code-runner",
+     "command": ".venv/bin/python -m pytest -q tests/test_broker.py",
+     "captureOutput": true,
+     "pathBase": "workspace",
+     "workingDir": "."
+    },
+    "input": {
+     "sources": [
+      {
+       "type": "user-input",
+       "label": "用户需求"
+      }
+     ],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "testLog",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false,
+    "dependsOn": [
+     "stage_impl_broker"
+    ]
+   },
+   {
+    "id": "stage_fix_if_failed_broker",
+    "title": "修复失败测试（broker）",
+    "description": "pytest 失败后：根据测试输出修复 Python 代码与依赖。",
+    "tool": "llm-text",
+    "toolConfig": {
+     "type": "llm-text",
+     "systemPrompt": "测试阶段 stage_test_run_broker 失败后执行修复（Python 栈）。\n步骤：1) 阅读 test_run 输出；2) 按 R3b 路由修复 impl 与 requirements.txt；3) 对齐 test 与 impl API。\n可修改文件：broker/__init__.py、requirements.txt。\n多文件输出格式（必须）：\n--- file: broker/__init__.py ---\n<impl 全文>\n--- file: requirements.txt ---\n<requirements.txt 全文>\n禁止 Markdown 围栏；禁止静默 import 未在 decisionArtifacts.dependencies 声明的第三方包。",
+     "writeOutputToFile": "broker/__init__.py",
+     "writePathBase": "workspace",
+     "additionalWriteTargets": [
+      "requirements.txt"
+     ],
+     "multiFileOutputFormat": "delimited"
+    },
+    "dependsOn": [
+     "stage_test_run_broker"
+    ],
+    "input": {
+     "sources": [
+      {
+       "type": "stage-output",
+       "stageId": "stage_test_run_broker",
+       "outputKey": "verifyOut",
+       "label": "test_run 输出"
+      }
+     ],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "fixPatch",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false,
+    "skipIf": {
+     "type": "exitCodeZero",
+     "stageId": "stage_test_run_broker",
+     "outputKey": "_exitCode"
+    }
+   },
+   {
+    "id": "stage_decide_main",
+    "title": "决策 · main",
+    "description": "决策 · main",
+    "tool": "llm-text",
+    "toolConfig": {
+     "type": "llm-text",
+     "systemPrompt": "你正在决策模块 `main` 的边界与接口合约。基于需求文档和全局架构决策，输出本模块的 DecisionRecord Markdown 正文。在正文之后，输出 JSON sidecar，其中 `modules` 数组包含恰好一条记录：`{\"name\":\"main\",\"exports\":[\"run_trading_loop\",\"load_config\"]}`。`run_trading_loop` 是主循环函数，加载配置、初始化各模块、执行信号判断和交易操作。`load_config` 读取 config.yaml 返回配置对象。\n\n\n\n\n\n===== 决策质量自检（在输出决策清单之前必须完成以下三项检查）=====\n\n【检查 1 - 边界压力测试】\n列出 2 个具体场景来压力测试你的设计方案。每个场景格式如下：\n\"当 <具体边界条件或极端情况> 时，本设计的行为是：<预期结果>。\n 若此行为不可接受，则需要修改决策：<需要调整的部分>\"\n这两个场景必须写入决策清单的\"边界压力测试\"节。\n\n【检查 2 - 隐含假设审计】\n对于每个关键设计决策，识别它依赖的隐含假设（那些你认为理所当然但用户可能不同意的前提）。\n每个假设格式如下：\n\"假设 <X> 成立。若 <X> 不成立，则需要改变：<受影响的设计决策>\"\n这些假设必须写入\"AI 无法验证的假设\"节。\n\n【检查 3 - 代码库冲突检测】\n仅当 input.sources 包含已有代码文件时执行：\n检查本决策是否与已有接口声明、类型定义、或现有模块的公开 API 存在矛盾。\n- 若发现矛盾：在决策清单最顶部插入 \"⚠️ 潜在冲突：<冲突描述>\"\n- 若无矛盾：在\"AI 无法验证的假设\"节末尾附加 \"已检查：与现有接口 <接口名列表> 无明显冲突\"\n若 input.sources 不包含已有代码：跳过此检查。\n\n完成三项检查后，输出符合 §4.4 格式的完整决策清单。\n===== 决策质量自检结束 =====\n\n\n【输出硬约束（必须满足）】\n你必须输出 DecisionRecord（Markdown），且只能使用以下四个二级标题（不得替换标题名）：\n### 职责边界\n### 关键设计决策\n### ★ 边界压力测试\n### AI 无法验证的假设\n\n额外要求：\n1) 不包含任何代码块（禁止 ```）。\n2) 总字数 <= 800。\n3) “关键设计决策”中每条都要写“为什么不选备选方案”。\n4) “★ 边界压力测试”至少 2 个场景，且每个场景必须写成**行首顶层**列表项（行首直接以 “- ”、“* ” 或编号 “1.”/“1)” 开头）；禁止用表格或纯段落承载，禁止写成缩进的子条目，否则内容校验按 0 计数并阻断批准。\n5) “AI 无法验证的假设”至少 1 条，同样每条写成**行首顶层**列表项（“- ”/“* ”/“1.” 均可；禁止表格、纯段落或缩进子条目）。\n6) 输出只包含该 DecisionRecord，不要教学说明、前后寒暄或额外小节。\n\n\n\n【决策机读 sidecar（decisionArtifacts）】\n在 DecisionRecord Markdown 正文之后，另起一行输出标记行：\n<!-- decisionArtifacts:json -->\n随后输出**唯一**一个 JSON 对象（不要用 markdown 围栏），结构：\n{\"version\":1,\"files\":[{\"key\":\"configContent\",\"path\":\"config.yaml\",\"format\":\"yaml\",\"content\":\"...\"}],\"modules\":[{\"name\":\"indicators\",\"exports\":[\"compute\"]}],\"dependencies\":[\"pytest\",\"numpy\",\"pandas\"],\"testStack\":\"pytest\"}\n- files[].key 供下游 file-write 的 sourceOutputKey 引用；content 为完整文件正文。\n- modules[]：全项目模块接口契约（name=Python 包名/切片语义名，exports=允许 test/impl 引用的公开符号）。\n- dependencies[]：允许 impl/fix 使用的第三方包根名（如 numpy、pandas）；未声明的包不得在代码中 import。\n- 全局架构决策须列出**全部**切片模块的 modules[]；若无额外落盘文件，files 可为 []。\n- DecisionRecord 正文仍禁止代码块；JSON sidecar 不受此限。\n\n===== 决策质量自检（在输出决策清单之前必须完成以下三项检查）=====\n\n【检查 1 - 边界压力测试】\n列出 2 个具体场景来压力测试你的设计方案。每个场景格式如下：\n\"当 <具体边界条件或极端情况> 时，本设计的行为是：<预期结果>。\n 若此行为不可接受，则需要修改决策：<需要调整的部分>\"\n这两个场景必须写入决策清单的\"边界压力测试\"节。\n\n【检查 2 - 隐含假设审计】\n对于每个关键设计决策，识别它依赖的隐含假设（那些你认为理所当然但用户可能不同意的前提）。\n每个假设格式如下：\n\"假设 <X> 成立。若 <X> 不成立，则需要改变：<受影响的设计决策>\"\n这些假设必须写入\"AI 无法验证的假设\"节。\n\n【检查 3 - 代码库冲突检测】\n仅当 input.sources 包含已有代码文件时执行：\n检查本决策是否与已有接口声明、类型定义、或现有模块的公开 API 存在矛盾。\n- 若发现矛盾：在决策清单最顶部插入 \"⚠️ 潜在冲突：<冲突描述>\"\n- 若无矛盾：在\"AI 无法验证的假设\"节末尾附加 \"已检查：与现有接口 <接口名列表> 无明显冲突\"\n若 input.sources 不包含已有代码：跳过此检查。\n\n完成三项检查后，输出符合 §4.4 格式的完整决策清单。\n===== 决策质量自检结束 =====\n",
+     "writePathBase": "workspace"
+    },
+    "input": {
+     "sources": [
+      {
+       "type": "user-input",
+       "label": "用户需求"
+      }
+     ],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "decisionRecord",
+      "format": "markdown"
+     },
+     {
+      "key": "decisionArtifacts",
+      "format": "json"
+     }
+    ],
+    "pauseAfter": true,
+    "isDecisionStage": true,
+    "dependsOn": [
+     "stage_test_run_broker"
+    ]
+   },
+   {
+    "id": "stage_materialize_stub_main",
+    "title": "物化 stub · main",
+    "description": "从 decide decisionArtifacts 生成 NotImplementedError stub 模块，供 RED 链 verify_imports --strict。",
+    "tool": "code-runner",
+    "toolConfig": {
+     "type": "code-runner",
+     "command": "node \"/Users/tina/Documents/auto_skills/autoAI/packages/stagent-core/scripts/materialize-python-module-stub.mjs\" main",
+     "captureOutput": true,
+     "pathBase": "workspace",
+     "workingDir": "."
+    },
+    "input": {
+     "sources": [],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "verifyOut",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false,
+    "dependsOn": [
+     "stage_decide_main"
+    ],
+    "meta": {
+     "executionMode": "deterministic"
+    }
+   },
+   {
+    "id": "stage_test_write_main",
+    "title": "写测试 · main",
+    "description": "写测试 · main",
+    "tool": "llm-text",
+    "toolConfig": {
+     "type": "llm-text",
+     "systemPrompt": "你正在为模块 `main` 编写 pytest 测试（RED 阶段）。测试应仅测行为，不测实现。只引入契约 exports 中已声明的符号：`from main import run_trading_loop, load_config`。测试加载配置的正确性以及主循环的集成逻辑（可 mock 其他模块）。使用 pytest 框架。不要引入任何未在 exports 中声明的符号。\n\n严格按照 decisionArtifacts.modules 中本模块的 exports 编写测试：仅 from <模块名> import <已声明符号>；禁止发明未在契约 exports 中的符号。",
+     "writePathBase": "workspace",
+     "writeOutputToFile": "tests/test_main.py"
+    },
+    "input": {
+     "sources": [
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_architecture_overview",
+       "outputKey": "decisionArtifacts",
+       "label": "全局模块接口表"
+      },
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_architecture_overview",
+       "outputKey": "decisionRecord",
+       "label": "全局架构决策"
+      },
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_main",
+       "outputKey": "decisionArtifacts",
+       "label": "模块接口契约"
+      },
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_main",
+       "outputKey": "decisionRecord",
+       "label": "模块决策"
+      },
+      {
+       "type": "user-input",
+       "label": "用户需求"
+      }
+     ],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "code",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false,
+    "dependsOn": [
+     "stage_materialize_stub_main"
+    ]
+   },
+   {
+    "id": "stage_verify_imports_main",
+    "title": "验证 Python 测试 import（main）",
+    "description": "pre-impl strict：校验测试文件与项目内模块存在（stub 物化后）。",
+    "tool": "code-runner",
+    "toolConfig": {
+     "type": "code-runner",
+     "command": "node \"/Users/tina/Documents/auto_skills/autoAI/packages/stagent-core/scripts/verify-python-test-imports.mjs\" --strict tests/test_main.py",
+     "captureOutput": true,
+     "pathBase": "workspace",
+     "workingDir": "."
+    },
+    "dependsOn": [
+     "stage_test_write_main"
+    ],
+    "input": {
+     "sources": [],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "verifyOut",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false,
+    "meta": {
+     "executionMode": "deterministic"
+    }
+   },
+   {
+    "id": "stage_impl_main",
+    "title": "实现 · main",
+    "description": "实现 · main",
+    "tool": "llm-text",
+    "toolConfig": {
+     "type": "llm-text",
+     "systemPrompt": "你正在实现模块 `main`（GREEN 阶段）。遵循已批准的 DecisionRecord。仅实现契约 exports 中声明的两个函数：`run_trading_loop` 和 `load_config`。`load_config` 从 config.yaml 读取配置；`run_trading_loop` 按照决策循环运行，调用 indicators、signals、risk、broker 模块。唯一落盘路径为 `main.py`，请将全部实现写入此文件。此文件可直接作为命令行入口运行（if __name__ == '__main__': run_trading_loop()）。\n\n严格按照已确认的决策清单实现，不得偏离。如发现清单中存在矛盾，在代码注释中标注。\n\n【本切片范围 — 引擎注入\n- 本阶段：stage_impl_main，垂直切片「main」\n- 仅实现本切片验收条件（AC）；落盘文件与测试须与本切片 test_write 一致\n- 禁止实现其他切片行为：「indicators」、「signals」、「risk」、「broker」\n- 禁止超前实现：不得写入尚未进入本切片 RED 阶段的测试所要求的行为（防 I-25 跨切片写绿）\n】",
+     "writePathBase": "workspace",
+     "writeOutputToFile": "main.py"
+    },
+    "input": {
+     "sources": [
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_architecture_overview",
+       "outputKey": "decisionArtifacts",
+       "label": "全局模块接口表"
+      },
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_main",
+       "outputKey": "decisionArtifacts",
+       "label": "模块接口契约"
+      },
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_architecture_overview",
+       "outputKey": "decisionRecord",
+       "label": "全局架构决策"
+      },
+      {
+       "type": "stage-output",
+       "stageId": "stage_decide_main",
+       "outputKey": "decisionRecord",
+       "label": "模块决策"
+      },
+      {
+       "type": "user-input",
+       "label": "用户需求"
+      }
+     ],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "code",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false,
+    "dependsOn": [
+     "stage_test_write_main"
+    ]
+   },
+   {
+    "id": "stage_impl_main_stagent_bundle_write",
+    "title": "落盘：实现 · main",
+    "description": "将上一实现阶段主输出写入工作区根下 .stagent/generated/，便于查看与 npm test 前人工核对。",
+    "tool": "file-write",
+    "dependsOn": [
+     "stage_impl_main"
+    ],
+    "toolConfig": {
+     "type": "file-write",
+     "filePath": ".stagent/generated/stage_impl_main.md",
+     "sourceOutputKey": "code",
+     "sourceStageId": "stage_impl_main",
+     "pathBase": "workspace"
+    },
+    "input": {
+     "sources": [
+      {
+       "type": "stage-output",
+       "stageId": "stage_impl_main",
+       "outputKey": "code",
+       "label": "实现输出"
+      }
+     ],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "writtenPath",
+      "format": "file-path"
+     }
+    ],
+    "pauseAfter": false
+   },
+   {
+    "id": "stage_test_run_main",
+    "title": "跑测试 · main",
+    "description": "pytest · main",
+    "tool": "code-runner",
+    "toolConfig": {
+     "type": "code-runner",
+     "command": ".venv/bin/python -m pytest -q tests/test_main.py",
+     "captureOutput": true,
+     "pathBase": "workspace",
+     "workingDir": "."
+    },
+    "input": {
+     "sources": [
+      {
+       "type": "user-input",
+       "label": "用户需求"
+      }
+     ],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "testLog",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false,
+    "dependsOn": [
+     "stage_impl_main"
+    ]
+   },
+   {
+    "id": "stage_fix_if_failed_main",
+    "title": "修复失败测试（main）",
+    "description": "pytest 失败后：根据测试输出修复 Python 代码与依赖。",
+    "tool": "llm-text",
+    "toolConfig": {
+     "type": "llm-text",
+     "systemPrompt": "测试阶段 stage_test_run_main 失败后执行修复（Python 栈）。\n步骤：1) 阅读 test_run 输出；2) 按 R3b 路由修复 impl 与 requirements.txt；3) 对齐 test 与 impl API。\n可修改文件：main.py、requirements.txt。\n多文件输出格式（必须）：\n--- file: main.py ---\n<impl 全文>\n--- file: requirements.txt ---\n<requirements.txt 全文>\n禁止 Markdown 围栏；禁止静默 import 未在 decisionArtifacts.dependencies 声明的第三方包。",
+     "writeOutputToFile": "main.py",
+     "writePathBase": "workspace",
+     "additionalWriteTargets": [
+      "requirements.txt"
+     ],
+     "multiFileOutputFormat": "delimited"
+    },
+    "dependsOn": [
+     "stage_test_run_main"
+    ],
+    "input": {
+     "sources": [
+      {
+       "type": "stage-output",
+       "stageId": "stage_test_run_main",
+       "outputKey": "verifyOut",
+       "label": "test_run 输出"
+      }
+     ],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "fixPatch",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false,
+    "skipIf": {
+     "type": "exitCodeZero",
+     "stageId": "stage_test_run_main",
+     "outputKey": "_exitCode"
+    }
+   },
+   {
+    "id": "stage_runtime_replan_fix_main",
+    "title": "Fix replan 升级（main）",
+    "description": "[系统插入 · runtime-replan] fix-exhausted：fix_if_failed 仍红",
+    "tool": "llm-text",
+    "toolConfig": {
+     "type": "llm-text",
+     "systemPrompt": "stage_fix_if_failed_main 已达上限仍未能使 test_run 通过；执行 runtime-replan 升级修复。\n只输出完整文件 main.py；禁止 Markdown 围栏。\n阅读 test_run 失败输出与下方注入的已落盘测试全文，逐条满足 assert/raises 语义；勿臆造第三方符号。\n测试用 prev_* 列（如 prev_vol_ma_short、prev_macd_hist、prev_cci）表达动态条件时，impl 必须读取 row 中同名字段并实现对应比较逻辑。\ntest_run 输出摘要：\n..F                                                                      [100%]\n=================================== FAILURES ===================================\n_______________________ test_run_trading_loop_basic_flow _______________________\n\n    def test_run_trading_loop_basic_flow():\n        mock_config = MagicMock()\n        mock_config.indicators = {\"ma_periods\": [5, 6, 7, 8, 9, 11, 20]}\n        mock_config.signals = {\"kline_interval\": \"3m\"}\n        mock_config.risk = {\"stop_loss_ticks\": 15}\n        mock_config.broker = {\"adapter\": \"SimBroker\", \"market_data_source\": \"csv/mock\"}\n        mock_config.main = {\"poll_interval_seconds\": 1}\n    \n        with patch('main.load_config', return_value=mock_config):\n            with patch('time.sleep', side_effect=[None, SystemExit]):\n                with patch('broker.SimBroker') as mock_broker_cls:\n                    mock_broker_instance = mock_broker_cls.return_value\n                    mock_klines = pd.DataFrame({\n                        'datetime': pd.date_range('2025-01-01', periods=100, freq='1min'),\n                        'open': np.random.randn(100) + 100,\n                        'high': np.random.randn(100) + 101,\n                        'low': np.random.randn(100) + 99,\n                        'close': np.random.randn(100) + 100.5,\n                        'volume': np.random.randint(1, 1000, 100)\n                    })\n                    mock_broker_instance.get_klines.return_value = mock_klines\n                    mock_broker_instance.send_order.return_value = {\"status\": \"filled\"}\n    \n                    with patch('indicators.calculate_ma', return_value=pd.Series(dtype=float)) as mock_ma, \\\n                         patch('indicators.calculate_boll', return_value=pd.Series(dtype=float)) as mock_boll, \\\n                         patch('indicators.calculate_vol', return_value=pd.Series(dtype=float)) as mock_vol, \\\n                         patch('indicators.calculate_macd', return_value=pd.Series(dtype=float)) as mock_macd, \\\n                         patch('indicators.calculate_cci', return_value=pd.Series(dtype=float)) as mock_cci, \\\n                         patch('signals.generate_long_signal', return_value=False) as mock_long, \\\n                         patch('signals.generate_short_signal', return_value=True) as mock_short, \\\n                         patch('risk.check_stop_loss', return_value=[]) as mock_check_stop, \\\n                         patch('risk.calculate_position_size', return_value=1) as mock_calc_pos:\n    \n                        with pytest.raises(SystemExit):\n>                           run_trading_loop()\n\ntests/test_main.py:93: \n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \n\n    def run_trading_loop():\n        config = load_config()\n        broker_adapter_name = config.broker['adapter']\n        if broker_adapter_name == 'SimBroker':\n            broker = SimBroker()\n        else:\n            raise ValueError(f\"Unsupported broker adapter: {broker_adapter_name}\")\n        interval = config.signals['kline_interval']\n        poll_interval = config.main['poll_interval_seconds']\n        while True:\n>           klines = broker.get_klines(interval=interval)\nE           AttributeError: 'SimBroker' object has no attribute 'get_klines'\n\nmain.py:38: AttributeError\n=========================== short test summary info ============================\nFAILED tests/test_main.py::test_run_trading_loop_basic_flow - AttributeError:...\n1 failed, 2 passed in 0.19s",
+     "writeOutputToFile": "main.py",
+     "writePathBase": "workspace"
+    },
+    "dependsOn": [
+     "stage_fix_if_failed_main"
+    ],
+    "input": {
+     "sources": [],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "replanOut",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false
+   },
+   {
+    "id": "stage_write_config",
+    "title": "写入 config.yaml",
+    "description": "从全局决策 decisionArtifacts 落盘 config.yaml",
+    "tool": "file-write",
+    "toolConfig": {
+     "type": "file-write",
+     "filePath": "config.yaml",
+     "pathBase": "workspace",
+     "sourceStageId": "stage_decide_architecture_overview",
+     "sourceOutputKey": "configContent"
+    },
+    "input": {
+     "sources": [],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "writeLog",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false,
+    "dependsOn": [
+     "stage_test_run_main"
+    ]
+   },
+   {
+    "id": "stage_smoke_run",
+    "title": "Smoke：真启动一次（有界）",
+    "description": "用机器上既有工具链有界启动一次（起服务/入口 → 确认存活 → 立即收掉），验证「真的跑得起来」，而非只靠测试绿。",
+    "aiTip": "serve 有界运行：起得来即通过；启动后立即崩溃/超时即失败，回到对应实现修。",
+    "tool": "code-runner",
+    "toolConfig": {
+     "type": "code-runner",
+     "command": ".venv/bin/python main.py --config config.yaml",
+     "captureOutput": true,
+     "pathBase": "workspace",
+     "serve": true,
+     "graceMs": 5000,
+     "readyTimeoutMs": 30000
+    },
+    "dependsOn": [
+     "stage_write_config"
+    ],
+    "input": {
+     "sources": [],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "smokeOutput",
+      "format": "text"
+     }
+    ],
+    "pauseAfter": false
+   },
+   {
+    "id": "stage_delivery_wrapup",
+    "title": "交付收口（验收 + 运行说明）",
+    "description": "汇总本次交付：做了什么、文件清单、怎么运行、验收清单、一键自检、已知限制，写入工作区根 DELIVERY.md，并暂停供用户验收。",
+    "aiTip": "面向非技术用户的验收页：核对「做得对吗 / 怎么跑」，不对则可回到对应阶段修。",
+    "tool": "llm-text",
+    "toolConfig": {
+     "type": "llm-text",
+     "systemPrompt": "交付收口：生成 DELIVERY.md，让非专业用户能「验收 + 运行」本次交付。\n输出**纯 Markdown 文件正文**（禁止代码围栏包裹整篇、禁止额外说明）。基于已批准的 DecisionRecord 与下方「产物文件清单」逐节填写；**不要臆造未产出的文件或能力**。结构如下：\n\n# 交付说明\n\n## 做了什么\n3–6 句白话说明本次交付实现了什么能力（面向非技术用户，避免 grill/slice/TDD 等术语）。\n\n## 文件清单\n逐一列出本次产出的关键文件及其一句话作用（严格基于「产物文件清单」，不遗漏、不编造）。\n\n## 怎么运行\n给出从零到跑起来的最小命令序列（安装依赖 → 启动/构建 → 访问入口）；命令须与实际技术栈、入口文件、package.json scripts 一致；每条命令注明在哪个目录执行（如 `cd server`）。\n\n## 验收清单（请逐项确认）\n用**可观察行为**表述 3–6 条验收项（用户能自己核对「做得对不对」），对应核心能力与已批准决策；写「能看到/能做到什么」，不要写实现步骤。每条用 `- [ ] ` 开头。\n\n## 一键自检\n给出一条可复制的 smoke 命令（如 `cd server && npm test`，或运行入口并观察预期输出），用于快速确认「能跑且测试绿」。\n\n## 已知限制与未做\n诚实列出本次未覆盖范围、已知风险、以及继承自决策记录「AI 无法验证的假设」中仍需人确认的前提。\n\n\n## 产物文件清单（务必逐一覆盖，不要编造清单外文件）\n- tests/test_indicators.py\n- indicators/__init__.py\n- conftest.py\n- tests/test_signals.py\n- signals/__init__.py\n- tests/test_risk.py\n- risk/__init__.py\n- tests/test_broker.py\n- broker/__init__.py\n- tests/test_main.py\n- main.py",
+     "writeOutputToFile": "DELIVERY.md",
+     "writePathBase": "workspace"
+    },
+    "dependsOn": [
+     "stage_write_config"
+    ],
+    "input": {
+     "sources": [
+      {
+       "type": "user-input",
+       "label": "原始需求"
+      }
+     ],
+     "mergeStrategy": "concat"
+    },
+    "outputs": [
+     {
+      "key": "delivery",
+      "format": "markdown"
+     }
+    ],
+    "pauseAfter": true,
+    "skipIf": {
+     "type": "anyTestRunFailed",
+     "stageId": "_any_test_run_"
+    }
+   }
+  ]
+ },
+ "decideSignals": {
+  "decisionArtifacts": {
+   "version": 1,
+   "files": [],
+   "modules": [
+    {
+     "name": "signals",
+     "exports": [
+      "generate_long_signal",
+      "generate_short_signal"
+     ]
+    }
+   ],
+   "dependencies": [
+    "numpy",
+    "pandas"
+   ],
+   "testStack": "pytest"
+  },
+  "warnings": [
+   "切片 signals 须在 decisionArtifacts.behaviorSpec 中声明行为规格（conditions + edge_rules）"
+  ]
+ },
+ "testWriteSignalsCode": "import pytest\nimport pandas as pd\nimport numpy as np\nfrom signals import generate_long_signal, generate_short_signal\n\n\ndef make_klines(close_series, volume_series=None, freq='3min'):\n    \"\"\"构建包含 datetime, open, high, low, close, volume 的 K 线 DataFrame 辅助函数。\"\"\"\n    n = len(close_series)\n    if volume_series is None:\n        volume_series = [1000] * n\n    base_time = pd.Timestamp('2023-01-01 09:30')\n    datetimes = pd.date_range(base_time, periods=n, freq=freq)\n    df = pd.DataFrame({\n        'datetime': datetimes,\n        'open': close_series,\n        'high': [c + 1 for c in close_series],\n        'low': [c - 1 for c in close_series],\n        'close': close_series,\n        'volume': volume_series,\n    })\n    return df\n\n\nclass TestNoSignal:\n    \"\"\"当任何多/空条件均不满足时，两个信号函数均应返回 False。\"\"\"\n\n    def test_no_signal_when_conditions_not_met(self):\n        # 构造均线分散、无并拢、指数位置错误、无白点、成交量不活跃的场景\n        indicators = {\n            'ma5': 100, 'ma6': 105, 'ma7': 110, 'ma8': 115, 'ma9': 120,\n            'ma11': 125, 'ma20': 130,\n            'boll_upper': 150, 'boll_lower': 100,\n            'volume_ma3': 2000,\n            'macd': -0.5, 'macd_signal': -0.3,\n            'cci': -80,\n            'white_dot': False,\n            'sh_index': 3800, 'sh_index_ma20': 4000,   # 上证在20日线下\n            'sz_index': 1500, 'sz_index_ma20': 1600,\n        }\n        klines = make_klines(close_series=[101, 102, 103], volume_series=[800, 800, 900])\n\n        assert generate_long_signal(indicators, klines) is False\n        assert generate_short_signal(indicators, klines) is False\n\n    def test_no_long_signal_if_index_below_ma20(self):\n        \"\"\"即使部分技术指标满足多头条件，但指数未站上20日线时，不产生多头信号。\"\"\"\n        indicators = {\n            'ma5': 209.5, 'ma6': 209.6, 'ma7': 209.7, 'ma8': 209.8, 'ma9': 209.9,\n            'ma11': 210.2, 'ma20': 210,\n            'boll_upper': 212, 'boll_lower': 208,\n            'volume_ma3': 1000,\n            'macd': 0.05, 'macd_signal': 0.02,\n            'cci': 0.5,\n            'white_dot': True,\n            'sh_index': 195, 'sh_index_ma20': 200,   # 上证在20日线下\n            'sz_index': 170, 'sz_index_ma20': 180,\n        }\n        klines = make_klines(close_series=[206, 207, 209, 213], volume_series=[500, 500, 800, 2500])\n        assert generate_long_signal(indicators, klines) is False\n\n\nclass TestLongSignal:\n    \"\"\"测试多头信号的触发条件。\"\"\"\n\n    def test_long_signal_triggered(self):\n        \"\"\"构造满足所有多头规则（均线并拢后上穿20、布林带非横盘、倍量、MACD零轴上红柱加长、白点、指数在线上）的情况。\"\"\"\n        indicators = {\n            'ma5': 209.5, 'ma6': 209.6, 'ma7': 209.7, 'ma8': 209.8, 'ma9': 209.9,\n            'ma11': 210.2, 'ma20': 210,\n            'boll_upper': 212, 'boll_lower': 208,   # 带宽 > 2%\n            'volume_ma3': 1000,\n            'macd': 0.05, 'macd_signal': 0.02,      # 红柱 0.03\n            'cci': 0.5,\n            'white_dot': True,\n            'sh_index': 220, 'sh_index_ma20': 200,   # 在线上\n            'sz_index': 190, 'sz_index_ma20': 180,\n        }\n        # 前三根在20线下，最后一根上穿\n        klines = make_klines(close_series=[206, 207, 209, 213],\n                             volume_series=[500, 500, 800, 2500])  # 倍量 2500 > 2*1000\n        assert generate_long_signal(indicators, klines) is True\n        assert generate_short_signal(indicators, klines) is False\n\n    def test_long_signal_missing_white_dot_fails(self):\n        \"\"\"白点条件不满足时不应产生多头信号（假设白点是必要条件）。\"\"\"\n        indicators = {\n            'ma5': 209.5, 'ma6': 209.6, 'ma7': 209.7, 'ma8': 209.8, 'ma9': 209.9,\n            'ma11': 210.2, 'ma20': 210,\n            'boll_upper': 212, 'boll_lower': 208,\n            'volume_ma3': 1000,\n            'macd': 0.05, 'macd_signal': 0.02,\n            'cci': 0.5,\n            'white_dot': False,        # 无白点\n            'sh_index': 220, 'sh_index_ma20': 200,\n            'sz_index': 190, 'sz_index_ma20': 180,\n        }\n        klines = make_klines(close_series=[206, 207, 209, 213], volume_series=[500, 500, 800, 2500])\n        assert generate_long_signal(indicators, klines) is False\n\n\nclass TestShortSignal:\n    \"\"\"测试空头信号的触发条件。\"\"\"\n\n    def test_short_signal_triggered(self):\n        \"\"\"构造满足所有空头规则（均线并拢后下穿20、布林带非横盘、倍量、MACD零轴下绿柱加长、CCI二次下穿、指数在线下）的情况。\"\"\"\n        indicators = {\n            'ma5': 190.5, 'ma6': 190.4, 'ma7': 190.3, 'ma8': 190.2, 'ma9': 190.1,\n            'ma11': 189.8, 'ma20': 190,\n            'boll_upper': 195, 'boll_lower': 185,\n            'volume_ma3': 1200,\n            'macd': -0.06, 'macd_signal': -0.02,   # 绿柱 -0.04\n            'cci': -0.3,\n            'white_dot': False,    # 空信号可能不要求白点，但提供也无妨\n            'sh_index': 3600, 'sh_index_ma20': 4000,\n            'sz_index': 1400, 'sz_index_ma20': 1600,\n        }\n        klines = make_klines(close_series=[194, 192, 190, 188],\n                             volume_series=[600, 600, 1000, 2500])  # 倍量\n        assert generate_short_signal(indicators, klines) is True\n        assert generate_long_signal(indicators, klines) is False\n\n    def test_short_signal_missing_volume_spike_fails(self):\n        \"\"\"缺少倍量条件时空头信号不应触发。\"\"\"\n        indicators = {\n            'ma5': 190.5, 'ma6': 190.4, 'ma7': 190.3, 'ma8': 190.2, 'ma9': 190.1,\n            'ma11': 189.8, 'ma20': 190,\n            'boll_upper': 195, 'boll_lower': 185,\n            'volume_ma3': 1200,\n            'macd': -0.06, 'macd_signal': -0.02,\n            'cci': -0.3,\n            'white_dot': False,\n            'sh_index': 3600, 'sh_index_ma20': 4000,\n            'sz_index': 1400, 'sz_index_ma20': 1600,\n        }\n        # 成交量未超过2倍均量\n        klines = make_klines(close_series=[194, 192, 190, 188],\n                             volume_series=[600, 600, 1000, 1500])  # 1500 < 2400\n        assert generate_short_signal(indicators, klines) is False\n\n\nclass TestBoundaryConditions:\n    \"\"\"测试边界情况与健壮性。\"\"\"\n\n    def test_signal_returns_false_if_key_missing(self):\n        \"\"\"indicators 缺少必要字段时函数应安全返回 False，不抛出异常。\"\"\"\n        incomplete = {\n            'ma5': 100, 'ma20': 105,\n        }\n        klines = make_klines(close_series=[100, 101, 102])\n        # 不应崩溃\n        assert generate_long_signal(incomplete, klines) is False\n        assert generate_short_signal(incomplete, klines) is False\n\n    def test_signal_with_empty_klines_returns_false(self):\n        \"\"\"空K线DataFrame时不产生任何信号。\"\"\"\n        indicators = {\n            'ma5': 100, 'ma6': 100, 'ma7': 100, 'ma8': 100, 'ma9': 100,\n            'ma11': 100, 'ma20': 100,\n            'boll_upper': 102, 'boll_lower': 98,\n            'volume_ma3': 500,\n            'macd': 0, 'macd_signal': 0,\n            'cci': 0,\n            'white_dot': False,\n            'sh_index': 200, 'sh_index_ma20': 200,\n            'sz_index': 180, 'sz_index_ma20': 180,\n        }\n        empty_klines = pd.DataFrame(columns=['datetime', 'open', 'high', 'low', 'close', 'volume'])\n        assert generate_long_signal(indicators, empty_klines) is False\n        assert generate_short_signal(indicators, empty_klines) is False\n\n    def test_both_signals_on_unusual_data(self):\n        \"\"\"\n        根据设计决策，当多空条件同时满足时，两个函数可能都返回 True，\n        由调用方处理冲突。此测试验证该行为（使用极端矛盾但可能同时出现的指标）。\n        \"\"\"\n        # 构造一个逻辑上难以同时成立但程序可能同时判定为真的场景\n        indicators = {\n            'ma5': 200, 'ma6': 200, 'ma7': 200, 'ma8': 200, 'ma9': 200,\n            'ma11': 200, 'ma20': 200,\n            'boll_upper': 210, 'boll_lower': 190,\n            'volume_ma3': 1000,\n            'macd': 0.01, 'macd_signal': -0.01,   # 柱 = 0.02 红柱（零轴上？可能有争议）\n            'cci': 0.1,\n            'white_dot': True,\n            'sh_index': 210, 'sh_index_ma20': 200,   # 在线上，利于多头\n            'sz_index': 189, 'sz_index_ma20': 190,   # 在线下，利于空头\n        }\n        klines = make_klines(close_series=[199, 200, 201, 202],\n                             volume_series=[500, 500, 800, 2500])\n        # 允许两者均为 True 或均为 False；重点是验证不会崩溃且行为符合设计\n        long_res = generate_long_signal(indicators, klines)\n        short_res = generate_short_signal(indicators, klines)\n        assert isinstance(long_res, bool)\n        assert isinstance(short_res, bool)"
+}

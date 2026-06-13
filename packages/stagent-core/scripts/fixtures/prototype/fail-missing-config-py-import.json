@@ -1,0 +1,49 @@
+{
+  "id": "wf_prototype_fail_missing_config_py_import",
+  "version": "2.0",
+  "meta": {
+    "title": "Prototype Fail Missing Config Py Import",
+    "taskType": "prototype",
+    "userInput": "原型：读取数据并验证分析假设是否成立",
+    "createdAt": "2026-05-09T10:40:00.000Z"
+  },
+  "stages": [
+    {
+      "id": "stage_decide_prototype_hypothesis",
+      "title": "定义原型假设与成功判据",
+      "description": "成功判据：分析产出非空且可复现",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "输出关键假设与成功/失败判据" },
+      "input": { "sources": [{ "type": "user-input", "label": "目标" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "hypothesis", "format": "markdown" }],
+      "pauseAfter": true
+    },
+    {
+      "id": "stage_impl_prototype_reader",
+      "title": "实现数据读取模块",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "生成 reader.py 读取输入数据", "writeOutputToFile": "reader.py" },
+      "input": { "sources": [{ "type": "stage-output", "stageId": "stage_decide_prototype_hypothesis", "outputKey": "hypothesis", "label": "假设" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "readerPy", "format": "markdown" }],
+      "pauseAfter": false
+    },
+    {
+      "id": "stage_impl_prototype_writer",
+      "title": "实现结果写出模块",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "生成 writer.py 写出分析结果", "writeOutputToFile": "writer.py" },
+      "input": { "sources": [{ "type": "stage-output", "stageId": "stage_decide_prototype_hypothesis", "outputKey": "hypothesis", "label": "假设" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "writerPy", "format": "markdown" }],
+      "pauseAfter": false
+    },
+    {
+      "id": "stage_test_run_prototype_experiment",
+      "title": "运行原型实验验证",
+      "tool": "code-runner",
+      "toolConfig": { "type": "code-runner", "command": "python -c \"import config; print(config.SETTINGS)\"", "captureOutput": true },
+      "input": { "sources": [{ "type": "stage-output", "stageId": "stage_impl_prototype_writer", "outputKey": "writerPy", "label": "写出模块" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "experimentReport", "format": "markdown" }],
+      "pauseAfter": false
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "id": "wf_runtime_fail_missing_decide",
+  "version": "2.0",
+  "meta": {
+    "title": "VS Code TODO 管理器（AI 漏掉决策阶段）",
+    "taskType": "software",
+    "userInput": "实现一个 VS Code TODO 注释管理器插件",
+    "createdAt": "2026-05-12T00:00:00.000Z"
+  },
+  "stages": [
+    {
+      "id": "stage_decide_scanner",
+      "title": "decide scanner",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "decision" },
+      "input": { "sources": [{ "type": "user-input", "label": "需求" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "decisionRecord", "format": "markdown" }],
+      "pauseAfter": true,
+      "isDecisionStage": true
+    },
+    {
+      "id": "stage_impl_scanner",
+      "title": "impl scanner（合规）",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "严格按照已确认的决策清单实现，不得偏离。" },
+      "input": { "sources": [{ "type": "stage-output", "stageId": "stage_decide_scanner", "outputKey": "decisionRecord", "label": "决策" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "code", "format": "text" }],
+      "pauseAfter": false
+    },
+    {
+      "id": "stage_impl_treeview",
+      "title": "impl treeview（漏决策、漏 decisionRecord 来源、漏约束语）",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "请实现 TreeDataProvider。" },
+      "input": { "sources": [{ "type": "user-input", "label": "需求" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "code", "format": "text" }],
+      "pauseAfter": false
+    }
+  ]
+}

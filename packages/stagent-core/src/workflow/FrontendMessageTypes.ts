@@ -1,0 +1,19 @@
+/** FrontendMessage `type` 字段常量（webview-safe，与 MessageTypes.FrontendMessage 一致）。 */
+
+export const FRONTEND_MSG_WEBVIEW_READY = 'webviewReady' as const;
+export const FRONTEND_MSG_GENERATE_WORKFLOW = 'generateWorkflow' as const;
+export const FRONTEND_MSG_PICK_TASK_WORKSPACE_FOLDER = 'pickTaskWorkspaceFolder' as const;
+export const FRONTEND_MSG_CLARIFY_START = 'clarifyStart' as const;
+export const FRONTEND_MSG_POLISH_USER_TASK = 'polishUserTask' as const;
+export const FRONTEND_MSG_START_EXECUTION = 'startExecution' as const;
+export const FRONTEND_MSG_APPROVE = 'approve' as const;
+export const FRONTEND_MSG_APPROVE_DECISION = 'approveDecision' as const;
+export const FRONTEND_MSG_ANSWER_QUESTIONS_BEFORE = 'answerQuestionsBefore' as const;
+export const FRONTEND_MSG_ANSWER_QUESTIONS = 'answerQuestions' as const;
+export const FRONTEND_MSG_RETRY = 'retry' as const;
+export const FRONTEND_MSG_UPSTREAM_FIX = 'upstreamFix' as const;
+export const FRONTEND_MSG_COPY_DEBUG_LOG = 'copyDebugLog' as const;
+export const FRONTEND_MSG_COPY_SESSION_LOG = 'copySessionLog' as const;
+export const FRONTEND_MSG_EDIT_OUTPUT = 'editOutput' as const;
+export const FRONTEND_MSG_OPEN_ARTIFACT_DIFF = 'openArtifactDiff' as const;
+export const FRONTEND_MSG_OPEN_ARTIFACT_FILE = 'openArtifactFile' as const;

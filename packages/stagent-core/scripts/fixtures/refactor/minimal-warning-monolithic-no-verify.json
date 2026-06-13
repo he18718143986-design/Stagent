@@ -1,0 +1,34 @@
+{
+  "id": "wf_refactor_warning_monolithic",
+  "version": "2.0",
+  "meta": {
+    "title": "Refactor Legacy Service",
+    "taskType": "refactor",
+    "userInput": "重构遗留服务，减少耦合",
+    "createdAt": "2026-05-09T07:32:00.000Z"
+  },
+  "stages": [
+    {
+      "id": "stage_decide_refactor_legacy_service",
+      "title": "决策遗留服务重构",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "输出重构决策清单" },
+      "input": { "sources": [{ "type": "user-input", "label": "需求" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "decisionRecord", "format": "markdown" }],
+      "pauseAfter": true,
+      "isDecisionStage": true
+    },
+    {
+      "id": "stage_impl_all",
+      "title": "一次性重构全部",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "严格按照已确认的决策清单实现，不得偏离。" },
+      "input": {
+        "sources": [{ "type": "stage-output", "stageId": "stage_decide_refactor_legacy_service", "outputKey": "decisionRecord", "label": "已确认的决策清单" }],
+        "mergeStrategy": "concat"
+      },
+      "outputs": [{ "key": "implPatch", "format": "markdown" }],
+      "pauseAfter": false
+    }
+  ]
+}

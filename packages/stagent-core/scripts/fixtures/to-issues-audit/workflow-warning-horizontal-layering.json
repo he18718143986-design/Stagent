@@ -1,0 +1,115 @@
+{
+  "id": "workflow_warning_horizontal_layering",
+  "version": "2.0",
+  "meta": {
+    "title": "Warning Horizontal Layering",
+    "taskType": "software",
+    "userInput": "fixture：两个切片均为 decide→test→run→impl 完整链，但阶段顺序为「全部 decide 在前、全部 impl 在后」，用于锁住水平分层启发式 warning",
+    "createdAt": "2026-05-09T12:00:00.000Z",
+    "isGreenfield": true
+  },
+  "stages": [
+    {
+      "id": "stage_decide_slice_alpha",
+      "title": "决策切片 alpha",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "产出 slice_alpha 决策清单" },
+      "input": { "sources": [{ "type": "user-input", "label": "需求" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "decisionRecord", "format": "markdown" }],
+      "pauseAfter": true,
+      "isDecisionStage": true
+    },
+    {
+      "id": "stage_decide_slice_beta",
+      "title": "决策切片 beta",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "产出 slice_beta 决策清单" },
+      "input": { "sources": [{ "type": "user-input", "label": "需求" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "decisionRecord", "format": "markdown" }],
+      "pauseAfter": true,
+      "isDecisionStage": true
+    },
+    {
+      "id": "stage_test_write_slice_alpha",
+      "title": "切片 alpha 测试编写",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "编写 slice_alpha 测试" },
+      "input": {
+        "sources": [{ "type": "stage-output", "stageId": "stage_decide_slice_alpha", "outputKey": "decisionRecord", "label": "决策清单" }],
+        "mergeStrategy": "concat"
+      },
+      "outputs": [{ "key": "tests", "format": "markdown" }],
+      "pauseAfter": false
+    },
+    {
+      "id": "stage_test_run_slice_alpha",
+      "title": "切片 alpha 测试运行",
+      "tool": "code-runner",
+      "toolConfig": { "type": "code-runner", "command": "npm run test -- slice-alpha", "captureOutput": true },
+      "input": {
+        "sources": [{ "type": "stage-output", "stageId": "stage_test_write_slice_alpha", "outputKey": "tests", "label": "测试" }],
+        "mergeStrategy": "concat"
+      },
+      "outputs": [{ "key": "report", "format": "markdown" }],
+      "pauseAfter": false
+    },
+    {
+      "id": "stage_test_write_slice_beta",
+      "title": "切片 beta 测试编写",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "编写 slice_beta 测试" },
+      "input": {
+        "sources": [{ "type": "stage-output", "stageId": "stage_decide_slice_beta", "outputKey": "decisionRecord", "label": "决策清单" }],
+        "mergeStrategy": "concat"
+      },
+      "outputs": [{ "key": "tests", "format": "markdown" }],
+      "pauseAfter": false
+    },
+    {
+      "id": "stage_test_run_slice_beta",
+      "title": "切片 beta 测试运行",
+      "tool": "code-runner",
+      "toolConfig": { "type": "code-runner", "command": "npm run test -- slice-beta", "captureOutput": true },
+      "input": {
+        "sources": [{ "type": "stage-output", "stageId": "stage_test_write_slice_beta", "outputKey": "tests", "label": "测试" }],
+        "mergeStrategy": "concat"
+      },
+      "outputs": [{ "key": "report", "format": "markdown" }],
+      "pauseAfter": false
+    },
+    {
+      "id": "stage_impl_slice_alpha",
+      "title": "实现切片 alpha",
+      "tool": "llm-text",
+      "toolConfig": {
+        "type": "llm-text",
+        "systemPrompt": "严格按照已确认的决策清单实现，不得偏离。如发现清单中存在矛盾，在代码注释中标注。"
+      },
+      "input": {
+        "sources": [
+          { "type": "stage-output", "stageId": "stage_decide_slice_alpha", "outputKey": "decisionRecord", "label": "已确认的决策清单" }
+        ],
+        "mergeStrategy": "concat"
+      },
+      "outputs": [{ "key": "code", "format": "text" }],
+      "pauseAfter": false
+    },
+    {
+      "id": "stage_impl_slice_beta",
+      "title": "实现切片 beta",
+      "tool": "llm-text",
+      "toolConfig": {
+        "type": "llm-text",
+        "systemPrompt": "严格按照已确认的决策清单实现，不得偏离。如发现清单中存在矛盾，在代码注释中标注。"
+      },
+      "input": {
+        "sources": [
+          { "type": "stage-output", "stageId": "stage_decide_slice_beta", "outputKey": "decisionRecord", "label": "已确认的决策清单" }
+        ],
+        "mergeStrategy": "concat"
+      },
+      "outputs": [{ "key": "code", "format": "text" }],
+      "pauseAfter": false
+    }
+  ]
+}

@@ -1,0 +1,74 @@
+{
+  "id": "workflow_auth_session_hardening",
+  "version": "2.0",
+  "meta": {
+    "title": "Auth Session Hardening",
+    "taskType": "software",
+    "userInput": "加固登录会话管理，支持 token 轮换与会话失效审计日志。",
+    "createdAt": "2026-05-09T14:49:00.000Z",
+    "isGreenfield": false
+  },
+  "stages": [
+    {
+      "id": "stage_zoom_out",
+      "title": "读取模块地图",
+      "tool": "file-read",
+      "toolConfig": { "type": "file-read", "filePath": "package.json" },
+      "input": { "sources": [{ "type": "user-input", "label": "需求" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "moduleMap", "format": "markdown" }],
+      "pauseAfter": false
+    },
+    {
+      "id": "stage_decide_session_guard",
+      "title": "决策会话守卫模块",
+      "isDecisionStage": true,
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "产出会话守卫决策清单，覆盖 token 轮换、过期策略与审计点。" },
+      "input": {
+        "sources": [{ "type": "stage-output", "stageId": "stage_zoom_out", "outputKey": "moduleMap", "label": "模块映射" }],
+        "mergeStrategy": "concat"
+      },
+      "outputs": [{ "key": "decisionRecord", "format": "markdown" }],
+      "pauseAfter": true
+    },
+    {
+      "id": "stage_test_write_session_guard",
+      "title": "编写会话守卫测试",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "按主路径、失效路径、边界冲突顺序编写 session_guard 测试。" },
+      "input": {
+        "sources": [{ "type": "stage-output", "stageId": "stage_decide_session_guard", "outputKey": "decisionRecord", "label": "决策清单" }],
+        "mergeStrategy": "concat"
+      },
+      "outputs": [{ "key": "testPlan", "format": "markdown" }],
+      "pauseAfter": false
+    },
+    {
+      "id": "stage_impl_session_guard",
+      "title": "实现会话守卫",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "严格按照已确认的决策清单实现，不得偏离。如发现清单中存在矛盾，在代码注释中标注。" },
+      "input": {
+        "sources": [
+          { "type": "stage-output", "stageId": "stage_decide_session_guard", "outputKey": "decisionRecord", "label": "已确认的决策清单" },
+          { "type": "stage-output", "stageId": "stage_test_write_session_guard", "outputKey": "testPlan", "label": "测试计划" }
+        ],
+        "mergeStrategy": "concat"
+      },
+      "outputs": [{ "key": "implPatch", "format": "markdown" }],
+      "pauseAfter": false
+    },
+    {
+      "id": "stage_test_run_session_guard",
+      "title": "运行会话守卫测试",
+      "tool": "code-runner",
+      "toolConfig": { "type": "code-runner", "command": "npm run test -- session-guard", "captureOutput": true },
+      "input": {
+        "sources": [{ "type": "stage-output", "stageId": "stage_impl_session_guard", "outputKey": "implPatch", "label": "实现结果" }],
+        "mergeStrategy": "concat"
+      },
+      "outputs": [{ "key": "testReport", "format": "markdown" }],
+      "pauseAfter": false
+    }
+  ]
+}

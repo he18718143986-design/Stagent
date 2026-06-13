@@ -1,0 +1,31 @@
+{
+  "id": "wf_prototype_warn_missing_verification",
+  "version": "2.0",
+  "meta": {
+    "title": "Prototype Missing Verification",
+    "taskType": "prototype",
+    "userInput": "快速做一个原型页面",
+    "createdAt": "2026-05-09T10:41:00.000Z"
+  },
+  "stages": [
+    {
+      "id": "stage_decide_prototype_hypothesis",
+      "title": "定义原型假设与成功判据",
+      "description": "成功判据：用户停留时长提升",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "输出假设与成功判据" },
+      "input": { "sources": [{ "type": "user-input", "label": "目标" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "hypothesis", "format": "markdown" }],
+      "pauseAfter": true
+    },
+    {
+      "id": "stage_impl_prototype_mvp",
+      "title": "实现原型",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "实现最小原型" },
+      "input": { "sources": [{ "type": "stage-output", "stageId": "stage_decide_prototype_hypothesis", "outputKey": "hypothesis", "label": "假设" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "mvpPatch", "format": "markdown" }],
+      "pauseAfter": false
+    }
+  ]
+}

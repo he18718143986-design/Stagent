@@ -1,0 +1,11 @@
+# 开关 ON 时 workflowGenerated.warnings 预期值
+# 即 Rule20RuntimeGate.buildGeneratorWarnings() 返回值
+[]
+
+# 解读：
+# - 阶段数 4 < MAX_STAGES_WARN(45)，无 stage_count_near_limit
+# - verifyRule20 全 pass：每个 impl 都有 decide pair + decisionRecord source + 约束 prompt；
+#   impl 数量 2 ≤ 5 且 userInput 不含全栈/多模块关键词，无 software-missing-global-architecture-decision；
+#   无 stage_test_run_*，因此 to-issues 专项规则不触发；
+#   无 verticalSlicing / horizontal-layering 等命中条件。
+# - 开关 OFF（显式 false）：workflowGenerated.warnings === [] —— 与开关 ON 时 pass 路径不同（无 rule20 行）。

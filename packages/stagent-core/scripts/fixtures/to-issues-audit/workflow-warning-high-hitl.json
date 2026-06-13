@@ -1,0 +1,58 @@
+{
+  "id": "workflow_warning_high_hitl",
+  "version": "2.0",
+  "meta": {
+    "title": "Warning High HITL",
+    "taskType": "software",
+    "userInput": "示例：HITL 比例偏高的 to-issues workflow",
+    "createdAt": "2026-05-09T09:31:00.000Z"
+  },
+  "stages": [
+    {
+      "id": "stage_decide_parser",
+      "title": "决策解析器",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "输出决策" },
+      "input": { "sources": [{ "type": "user-input", "label": "需求" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "decisionRecord", "format": "markdown" }],
+      "pauseAfter": true,
+      "isDecisionStage": true
+    },
+    {
+      "id": "stage_test_write_parser",
+      "title": "编写测试",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "写测试" },
+      "input": {
+        "sources": [{ "type": "stage-output", "stageId": "stage_decide_parser", "outputKey": "decisionRecord", "label": "决策" }],
+        "mergeStrategy": "concat"
+      },
+      "outputs": [{ "key": "tests", "format": "markdown" }],
+      "pauseAfter": true
+    },
+    {
+      "id": "stage_impl_parser",
+      "title": "实现解析器",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "严格按照已确认的决策清单实现，不得偏离。" },
+      "input": {
+        "sources": [{ "type": "stage-output", "stageId": "stage_decide_parser", "outputKey": "decisionRecord", "label": "已确认的决策清单" }],
+        "mergeStrategy": "concat"
+      },
+      "outputs": [{ "key": "code", "format": "text" }],
+      "pauseAfter": true
+    },
+    {
+      "id": "stage_test_run_parser",
+      "title": "运行测试",
+      "tool": "code-runner",
+      "toolConfig": { "type": "code-runner", "command": "npm run test -- parser", "captureOutput": true },
+      "input": {
+        "sources": [{ "type": "stage-output", "stageId": "stage_impl_parser", "outputKey": "code", "label": "实现结果" }],
+        "mergeStrategy": "concat"
+      },
+      "outputs": [{ "key": "report", "format": "markdown" }],
+      "pauseAfter": false
+    }
+  ]
+}

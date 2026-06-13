@@ -1,0 +1,42 @@
+{
+  "id": "wf_debug_warn_missing_reproduce",
+  "version": "2.0",
+  "meta": {
+    "title": "Debug Missing Reproduce",
+    "taskType": "debug",
+    "userInput": "排查启动超时",
+    "createdAt": "2026-05-09T10:11:00.000Z"
+  },
+  "stages": [
+    {
+      "id": "stage_hypothesis_debug_root_cause",
+      "title": "根因假设",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "输出假设" },
+      "input": { "sources": [{ "type": "user-input", "label": "故障描述" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "hypothesis", "format": "markdown" }],
+      "pauseAfter": false
+    },
+    {
+      "id": "stage_impl_debug_fix",
+      "title": "实现修复",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "按假设修复" },
+      "input": {
+        "sources": [{ "type": "stage-output", "stageId": "stage_hypothesis_debug_root_cause", "outputKey": "hypothesis", "label": "根因假设" }],
+        "mergeStrategy": "concat"
+      },
+      "outputs": [{ "key": "fixPatch", "format": "markdown" }],
+      "pauseAfter": false
+    },
+    {
+      "id": "stage_test_run_debug_regression",
+      "title": "回归验证",
+      "tool": "code-runner",
+      "toolConfig": { "type": "code-runner", "command": "npm run test -- startup-timeout", "captureOutput": true },
+      "input": { "sources": [{ "type": "stage-output", "stageId": "stage_impl_debug_fix", "outputKey": "fixPatch", "label": "修复结果" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "regressionReport", "format": "markdown" }],
+      "pauseAfter": false
+    }
+  ]
+}

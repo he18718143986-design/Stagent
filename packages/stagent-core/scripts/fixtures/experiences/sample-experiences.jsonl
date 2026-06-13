@@ -1,0 +1,6 @@
+{"id":"exp-1","timestamp":"2026-01-01T00:00:00.000Z","taskType":"software","completionStatus":"failed","failureStageId":"stage_impl_auth","failureErrorType":"tool-execution-failed","humanInterventions":2,"stageOutcomes":[{"stageId":"stage_impl_auth","confidenceScore":0.3}]}
+{"id":"exp-2","timestamp":"2026-01-02T00:00:00.000Z","taskType":"software","completionStatus":"failed","failureStageId":"stage_impl_auth","failureErrorType":"tool-execution-failed","humanInterventions":1}
+{"id":"exp-3","timestamp":"2026-01-03T00:00:00.000Z","taskType":"software","completionStatus":"failed","failureStageId":"stage_test_run_auth","failureErrorType":"code-runner-timeout","humanInterventions":0}
+{"id":"exp-4","timestamp":"2026-01-04T00:00:00.000Z","taskType":"software","completionStatus":"failed","failureStageId":"stage_decide_arch","failureErrorType":"invariant-violation","humanInterventions":6}
+{"id":"exp-5","timestamp":"2026-01-05T00:00:00.000Z","taskType":"software","completionStatus":"completed","humanInterventions":1,"stageOutcomes":[{"stageId":"stage_impl_ok","confidenceScore":0.85}]}
+{"id":"exp-6","timestamp":"2026-01-06T00:00:00.000Z","taskType":"software","completionStatus":"abandoned","humanInterventions":8}

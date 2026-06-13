@@ -1,0 +1,69 @@
+{
+  "id": "wf_runtime_pass_todo",
+  "version": "2.0",
+  "meta": {
+    "title": "VS Code TODO 注释管理器（理想 AI 输出）",
+    "taskType": "software",
+    "userInput": "实现一个 VS Code 插件，扫描工作区中所有文件的 TODO/FIXME/HACK 注释，在侧边栏树视图中分组展示。",
+    "createdAt": "2026-05-12T00:00:00.000Z"
+  },
+  "stages": [
+    {
+      "id": "stage_decide_scanner",
+      "title": "决策：文件扫描器模块边界",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "你是高级架构师，请输出 4 节决策清单。" },
+      "input": {
+        "sources": [{ "type": "user-input", "label": "需求" }],
+        "mergeStrategy": "concat"
+      },
+      "outputs": [{ "key": "decisionRecord", "format": "markdown" }],
+      "pauseAfter": true,
+      "isDecisionStage": true
+    },
+    {
+      "id": "stage_impl_scanner",
+      "title": "实现：文件扫描器",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "严格按照已确认的决策清单实现，不得偏离。如发现清单中存在矛盾，请在代码注释中标注 BLOCKED。" },
+      "input": {
+        "sources": [
+          { "type": "stage-output", "stageId": "stage_decide_scanner", "outputKey": "decisionRecord", "label": "已确认的决策清单" }
+        ],
+        "mergeStrategy": "concat"
+      },
+      "outputs": [{ "key": "code", "format": "text" }],
+      "pauseAfter": false
+    },
+    {
+      "id": "stage_decide_treeview",
+      "title": "决策：TreeDataProvider 模块边界",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "你是高级架构师，请输出 4 节决策清单。" },
+      "input": {
+        "sources": [
+          { "type": "user-input", "label": "需求" },
+          { "type": "stage-output", "stageId": "stage_impl_scanner", "outputKey": "code", "label": "扫描器实现" }
+        ],
+        "mergeStrategy": "concat"
+      },
+      "outputs": [{ "key": "decisionRecord", "format": "markdown" }],
+      "pauseAfter": true,
+      "isDecisionStage": true
+    },
+    {
+      "id": "stage_impl_treeview",
+      "title": "实现：TreeDataProvider 侧边栏",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "严格按照已确认的决策清单实现，不得偏离。如发现清单中存在矛盾，请在代码注释中标注 BLOCKED。" },
+      "input": {
+        "sources": [
+          { "type": "stage-output", "stageId": "stage_decide_treeview", "outputKey": "decisionRecord", "label": "已确认的决策清单" }
+        ],
+        "mergeStrategy": "concat"
+      },
+      "outputs": [{ "key": "code", "format": "text" }],
+      "pauseAfter": false
+    }
+  ]
+}

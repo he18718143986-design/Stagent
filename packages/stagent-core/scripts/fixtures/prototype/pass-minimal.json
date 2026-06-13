@@ -1,0 +1,40 @@
+{
+  "id": "wf_prototype_pass_minimal",
+  "version": "2.0",
+  "meta": {
+    "title": "Prototype Pass Minimal",
+    "taskType": "prototype",
+    "userInput": "验证新交互是否提升首次完成率",
+    "createdAt": "2026-05-09T10:40:00.000Z"
+  },
+  "stages": [
+    {
+      "id": "stage_decide_prototype_hypothesis",
+      "title": "定义原型假设与成功判据",
+      "description": "成功判据：首次完成率提升 >= 10%",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "输出关键假设与成功/失败判据" },
+      "input": { "sources": [{ "type": "user-input", "label": "目标" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "hypothesis", "format": "markdown" }],
+      "pauseAfter": true
+    },
+    {
+      "id": "stage_impl_prototype_mvp",
+      "title": "实现最小原型",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "仅实现可验证假设的最小功能面" },
+      "input": { "sources": [{ "type": "stage-output", "stageId": "stage_decide_prototype_hypothesis", "outputKey": "hypothesis", "label": "假设" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "mvpPatch", "format": "markdown" }],
+      "pauseAfter": false
+    },
+    {
+      "id": "stage_test_run_prototype_experiment",
+      "title": "运行原型实验验证",
+      "tool": "code-runner",
+      "toolConfig": { "type": "code-runner", "command": "npm run test -- prototype-experiment", "captureOutput": true },
+      "input": { "sources": [{ "type": "stage-output", "stageId": "stage_impl_prototype_mvp", "outputKey": "mvpPatch", "label": "原型实现" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "experimentReport", "format": "markdown" }],
+      "pauseAfter": false
+    }
+  ]
+}

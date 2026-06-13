@@ -1,0 +1,30 @@
+{
+  "id": "wf_prototype_warn_missing_success_criteria",
+  "version": "2.0",
+  "meta": {
+    "title": "Prototype Missing Success Criteria",
+    "taskType": "prototype",
+    "userInput": "验证新引导流程是否值得继续投入",
+    "createdAt": "2026-05-09T10:42:00.000Z"
+  },
+  "stages": [
+    {
+      "id": "stage_decide_prototype_hypothesis",
+      "title": "定义原型假设",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "输出核心假设" },
+      "input": { "sources": [{ "type": "user-input", "label": "目标" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "hypothesis", "format": "markdown" }],
+      "pauseAfter": true
+    },
+    {
+      "id": "stage_impl_prototype_mvp",
+      "title": "实现最小原型",
+      "tool": "llm-text",
+      "toolConfig": { "type": "llm-text", "systemPrompt": "实现最小可演示版本" },
+      "input": { "sources": [{ "type": "stage-output", "stageId": "stage_decide_prototype_hypothesis", "outputKey": "hypothesis", "label": "假设" }], "mergeStrategy": "concat" },
+      "outputs": [{ "key": "mvpPatch", "format": "markdown" }],
+      "pauseAfter": false
+    }
+  ]
+}

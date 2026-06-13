@@ -1,0 +1,23 @@
+{
+  "timestamp": "2026-06-10T22:48:04.063Z",
+  "commit": "cba1747c",
+  "mode": "mock",
+  "repeat": 2,
+  "threshold": 2,
+  "scenarios": [
+    {
+      "id": "generate",
+      "attempts": 2,
+      "passed": 2,
+      "strictPassed": 0,
+      "successRate": 1,
+      "meetsThreshold": true,
+      "avgElapsedMs": 21,
+      "failures": []
+    }
+  ],
+  "verdict": {
+    "pass": true,
+    "rule": "每个 scenario 通过次数 ≥ 2/2（§6.1 成功率口径）"
+  }
+}

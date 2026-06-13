@@ -1,0 +1,27 @@
+{
+  "include": [
+    "src/main/**/*",
+    "src/preload/**/*"
+  ],
+  "exclude": [
+    "src/preload/index.d.ts"
+  ],
+  "compilerOptions": {
+    "composite": true,
+    "outDir": "./out/tsc-node",
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "lib": ["ES2022"],
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "baseUrl": ".",
+    "paths": {
+      "@main/*": ["src/main/*"]
+    },
+    "strictNullChecks": true,
+    "noUncheckedIndexedAccess": true
+  }
+}
