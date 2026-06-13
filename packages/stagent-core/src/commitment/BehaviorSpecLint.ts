@@ -80,17 +80,47 @@ function lintSetIdealOrdering(code: string): BehaviorSpecLintIssue[] {
   return issues;
 }
 
+export interface BehaviorSpecLintOptions {
+  /** 切片契约 exports；单入口 API（如 generate_signals）覆盖逻辑分组函数名时跳过逐函数覆盖（Run #54）。 */
+  contractExports?: string[];
+}
+
+/**
+ * 单入口 export 已在测试中调用且不在 spec.functions 名列表 → 逻辑分组由入口函数覆盖。
+ */
+function resolveSingleEntryExport(
+  testCode: string,
+  spec: BehaviorSpecV1,
+  contractExports?: string[],
+): string | null {
+  if (!contractExports?.length) {
+    return null;
+  }
+  const specFnNames = new Set(spec.functions.map((f) => f.name));
+  for (const exp of contractExports) {
+    if (specFnNames.has(exp)) {
+      continue;
+    }
+    if (new RegExp(`\\b${escapeRegExp(exp)}\\s*\\(`).test(testCode)) {
+      return exp;
+    }
+  }
+  return null;
+}
+
 /**
  * 用 behaviorSpec SSOT 复核测试文件：条件 id / 函数覆盖 + edge_rules 确定性纪律。
  */
 export function lintTestAgainstBehaviorSpec(
   testCode: string,
   spec: BehaviorSpecV1,
+  opts?: BehaviorSpecLintOptions,
 ): BehaviorSpecLintIssue[] {
   const issues: BehaviorSpecLintIssue[] = [];
+  const singleEntryExport = resolveSingleEntryExport(testCode, spec, opts?.contractExports);
   for (const fn of spec.functions) {
     const fnCalled = new RegExp(`\\b${escapeRegExp(fn.name)}\\s*\\(`).test(testCode);
-    if (!fnCalled) {
+    if (!fnCalled && !singleEntryExport) {
       issues.push({
         code: 'behavior-spec-function-uncovered',
         message: `behaviorSpec 函数 ${fn.name}() 未在测试中被调用`,

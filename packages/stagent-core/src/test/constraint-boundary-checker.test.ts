@@ -62,7 +62,7 @@ test('isAdrLabelByFeatures: AND logic for adr label', () => {
 });
 
 test('loadAdrCalibrationQuestions: seed jsonl validates label/features consistency', () => {
-  const repoRoot = path.resolve(__dirname, '../../../../..');
+  const repoRoot = path.resolve(__dirname, '../../../..');
   const file = path.join(repoRoot, '.stagent/charter/calibration/questions.jsonl');
   const rows = loadAdrCalibrationQuestions(file);
   assert.ok(rows.length >= 7);
