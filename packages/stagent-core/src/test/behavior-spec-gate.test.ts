@@ -121,7 +121,7 @@ def test_bear_ma_convergence():
 def test_bull_ma_convergence():
     assert generate_signals("bull", df) is not None
 `;
-  const issues = lintTestAgainstBehaviorSpec(body, spec);
+  const issues = lintTestAgainstBehaviorSpec(body, spec, { contractExports: ['generate_signals'] });
   assert.equal(issues.filter((i) => i.code === 'behavior-spec-function-uncovered').length, 0);
 });
 

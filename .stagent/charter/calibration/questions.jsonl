@@ -1,0 +1,10 @@
+{"id":"t4-01","text":"MarketGateway 是否应该设计为 abstract base class 还是 Protocol？","label":"adr","rationale":"接口形态不可逆取舍，charter 未覆盖","features":{"irreversible":true,"surprising":true,"tradeoff":true}}
+{"id":"t4-02","text":"测试目录用 tests/ 还是 src/tests/？","label":"non-adr","rationale":"惯例级目录选择，易逆转","features":{"irreversible":false,"surprising":false,"tradeoff":true}}
+{"id":"t4-03","text":"BrokerAdapter 接口形态：是否暴露 send_order 作为公共方法还是内化到 SimBroker？","label":"adr","rationale":"公共 API 边界与模块内化取舍","features":{"irreversible":true,"surprising":true,"tradeoff":true}}
+{"id":"t4-04","text":"signals 模块边界：generate_bear_signal 与 generate_bull_signal 合并为 generate_signals 还是保持分离？","label":"adr","rationale":"模块边界与导出面取舍","features":{"irreversible":true,"surprising":true,"tradeoff":true}}
+{"id":"t4-05","text":"RiskManager 是否设计为 abstract base class 还是具体类？","label":"adr","rationale":"类型层次与扩展点取舍","features":{"irreversible":true,"surprising":true,"tradeoff":true}}
+{"id":"t4-06","text":"事件模型：subscriber 回调还是 caller 拉取？","label":"adr","rationale":"事件契约与调用方模型取舍","features":{"irreversible":true,"surprising":true,"tradeoff":true}}
+{"id":"t4-07","text":"是否采用 pytest 作为测试框架？","label":"non-adr","rationale":"是否采用类 yes-no，非 irreversible tradeoff","features":{"irreversible":false,"surprising":false,"tradeoff":false}}
+{"id":"t4-08","text":"日志格式用 structlog 还是 standard logging？","label":"non-adr","rationale":"可逆转的日志实现细节","features":{"irreversible":false,"surprising":false,"tradeoff":true}}
+{"id":"t4-09","text":"指数退避重试策略间隔设为 1s 还是 2s？","label":"non-adr","rationale":"运维参数，易调整","features":{"irreversible":false,"surprising":false,"tradeoff":true}}
+{"id":"t4-10","text":"连接超时设为 30s 还是 60s？","label":"non-adr","rationale":"超时参数，非架构级取舍","features":{"irreversible":false,"surprising":false,"tradeoff":true}}

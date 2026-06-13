@@ -10,7 +10,7 @@ import { loadAdrCalibrationQuestions } from '../charter/calibration/loadCalibrat
 import { matchCharterToDecision } from '../charter/CharterAnswerRouter';
 import { parseCharterMarkdown } from '../charter/CharterParser';
 
-const REPO_ROOT = path.resolve(__dirname, '../../../../..');
+const REPO_ROOT = path.resolve(__dirname, '../../../..');
 const CALIBRATION_FILE = defaultCalibrationQuestionsPath(REPO_ROOT);
 
 test('detectAdrCriteria: calibration rows match label', () => {
