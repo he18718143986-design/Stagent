@@ -17,6 +17,7 @@ import type {
   HitlUiHost,
 } from './HitlCoordinatorHost';
 import { postHitlStageError } from './postHitlStageError';
+import { formatDecisionRejectionError } from './DecisionRejection';
 
 export function evaluateApproveDecisionLintOrReject(
   host: HitlStateHost & HitlUiHost & HitlDiagnosticsHost,
@@ -35,11 +36,14 @@ export function evaluateApproveDecisionLintOrReject(
     stageId,
     violationCodes: lintGate.violationCodes,
   });
+  const lintDetail = lintGate.rejectionSummary?.trim()
+    ? lintGate.rejectionSummary.trim()
+    : uiMsg('stagent.hitl.decisionLintRejected');
   postHitlStageError(
     host,
     panel,
     stageId,
-    uiMsg('stagent.hitl.decisionLintRejected', lintGate.rejectionSummary ?? ''),
+    formatDecisionRejectionError('content-lint', lintDetail),
     ERROR_TYPE_INVARIANT_VIOLATION,
   );
   return false;
@@ -87,7 +91,10 @@ export function evaluateApproveBehaviorSpecOrReject(
     host,
     panel,
     stageId,
-    `behaviorSpec 硬校验未通过：${violations.map((v) => v.message).join('；')}。请按 system 中 BEHAVIOR_SPEC 要求在 decisionArtifacts.behaviorSpec 输出机读行为规格（functions[].conditions[].id + edge_rules）。`,
+    formatDecisionRejectionError(
+      'behavior-spec',
+      `behaviorSpec 硬校验未通过：${violations.map((v) => v.message).join('；')}。请按 system 中 BEHAVIOR_SPEC 要求在 decisionArtifacts.behaviorSpec 输出机读行为规格（functions[].conditions[].id + edge_rules）。`,
+    ),
     ERROR_TYPE_INVARIANT_VIOLATION,
   );
   return false;

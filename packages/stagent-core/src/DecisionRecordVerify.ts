@@ -151,6 +151,23 @@ export function buildDecisionLintRetryUserComment(): string {
   ].join('\n');
 }
 
+/**
+ * behaviorSpec 硬校验拒绝后的重试反馈（T4 Run #66 根治）。
+ * 与 `buildDecisionLintRetryUserComment` 区分：behaviorSpec 拒绝时必须补的是
+ * 机读行为规格 `decisionArtifacts.behaviorSpec`，而非 I-17 章节。沿用旧的
+ * 章节重试注释会答非所问，导致重试仍缺 spec。
+ */
+export function buildBehaviorSpecRetryUserComment(): string {
+  return [
+    '决策被 behaviorSpec 硬校验拒绝：必须在 decisionArtifacts.behaviorSpec 输出机读行为规格。',
+    '请在保留原有 decisionRecord 章节的同时，补全 behaviorSpec：',
+    '- functions[]：每个公开信号函数一条，name 必须在 modules.exports 中；',
+    '- 每个 function 的 conditions[]：给出稳定的 id（如 ma_converge / cross_ma20 / cci_double_cross 等）与可读描述；',
+    '- edge_rules：声明边界/横盘振荡过滤等不出信号的规则。',
+    '只输出决策内容本身（含 decisionArtifacts），不要解释这次重写。',
+  ].join('\n');
+}
+
 export function verifyDecisionRecord(record: string): VerifyDecisionRecordResult {
   const violations: DecisionViolation[] = [];
   const text = typeof record === 'string' ? record : '';

@@ -32,7 +32,13 @@ import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { WorkflowEngine, buildDecisionLintRetryUserComment } from '@stagent/core'
+import {
+  WorkflowEngine,
+  buildDecisionLintRetryUserComment,
+  buildBehaviorSpecRetryUserComment,
+  isDecisionLintRejectedError,
+  decisionRejectionKindFromError,
+} from '@stagent/core'
 import { createHeadlessPlatform, findArtifacts, tailDebugLog } from './lib/headless-platform.mjs'
 import {
   CHARTER_REL_PATH,
@@ -199,6 +205,14 @@ function syncStageOutputs(sent, stageOutputs) {
 const MAX_DECISION_LINT_RETRIES = 2
 
 const DECISION_LINT_RETRY_COMMENT = buildDecisionLintRetryUserComment()
+const BEHAVIOR_SPEC_RETRY_COMMENT = buildBehaviorSpecRetryUserComment()
+
+/** 决策拒绝按 kind 选重试反馈：behaviorSpec 拒绝必须补机读行为规格，而非 I-17 章节。 */
+function decisionRetryCommentForError(error) {
+  return decisionRejectionKindFromError(error) === 'behavior-spec'
+    ? BEHAVIOR_SPEC_RETRY_COMMENT
+    : DECISION_LINT_RETRY_COMMENT
+}
 
 /**
  * Auto-approve HITL gates so live runs can finish without a UI.
@@ -220,7 +234,7 @@ async function drainHitl(engine, sent, handled, stageOutputs, decisionApprovalAt
     if (
       type === 'stageError' &&
       'error' in m &&
-      String(m.error).includes('decisionLintRejected') &&
+      isDecisionLintRejectedError(String(m.error)) &&
       'stageId' in m
     ) {
       if (handled.has(m)) continue
@@ -229,12 +243,13 @@ async function drainHitl(engine, sent, handled, stageOutputs, decisionApprovalAt
       const n = decisionLintRetries?.get(stageId) ?? 0
       if (n >= MAX_DECISION_LINT_RETRIES) {
         // 快速失败并给出确定性终因，避免挂死到 timeout
-        throw new Error(`decision lint rejected after ${n} retries @ ${stageId}`)
+        throw new Error(`decision lint rejected after ${n} retries @ ${stageId}: ${String(m.error)}`)
       }
       decisionLintRetries?.set(stageId, n + 1)
       // 允许重试后的新 decisionRecord 再次走 approveDecision
       decisionApprovalAttempted.delete(stageId)
-      await engine.retry(stageId, DECISION_LINT_RETRY_COMMENT)
+      // behaviorSpec 拒绝注入补 spec 的反馈；内容 lint 拒绝注入补章节的反馈
+      await engine.retry(stageId, decisionRetryCommentForError(String(m.error)))
       continue
     }
 
