@@ -203,7 +203,9 @@ function syncStageOutputs(sent, stageOutputs) {
 
 // decision lint 拒绝（decisionRecord 缺章节等）→ AFK 驾驶员带 lint 反馈自动重试 decide
 // stage 的次数上限（T4 Run #25：拒绝后 stage 停 paused，无人值守即挂死到 timeout）。
-const MAX_DECISION_LINT_RETRIES = 2
+// decide 结构化输出存在模型方差（偶发漏「AI 无法验证的假设」节 / 边界场景 < 2），且属可恢复
+// （同任务多数轮次能合规）。AFK 无人值守下提高重试预算以吸收方差；每次重试仅重生成决策（便宜）。
+const MAX_DECISION_LINT_RETRIES = 4
 
 const DECISION_LINT_RETRY_COMMENT = buildDecisionLintRetryUserComment()
 const BEHAVIOR_SPEC_RETRY_COMMENT = buildBehaviorSpecRetryUserComment()
