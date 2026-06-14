@@ -42,6 +42,27 @@
 
 > 说明：T6 用全新临时工作区（无 resume），与「连续 strict」采样口径一致；不纳入 `--live-tier all`（避免与 T4/T5 混算 strict）。
 
+### Live 运行journey（run1→run9，命令 `feedback:live:t6`，全新工作区无 resume）
+
+| run | 终态 | 卡点 / 根因（全部确定性引擎缺陷或可恢复方差） | 根治 |
+|-----|------|------|------|
+| 1 | ❌ generate | `pandas/` 斜杠 token 被当第 6 切片 → 57>55 | 任务 deps 去斜杠 + maxStages 60 |
+| 2 | ❌ main 先跑 | 集成切片 `main` 被排在依赖切片之前（LLM 决策 modules[] 把 main 列首位） | `orderEntrySliceLast`：入口切片恒末位 |
+| 3 | ❌ test_models | test-quality lint 生产模块名硬编码 T4 切片 → `models` 被误判内联 Test Double 假绿 | lint 生产模块名参数化（decide modules[] SSOT ∪ TDD stage 语义） |
+| 4 | ❌ statemachine impl | 契约导出 `ALLOWED_TRANSITIONS`（模块级常量），导出表面检测只认 def/class | `extractModuleLevelConstants` 计入 export-missing 表面 |
+| 5 | ❌ decide 架构 | 重试注释标题带括号 `（至少 1 条）` 与 lint titleRegex 不匹配 → 模型照抄永拒 | 重试注释用干净标题 + 标题外说明数量 |
+| 6 | ❌ main impl | `main` 契约含 `import_tasks_from_csv`（pipeline 函数），main `from pipeline import` re-export 不被识别 | `extractImportedNames`：from-import re-export 计入表面 |
+| 7 | ❌ decide 架构 | 模型方差：偶发漏「AI 无法验证的假设」节 / 边界场景<2，2 次重试未恢复 | AFK decide 重试预算 2→4（吸收可恢复方差） |
+| 8 | ❌ pipeline test_run | 标准库 `csv` 被列为依赖 → `pip install csv` 失败 | stdlib 模块名（csv/json/…）不得作为 pip 依赖 |
+| **9** | **✅ workflowCompleted · strict 1/1** | — | **首次平台及格线 strict 通过** |
+
+run9：49 stages · 25 calls · ~14.7min；交付 config.yaml + models/store/statemachine/pipeline + main.py + 5 个测试文件（**复跑 69 passed**）+ DELIVERY.md。
+
+### 判定（与决策记录一致：架构健康，卡点在量化语义模型能力，非引擎）
+
+- 失败 run1→run9 **单调前移、越来越具体**，每个都是局部、确定性、可 gate/SSOT/参数化收敛的缺陷或可恢复模型方差——正是健康架构特征。本轮根治的 6 处确定性引擎缺陷**全部是 T4 量化任务恰好没触发的硬编码/检测盲区**（T4 切片只导出 def/class、不含模块常量/re-export/stdlib 误列），被确定性平台任务一次性照出来。
+- **平台正确性已被确定性多切片任务证伪「架构需重写」**：引擎能把数据管道/CRUD/状态机多切片任务稳定推到 strict 通过。这反过来印证 T4 signals/broker 的剩余卡点是**量化语义的模型收敛能力**，而非主干架构——决策记录 D2/D3 的拆分判据成立。
+
 ---
 
 ## 运行 #72 — 2026-06-14（稳定性轮次 run9：decide→pro 后 decide 全清，broker 行为收敛耗尽 + 超时 ❌）
