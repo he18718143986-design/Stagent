@@ -261,7 +261,7 @@ test('post-mutate module-contract does not exempt downstream module names for no
   const result = evalSync(postMutateGate, ctx);
   assert.ok(result);
   assert.equal(result!.severity, 'block');
-  assert.equal((result!.metadata as { issue?: { symbol?: string } } | undefined)?.issue?.symbol, 'pipeline');
+  assert.equal((result!.meta as { issue?: { symbol?: string } } | undefined)?.issue?.symbol, 'pipeline');
 });
 
 test('mergeDeclaredDependenciesIntoRequirements is idempotent', () => {
