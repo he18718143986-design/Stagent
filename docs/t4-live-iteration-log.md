@@ -61,7 +61,31 @@ run9：49 stages · 25 calls · ~14.7min；交付 config.yaml + models/store/sta
 ### 判定（与决策记录一致：架构健康，卡点在量化语义模型能力，非引擎）
 
 - 失败 run1→run9 **单调前移、越来越具体**，每个都是局部、确定性、可 gate/SSOT/参数化收敛的缺陷或可恢复模型方差——正是健康架构特征。本轮根治的 6 处确定性引擎缺陷**全部是 T4 量化任务恰好没触发的硬编码/检测盲区**（T4 切片只导出 def/class、不含模块常量/re-export/stdlib 误列），被确定性平台任务一次性照出来。
-- **平台正确性已被确定性多切片任务证伪「架构需重写」**：引擎能把数据管道/CRUD/状态机多切片任务稳定推到 strict 通过。这反过来印证 T4 signals/broker 的剩余卡点是**量化语义的模型收敛能力**，而非主干架构——决策记录 D2/D3 的拆分判据成立。
+- **平台正确性已被确定性多切片任务证伪「架构需重写」**：引擎能把数据管道/CRUD/状态机多切片任务推到 strict 通过（run9）。这反过来印证 T4 signals/broker 的剩余卡点是**量化语义的模型收敛能力**，而非主干架构——决策记录 D2/D3 的拆分判据成立。
+
+### 连续 strict 批跑（`feedback:live:t6:batch` · --repeat 3）
+
+首批（commit 0a6356d，run9 之后、main-entry 修复之前）**0/3**，三例失败正好把「确定性引擎缺陷」与「模型方差」彻底分离：
+
+| run | 失败 | 性质 |
+|-----|------|------|
+| 1 | `test_main.py from main import main` 未在契约 | **确定性引擎缺陷** → 已修（main 约定入口符号测试导入放行，与 export-extra 对称） |
+| 2 | `decide_models` 4 次重试仍缺「AI 无法验证的假设」节 / 边界场景<2 | **模型方差**（decide 结构化内容 rigor，I-17/18/19 硬门禁 × 简单切片难凑 2 个边界场景） |
+| 3 | `test_pipeline.py from pipeline import import_tasks_from_csv` 未在契约 | **模型方差**（decide 契约合成漏列真实函数名；测试由出题人 pro 写出真实 API，契约 prose 未捕获） |
+
+> **关键结论**：修掉 7 处确定性引擎缺陷后，批跑残留失败**全部是 decide 阶段的模型输出方差**（内容 rigor 不稳 + 契约合成不全），经多道**严格契约硬门禁**放大；每轮 6 个决策（架构 + 5 切片）各有失败概率、按轮复合 → 连续 strict 成功率被 decide 方差压低。这与原分析「剩余瓶颈 = 结构化决策的模型能力/方差，而非引擎」完全一致：**架构健康（run9 证），不重写；下一步是降低 decide 方差（提示/采样/门禁分级），而非改主干**。
+
+### 本轮根治的 7 处确定性引擎缺陷（均带单测；`@stagent/core` 932 pass）
+
+1. 入口切片 `main` 恒排末位（`orderEntrySliceLast`）——非 T4 模块名时 LLM 把 main 列首致先跑团灭。
+2. test-quality lint 生产模块名参数化——解耦 T4 硬编码 `indicators/signals/risk/broker`。
+3. 模块顶层常量计入可导入表面（`extractModuleLevelConstants`）——修 `ALLOWED_TRANSITIONS` export-missing 假阴。
+4. decide 重试注释标题去括号——与 lint titleRegex 一致，避免模型照抄带括号标题永拒。
+5. from-import re-export 计入可导入表面（`extractImportedNames`）——修集成切片 `from pipeline import …` 转出。
+6. 标准库模块名（csv/json/…）不得作为 pip 依赖——修 requirements 含 csv 致 pip 失败。
+7. 测试导入 main 约定入口符号即使契约漏声明也放行——与 export-extra 对称。
+
+> 这 7 处全是 **T4 量化任务恰好没触发的耦合/检测盲区**（T4 切片只导出 def/class、不含模块常量/re-export/stdlib 误列、模块名恰好命中硬编码表）。确定性平台任务把它们一次性照出来——正是 D3「用确定性多切片任务做平台及格线」的预期价值：**它既验证了架构健康，也补齐了平台对非量化任务的鲁棒性**。
 
 ---
 
