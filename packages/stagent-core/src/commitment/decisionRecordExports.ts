@@ -114,6 +114,68 @@ const BUILTIN_EXPORT_NOISE = new Set([
   'union',
 ]);
 
+/**
+ * typing / dataclasses / enum / abc / collections 的「类型原语」噪声（T4 Run #66c）。
+ * decide 正文常写「返回一个 NamedTuple」「用 dataclass 定义」「Optional[Signal]」等，
+ * 这些是**导入的类型构造器**，被抽成契约 export → impl 合理不导出原语名 →
+ * `python-impl-export-missing` 误拦（与 #66b 库名同类：导入名 ≠ 模块 API）。
+ * 大小写不敏感（按 toLowerCase 比对）。
+ */
+const PYTHON_TYPING_DATACLASS_NOISE = new Set([
+  // typing
+  'namedtuple',
+  'typeddict',
+  'protocol',
+  'generic',
+  'typevar',
+  'newtype',
+  'callable',
+  'classvar',
+  'final',
+  'literal',
+  'annotated',
+  'iterable',
+  'iterator',
+  'generator',
+  'sequence',
+  'mapping',
+  'mutablemapping',
+  'frozenset',
+  'type',
+  'awaitable',
+  'coroutine',
+  'asynciterator',
+  'asynciterable',
+  'contextmanager',
+  'noreturn',
+  'anystr',
+  'overload',
+  'cast',
+  // dataclasses
+  'dataclass',
+  'field',
+  'fields',
+  'asdict',
+  'astuple',
+  'initvar',
+  'make_dataclass',
+  // enum
+  'enum',
+  'intenum',
+  'flag',
+  'intflag',
+  'auto',
+  // abc
+  'abc',
+  'abcmeta',
+  'abstractmethod',
+  // collections
+  'ordereddict',
+  'defaultdict',
+  'counter',
+  'deque',
+]);
+
 /** 异常类名（DecisionRecord 正文「抛出 KeyError」等），非模块 API。 */
 const PYTHON_EXCEPTION_NOISE = new Set([
   'KeyError',
@@ -225,6 +287,9 @@ function isNoiseExportName(name: string): boolean {
     return true;
   }
   if (BUILTIN_EXPORT_NOISE.has(n.toLowerCase())) {
+    return true;
+  }
+  if (PYTHON_TYPING_DATACLASS_NOISE.has(n.toLowerCase())) {
     return true;
   }
   if (MARKET_INDEX_EXPORT_NOISE.has(n)) {

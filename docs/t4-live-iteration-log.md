@@ -13,6 +13,30 @@
 
 ---
 
+## 运行 #67 — 2026-06-13（稳定性轮次 run4：signals export 噪声 `NamedTuple` 早败 ❌）
+
+| 字段 | 值 |
+|------|-----|
+| 命令 | `feedback:live:t4`（全新工作区 `/tmp/t4-acc/run4`，无 `--resume`） |
+| 耗时 | 548.4s（14 calls；in 46997 / out 55404 tok） |
+| headless 判定 | **FAIL** `python-impl-export-missing` @ `stage_impl_signals` |
+| instance | `7c1a47c1-b536-423e-bcbf-7c425cc5278d` |
+
+### RCA（与 #66b 同类：导入名被当 export，本次是 typing 原语）
+
+`decide_signals` 合成 exports = 函数/条件名 + **`NamedTuple`**（`signals` exports 实测 `[…generate_long_signal, generate_short_signal, ma_convergence, NamedTuple, …]`）。`NamedTuple` 是 `typing` 的类型构造器（正文「返回一个 NamedTuple」），impl 合理不导出原语名 → `module-contract（export-missing）` 误拦。#66b 只覆盖库**包名**（numpy/pandas），未覆盖 **typing/dataclasses 成员原语**。
+
+### 根治（Run #67 代码 · 确定性噪声 SSOT）
+
+| # | 机制 | 落点 |
+|---|------|------|
+| 1 | `isNoiseExportName` 增加 `PYTHON_TYPING_DATACLASS_NOISE`：typing（NamedTuple/TypedDict/Protocol/Optional/Callable…）+ dataclasses（dataclass/field/asdict…）+ enum/abc/collections 原语，大小写不敏感 | `commitment/decisionRecordExports.ts` |
+| - | 单测：`pruneExportNoise` 剔除 NamedTuple/TypedDict/dataclass/Protocol/Enum，保留 `generate_*`/领域类名；`@stagent/core` **908 pass**（3 fail 为预存环境性 ADR 种子缺失） |
+
+> 连续 strict 计数：#66 ✅ → #67 ❌（streak 中断，根治后重启连击）。
+
+---
+
 ## 运行 #66 — 2026-06-13（behaviorSpec 拒绝挂死 + NumPy export 噪声根治 → strict delivery ✅ GREEN）
 
 | 字段 | 值 |
