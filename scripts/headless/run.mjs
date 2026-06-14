@@ -397,7 +397,8 @@ function buildLiveConfigOverrides(spec) {
     'generation.maxParseRetries': 3,
     'contract.planPreflightV2': true,
   }
-  if (T4_FAMILY_TASK_IDS.has(spec.id)) {
+  // strict 多切片交付（T4/T5 量化 + T6 确定性平台及格线）共享同一套硬加固。
+  if (spec.pass?.strict === true) {
     overrides['plan.requireCompleteness'] = true
     overrides['contract.skeletonCompiler'] = true
     overrides['afk.enabled'] = true
@@ -405,11 +406,11 @@ function buildLiveConfigOverrides(spec) {
     overrides.llmMaxOutputTokens = LIVE_T4_MAX_OUTPUT_TOKENS
     // T4 Run #28：test_write（deepseek-v4-pro）长输出偶发 180s 空闲超时 → AFK 拉满上限
     overrides.llmTimeoutSeconds = 600
-    // 可体验交付（价值档）：STAGENT_DEMO_DELIVERY=1 时注入 demo 链；独立度量，不污染 strict。
-    if (process.env.STAGENT_DEMO_DELIVERY === '1') {
-      overrides['delivery.demoDelivery'] = true
-      overrides['delivery.demoArtifactLint'] = 'warn'
-    }
+  }
+  // 可体验交付（价值档）：仅南华期货族；STAGENT_DEMO_DELIVERY=1 时注入 demo 链，独立度量不污染 strict。
+  if (T4_FAMILY_TASK_IDS.has(spec.id) && process.env.STAGENT_DEMO_DELIVERY === '1') {
+    overrides['delivery.demoDelivery'] = true
+    overrides['delivery.demoArtifactLint'] = 'warn'
   }
   if (spec.charter?.enabled) {
     overrides['charter.enabled'] = true
@@ -829,12 +830,17 @@ async function runFullJourney(ctx, spec) {
 
     let strictMvp
     if (spec.pass?.strict) {
-      strictMvp = assertStrictMvpPass(ws, { outcome, requireTraceability: true })
+      strictMvp = assertStrictMvpPass(ws, {
+        outcome,
+        requireTraceability: true,
+        moduleDirs: spec.mvp?.moduleDirs,
+        traceabilityRules: spec.mvp?.traceability,
+      })
       trace.log('strict_mvp_pass', {
         testFiles: strictMvp.testFiles,
         warnings: strictMvp.warnings,
       })
-      if (ctx.keep && ws.includes('.headless-iter')) {
+      if (ctx.keep && ws.includes('.headless-iter') && T4_FAMILY_TASK_IDS.has(spec.id)) {
         const t4Root = path.resolve(REPO_ROOT, '../T4')
         strictMvp.promoted = promoteIterToT4Root(ws, t4Root, {
           instanceKey: key,
@@ -984,7 +990,7 @@ function printHuman(report) {
     }
   }
   console.log(`summary: ${report.summary.passed}/${report.summary.total} passed`)
-  const strictScenarios = report.scenarios.filter((s) => s.strictMvp || s.id?.includes('t4') || s.id?.includes('charter'))
+  const strictScenarios = report.scenarios.filter((s) => s.strictMvp || s.id?.includes('t4') || s.id?.includes('t6') || s.id?.includes('charter'))
   const strictPassed = strictScenarios.filter((s) => s.status === 'pass' && s.strictMvp).length
   if (report.mode === 'live' && strictScenarios.length > 0) {
     console.log(

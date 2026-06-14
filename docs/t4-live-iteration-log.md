@@ -6,10 +6,41 @@
 |------|---------------|-------------------|
 | T1–T3 | headless 流水线完成（T3 可 `acceptRunnerFailure`） | 不适用 |
 | T4/T5 | `workflowCompleted` 或历史 runner-failed-accepted | **必须** pytest 全绿 + MVP 目录 + traceability + `workflowCompleted` |
+| **T6（平台及格线）** | — | **必须** pytest 全绿 + 确定性 MVP 目录（models/store/statemachine/pipeline）+ traceability + `workflowCompleted` |
 
 - `npm run feedback:live:all` 报告含 `strict delivery: X/Y`
 - Engine：`blockDeliveryOnTestFailure` 对 software 默认 true；test 红不得 delivery
 - 详见 [`docs/adr/0004-t4-delivery-hardening.md`](adr/0004-t4-delivery-hardening.md)
+
+---
+
+## 平台及格线 T6 — 2026-06-14（确定性多切片靶子落地 · 决策记录 D2/D3）
+
+> **动机**：T4 南华期货把「平台正确性」与「signals/broker 量化策略语义」绑成一个 strict 验收（= 用奥数题考编译器）。run9 证实剩余卡点已不在确定性引擎，而在量化语义的模型收敛 + 全 decide-pro 的单轮时长。按 D2/D3，新增**确定性多切片任务**作平台及格线，把两者解耦：若 T6 能稳定连续 strict pass，即证主干（DAG + Plan Compiler + Gate/SSOT + fix/replan + 异族出题人 + integration 路由）OK，T4 卡的是量化语义模型能力，而非架构。
+
+### 靶子设计（`live-t6-deterministic-platform`）
+
+任务「Todo 批处理 CLI」——刻意只含**可逐例断言的确定性契约**，无统计/数值/策略模糊语义：
+
+| 切片 | 确定性契约 |
+|------|-----------|
+| `models/` | `validate_task(data)->list[str]`：title 非空、status∈枚举、priority∈1..5，逐条错误可断言 |
+| `store/` | `TaskStore` CRUD：`add/get/update/delete/list_all` + `save_json/load_json`，自增 id 确定 |
+| `statemachine/` | `ALLOWED_TRANSITIONS` + `can_transition/apply_transition`，非法转移抛 `InvalidTransition` |
+| `pipeline/` | `import_tasks_from_csv`（合法入库/非法跳过计数）+ `summarize`（各 status 计数） |
+| `main.py` | 读 config.yaml → 跑 pipeline → 写 summary JSON |
+
+### 机制落点（与 T4 共享同一 strict 通路，仅替换靶子）
+
+| # | 机制 | 落点 |
+|---|------|------|
+| 1 | `assertStrictMvpPass` 泛化：`moduleDirs` + 声明式 `traceabilityRules`（`{id,dirs,pattern,requireDirPy,hint}`）从 spec 注入；缺省回退 T4 量化靶子（向后兼容） | `scripts/headless/lib/mvp-acceptance.mjs` |
+| 2 | T6 tier 自带 `mvp.moduleDirs` + `mvp.traceability`；userInput 自含完整契约（≥4 path-like token → 触发多模块布局、禁 express） | `scripts/headless/lib/live-tasks.mjs` |
+| 3 | strict 硬加固（requireCompleteness/skeletonCompiler/afk/verifyImportsStrict/maxTokens/timeout）改由 `spec.pass.strict` 驱动，T4/T5/T6 共享；T4-root 提升仍仅限南华族 | `scripts/headless/run.mjs` |
+| 4 | `feedback:live:t6` / `feedback:live:t6:batch`（连跑 3 次取成功率，§6.1 口径） | `package.json` |
+| - | 单测：`mvp-acceptance.test.mjs`（泛化 + 声明式规则 + 默认回退 T4）、`live-tasks.test.mjs`（tier 6 解析 / strict spec / 多模块 token）；`node --test scripts/headless/lib/*.test.mjs` **7 pass**。`@stagent/core` 仍 **917 pass**（无回归） | — |
+
+> 说明：T6 用全新临时工作区（无 resume），与「连续 strict」采样口径一致；不纳入 `--live-tier all`（避免与 T4/T5 混算 strict）。
 
 ---
 
