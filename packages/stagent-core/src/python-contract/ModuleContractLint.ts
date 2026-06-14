@@ -115,6 +115,11 @@ export function lintTestImportsAgainstModuleContract(params: {
       if (name === '*' || exportSet.has(name)) {
         continue;
       }
+      // 集成切片 main 的约定入口符号（main/run/cli）即使 decide 契约漏声明也允许测试导入，
+      // 与 export-extra 侧的 MAIN_ENTRY_CONVENTIONAL_EXPORTS 放行对称（T6 测试 `from main import main`）。
+      if (semantic === 'main' && MAIN_ENTRY_CONVENTIONAL_EXPORTS.has(name)) {
+        continue;
+      }
       return {
         code: 'python-module-contract-violation',
         message: `module-contract：${testRelPath} 从 ${semantic} import ${name}，但契约 exports（${contractSource}）未声明该符号`,
