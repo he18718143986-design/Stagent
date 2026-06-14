@@ -33,6 +33,29 @@ export type CoreLlmInvokeFn = (
   opts?: LlmInvokeOpts,
 ) => Promise<string>;
 
+/** 单个 LLM 调用遭遇瞬态网络错误时的最大重试次数（T4 Run #68 根治）。 */
+export const MAX_TRANSIENT_LLM_RETRIES = 2;
+
+const TRANSIENT_LLM_ERROR_RE =
+  /(\b(terminated|econnreset|econnrefused|epipe|etimedout|enotfound|eai_again|socket hang ?up|fetch failed|network (?:error|timeout)|premature close|other side closed|stream (?:closed|aborted|errored)|connection (?:reset|closed|error))\b|und_err[a-z_]*)/i;
+
+/**
+ * 瞬态 LLM 错误（连接被掐断、网络抖动等），可安全重试。
+ * 关键：排除我方 idle 超时触发的 abort（genuine 卡死，不应反复重试加倍等待）。
+ * @param idleAborted 本次调用是否由 idle 超时主动 abort
+ */
+export function isTransientLlmError(err: unknown, idleAborted: boolean): boolean {
+  if (idleAborted) {
+    return false;
+  }
+  const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  return TRANSIENT_LLM_ERROR_RE.test(msg);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 export function createCoreLlmInvoker(deps: CoreLlmInvokerDeps): CoreLlmInvokeFn {
   /**
    * 按角色路由（M-异族出题人）：`stagent.llmModelByRole` 配置了当前 stage 角色
@@ -88,15 +111,19 @@ export function createCoreLlmInvoker(deps: CoreLlmInvokerDeps): CoreLlmInvokeFn 
     return full;
   }
 
-  return async function invokeLlmRaw(
+  async function invokeOnce(
     systemPrompt: string,
     userContent: string,
     traceStageId: string,
-    opts?: LlmInvokeOpts,
+    idleMs: number,
+    opts: LlmInvokeOpts | undefined,
   ): Promise<string> {
-    const idleMs = readLlmTimeoutMs(deps.platform.config);
     const ac = new AbortController();
-    const idle = createIdleTimeout(idleMs, () => ac.abort());
+    let idleAborted = false;
+    const idle = createIdleTimeout(idleMs, () => {
+      idleAborted = true;
+      ac.abort();
+    });
     const onActivity = (): void => idle.reset();
     try {
       const apiKey = deps.platform.config.get<string>('llmApiKey', '').trim();
@@ -182,12 +209,56 @@ export function createCoreLlmInvoker(deps: CoreLlmInvokerDeps): CoreLlmInvokeFn 
       });
       return full;
     } catch (e) {
-      deps.debug.llmTraceLog(traceStageId, 'llm_error', {
-        error: e instanceof Error ? e.message : String(e),
-      });
-      throw new Error(formatLlmUserFacingError(e, idleMs));
+      // 区分瞬态网络错误（可重试）与 idle 超时/其它（不重试）：交由上层判定
+      if (e instanceof Error && !idleAborted && isTransientLlmError(e, false)) {
+        const transient = new TransientLlmError(e.message);
+        transient.cause = e;
+        throw transient;
+      }
+      throw e;
     } finally {
       idle.clear();
     }
+  }
+
+  return async function invokeLlmRaw(
+    systemPrompt: string,
+    userContent: string,
+    traceStageId: string,
+    opts?: LlmInvokeOpts,
+  ): Promise<string> {
+    const idleMs = readLlmTimeoutMs(deps.platform.config);
+    let lastErr: unknown;
+    // 瞬态网络错误（连接被掐断等）重试：一次掉线不应让 ~30 次调用的整轮 T4 失败（Run #68）。
+    for (let attempt = 0; attempt <= MAX_TRANSIENT_LLM_RETRIES; attempt++) {
+      try {
+        return await invokeOnce(systemPrompt, userContent, traceStageId, idleMs, opts);
+      } catch (e) {
+        const transient = e instanceof TransientLlmError;
+        lastErr = transient ? (e as TransientLlmError).cause ?? e : e;
+        deps.debug.llmTraceLog(traceStageId, 'llm_error', {
+          error: lastErr instanceof Error ? lastErr.message : String(lastErr),
+          attempt,
+          transient,
+          willRetry: transient && attempt < MAX_TRANSIENT_LLM_RETRIES,
+        });
+        if (transient && attempt < MAX_TRANSIENT_LLM_RETRIES) {
+          await sleep(2000 * (attempt + 1));
+          continue;
+        }
+        throw new Error(formatLlmUserFacingError(lastErr, idleMs));
+      }
+    }
+    // 不可达：循环要么 return 要么 throw
+    throw new Error(formatLlmUserFacingError(lastErr, idleMs));
   };
+}
+
+/** 内部哨兵：标记可重试的瞬态 LLM 错误，携带原始 cause 供最终用户文案使用。 */
+class TransientLlmError extends Error {
+  cause?: unknown;
+  constructor(message: string) {
+    super(message);
+    this.name = 'TransientLlmError';
+  }
 }

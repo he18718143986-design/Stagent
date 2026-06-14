@@ -13,6 +13,32 @@
 
 ---
 
+## 运行 #68 — 2026-06-14（稳定性轮次 run5：fix-chain LLM 调用瞬态掉线 `terminated` 整轮失败 ❌）
+
+| 字段 | 值 |
+|------|-----|
+| 命令 | `feedback:live:t4`（全新工作区 `/tmp/t4-acc/run5`，无 `--resume`） |
+| 耗时 | 938.6s（12 calls；in 49617 / out 59189 tok） |
+| headless 判定 | **FAIL** `workflowFailed: terminated` @ `stage_fix_if_failed_indicators` |
+| instance | `2cf8d99c-71c4-499b-af48-6d47578cf319` |
+
+### RCA（瞬态网络错误未重试 → 整轮失败）
+
+indicators 切片 pytest 2 红（`test_macd_constant_close…` NaN 容差、`test_cci_known_values` 测试自身 `expected_cci = expected_cci(...)` 自遮蔽 UnboundLocalError），fix 链正在自愈；但 `stage_fix_if_failed_indicators` 的一次 LLM 调用在 ~6 分钟后 `llm_error: "terminated"`（连接被掐断，非 idle 超时——idleMs=600s 未到）。`CoreLlmInvoker` 仅对**空响应/拒答**重试，**不对网络掉线重试** → 单次掉线让整轮 ~30 次调用的 T4 直接 `workflowFailed`。22 分钟长跑中任一调用掉线都会团灭，是稳定性的主要噪声源。
+
+### 根治（Run #68 代码 · 重试结构）
+
+| # | 机制 | 落点 |
+|---|------|------|
+| 1 | `CoreLlmInvoker` 抽出 `invokeOnce` + 外层瞬态重试循环（每次新建 AbortController/idle）；瞬态错误（terminated/ECONNRESET/socket hang up/fetch failed/und_err… 且非 idle-abort）退避重试 ≤2 次 | `core/CoreLlmInvoker.ts` |
+| 2 | `isTransientLlmError(err, idleAborted)` 谓词 + `MAX_TRANSIENT_LLM_RETRIES`；idle 超时主动 abort 不重试（genuine 卡死） | 同上 |
+| - | 单测：`llm-transient-retry.test.ts`（谓词 + 掉线重试成功 / 超上限放弃 / 非瞬态不重试）；`@stagent/core` **913 pass** |
+
+> 残留观察：indicators `test_cci_known_values` 自遮蔽是 test_write 产出的假红测试，本轮因瞬态掉线先死、未走到 testfix replan；留待后续轮次复验（testfix 链应能重写）。
+> 连续 strict 计数：#66 ✅ → #67 ❌ → #68 ❌（根治后重启连击）。
+
+---
+
 ## 运行 #67 — 2026-06-13（稳定性轮次 run4：signals export 噪声 `NamedTuple` 早败 ❌）
 
 | 字段 | 值 |
