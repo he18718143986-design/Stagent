@@ -51,7 +51,7 @@ const T6_USER_INPUT = `用 Python 开发一个「任务清单（Todo）批处理
 
 5. main.py / cli：读取 config.yaml（含 csv_path、output_json_path），调用 pipeline 导入、写出 summarize 结果到 output_json。
 6. 交付：config.yaml、models/、store/、statemachine/、pipeline/、main.py、tests/（pytest 覆盖每个切片的契约与边界）、DELIVERY.md。
-7. 纯标准库 + pandas/pyyaml 即可；不接任何外部服务；CSV 样例可自带 fixture。`
+7. 依赖：仅 PyYAML 用于读取 config.yaml；其余一律使用 Python 标准库（csv、json、dataclasses、enum）。不接任何外部服务；CSV 样例可自带 fixture。`
 
 export const LIVE_TASK_TIERS = {
   1: {
@@ -175,7 +175,9 @@ export const LIVE_TASK_TIERS = {
       terminal: 'workflowCompleted',
       strict: true,
       minStages: 6,
-      maxStages: 55,
+      // 5 切片（models/store/statemachine/pipeline/main）+ skeleton-compiler venv/verify 链；
+      // 留余量避免确定性任务在 generate 计数边界假失败（量化 T4 用 55）。
+      maxStages: 60,
     },
   },
 }
