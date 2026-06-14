@@ -46,6 +46,26 @@ export function parsePythonFromImports(content: string): Array<{ module: string;
   return results;
 }
 
+/**
+ * 模块顶层常量/变量绑定（行首无缩进，含可选类型标注 `NAME: T = ...`）。
+ * 这些符号同样可被 `from module import NAME` 导入，是导出表面的一部分；
+ * 仅用于「import/契约缺失」判定，不计入 export-extra（避免把内部常量误判为多余导出）。
+ */
+const MODULE_CONST_RE = /^([A-Za-z_]\w*)\s*(?::[^=\n]+)?=(?!=)/gm;
+
+export function extractModuleLevelConstants(content: string): Set<string> {
+  const symbols = new Set<string>();
+  MODULE_CONST_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = MODULE_CONST_RE.exec(content)) !== null) {
+    const name = m[1]!;
+    if (!name.startsWith('_')) {
+      symbols.add(name);
+    }
+  }
+  return symbols;
+}
+
 export function extractExportedSymbols(content: string): Set<string> {
   const symbols = new Set<string>();
   MODULE_CLASS_DEF_RE.lastIndex = 0;
@@ -97,8 +117,9 @@ export function lintPythonExportContractOnDisk(params: {
       }
       const implContent = fs.readFileSync(implPath, 'utf8');
       const exported = extractExportedSymbols(implContent);
+      const constants = extractModuleLevelConstants(implContent);
       for (const name of imp.names) {
-        if (name === '*' || exported.has(name)) {
+        if (name === '*' || exported.has(name) || constants.has(name)) {
           continue;
         }
         const key = `${rel}:${imp.module}:${name}`;
@@ -139,13 +160,14 @@ export function lintPythonExportContractFromPaths(
     const testContent = readFile(testPath);
     const implContent = readFile(implPath);
     const exported = extractExportedSymbols(implContent);
+    const constants = extractModuleLevelConstants(implContent);
     const mod = moduleNameFromImplPath(implPath);
     for (const imp of parsePythonFromImports(testContent)) {
       if (imp.module !== mod) {
         continue;
       }
       for (const name of imp.names) {
-        if (name === '*' || exported.has(name)) {
+        if (name === '*' || exported.has(name) || constants.has(name)) {
           continue;
         }
         const key = `${testPath}:${name}`;

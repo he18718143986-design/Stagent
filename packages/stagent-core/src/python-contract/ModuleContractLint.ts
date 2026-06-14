@@ -6,7 +6,11 @@ import {
   resolveModuleExports,
 } from '../commitment/decisionArtifactsSchema';
 import type { WorkflowInstance } from '../WorkflowDefinition';
-import { extractExportedSymbols, parsePythonFromImports } from './PythonExportContractLint';
+import {
+  extractExportedSymbols,
+  extractModuleLevelConstants,
+  parsePythonFromImports,
+} from './PythonExportContractLint';
 import { isExternalPythonModuleRoot } from './pythonExternalModules';
 import { resolveSliceArtifacts } from './sliceContractGateHelpers';
 
@@ -259,13 +263,16 @@ export function lintImplExportsAgainstModuleContract(params: {
   }
   const content = fs.readFileSync(abs, 'utf8');
   const exported = extractExportedSymbols(content);
+  // 模块顶层常量（ALLOWED_TRANSITIONS 等）同样可被 import，是契约导出的合法落点；
+  // 计入「缺失」判定的可见表面，但不参与下方 export-extra（避免内部常量被误判多余）。
+  const importable = new Set([...exported, ...extractModuleLevelConstants(content)]);
   const contractSet = new Set(exports);
   const sliceEntry = sliceArtifacts?.modules?.find((m) => m.name === semantic);
   const contractSource =
     sliceEntry && (sliceEntry.exports?.length ?? 0) > 0 ? 'slice' : 'global';
 
   for (const sym of exports) {
-    if (!exported.has(sym)) {
+    if (!importable.has(sym)) {
       return {
         code: 'python-impl-export-missing',
         message: `module-contract：${implRelPath} 未导出契约符号 ${sym}（${contractSource}）`,
