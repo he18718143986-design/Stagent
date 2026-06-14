@@ -122,6 +122,37 @@ test('pruneExportNoise strips datetime stdlib from export list（Run #59）', ()
   assert.deepEqual(cleaned, ['BrokerAdapter', 'SimBroker']);
 });
 
+test('pruneExportNoise strips library display names NumPy/Pandas（Run #66b indicators）', () => {
+  // 真实 decide_indicators 合成 exports：5 个 calc_* + 库名 NumPy → impl 误拦根因
+  const cleaned = pruneExportNoise([
+    'calc_boll',
+    'calc_cci',
+    'calc_ma',
+    'calc_macd',
+    'calc_vol',
+    'NumPy',
+  ]);
+  assert.deepEqual(cleaned, ['calc_boll', 'calc_cci', 'calc_ma', 'calc_macd', 'calc_vol']);
+  // 其它库展示名（import 根名或展示名）同样剔除，但真实领域类名保留
+  assert.deepEqual(pruneExportNoise(['Pandas', 'PyYAML', 'requests', 'SimBroker']), ['SimBroker']);
+});
+
+test('pruneExportNoise strips typing/dataclass primitives NamedTuple/dataclass（Run #66c signals）', () => {
+  // 真实 decide_signals 合成 exports：函数+条件名 + 类型原语 NamedTuple → impl 误拦根因
+  const cleaned = pruneExportNoise([
+    'generate_long_signal',
+    'generate_short_signal',
+    'ma_convergence',
+    'NamedTuple',
+  ]);
+  assert.deepEqual(cleaned, ['generate_long_signal', 'generate_short_signal', 'ma_convergence']);
+  // 其它 typing/dataclasses/enum 原语同样剔除，真实领域符号保留
+  assert.deepEqual(
+    pruneExportNoise(['TypedDict', 'dataclass', 'Protocol', 'Enum', 'RiskManager']),
+    ['RiskManager'],
+  );
+});
+
 test('extractModuleExportsFromDecisionRecord ignores CSV columns and instance methods（Run #59 broker）', () => {
   const exports = extractModuleExportsFromDecisionRecord('broker', RUN59_BROKER_RECORD);
   assert.deepEqual(exports, ['BrokerAdapter', 'SimBroker']);

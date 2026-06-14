@@ -84,4 +84,15 @@ export type {
   AssembleSkillWorkflowResult,
 } from './SkillWorkflowAssembler';
 
-export { buildDecisionLintRetryUserComment } from './DecisionRecordVerify';
+export {
+  buildDecisionLintRetryUserComment,
+  buildBehaviorSpecRetryUserComment,
+  buildArchitectureConfigRetryUserComment,
+} from './DecisionRecordVerify';
+export {
+  DECISION_LINT_REJECTED_MARKER,
+  formatDecisionRejectionError,
+  isDecisionLintRejectedError,
+  decisionRejectionKindFromError,
+} from './hitl/DecisionRejection';
+export type { DecisionRejectionKind } from './hitl/DecisionRejection';

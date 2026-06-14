@@ -32,7 +32,14 @@ import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { WorkflowEngine, buildDecisionLintRetryUserComment } from '@stagent/core'
+import {
+  WorkflowEngine,
+  buildDecisionLintRetryUserComment,
+  buildBehaviorSpecRetryUserComment,
+  buildArchitectureConfigRetryUserComment,
+  isDecisionLintRejectedError,
+  decisionRejectionKindFromError,
+} from '@stagent/core'
 import { createHeadlessPlatform, findArtifacts, tailDebugLog } from './lib/headless-platform.mjs'
 import {
   CHARTER_REL_PATH,
@@ -199,6 +206,20 @@ function syncStageOutputs(sent, stageOutputs) {
 const MAX_DECISION_LINT_RETRIES = 2
 
 const DECISION_LINT_RETRY_COMMENT = buildDecisionLintRetryUserComment()
+const BEHAVIOR_SPEC_RETRY_COMMENT = buildBehaviorSpecRetryUserComment()
+const ARCH_CONFIG_RETRY_COMMENT = buildArchitectureConfigRetryUserComment()
+
+/** 决策拒绝按 kind 选重试反馈：补行为规格 / 补 config.yaml / 补 I-17 章节。 */
+function decisionRetryCommentForError(error) {
+  switch (decisionRejectionKindFromError(error)) {
+    case 'behavior-spec':
+      return BEHAVIOR_SPEC_RETRY_COMMENT
+    case 'arch-config':
+      return ARCH_CONFIG_RETRY_COMMENT
+    default:
+      return DECISION_LINT_RETRY_COMMENT
+  }
+}
 
 /**
  * Auto-approve HITL gates so live runs can finish without a UI.
@@ -220,7 +241,7 @@ async function drainHitl(engine, sent, handled, stageOutputs, decisionApprovalAt
     if (
       type === 'stageError' &&
       'error' in m &&
-      String(m.error).includes('decisionLintRejected') &&
+      isDecisionLintRejectedError(String(m.error)) &&
       'stageId' in m
     ) {
       if (handled.has(m)) continue
@@ -229,12 +250,13 @@ async function drainHitl(engine, sent, handled, stageOutputs, decisionApprovalAt
       const n = decisionLintRetries?.get(stageId) ?? 0
       if (n >= MAX_DECISION_LINT_RETRIES) {
         // 快速失败并给出确定性终因，避免挂死到 timeout
-        throw new Error(`decision lint rejected after ${n} retries @ ${stageId}`)
+        throw new Error(`decision lint rejected after ${n} retries @ ${stageId}: ${String(m.error)}`)
       }
       decisionLintRetries?.set(stageId, n + 1)
       // 允许重试后的新 decisionRecord 再次走 approveDecision
       decisionApprovalAttempted.delete(stageId)
-      await engine.retry(stageId, DECISION_LINT_RETRY_COMMENT)
+      // behaviorSpec 拒绝注入补 spec 的反馈；内容 lint 拒绝注入补章节的反馈
+      await engine.retry(stageId, decisionRetryCommentForError(String(m.error)))
       continue
     }
 
@@ -623,9 +645,14 @@ async function runFullJourney(ctx, spec) {
     // 异族出题人 + 集成切片增强（T4 Run #65）：test_write 用出题人(pro)；
     // main 集成切片 impl/fix/replan-fix 同样路由到 pro（#62/#64 收敛墙，flash 在多模块编排不收敛）。
     // 叶子切片 impl/fix 仍用全局 flash，保持异族非对称。
+    // decision 角色也路由到出题人(pro)：decide 阶段产出结构化决策契约（I-17 四节 +
+    // behaviorSpec + configContent + modules[]），flash 偶发漏节/漏 spec/漏 config（#66A/#70/
+    // run8 同源），是 decide 类失败的共因；pro 在结构化决策上稳定得多。decide 阶段少（全局
+    // 架构 + 各切片），成本可控。叶子 impl/fix 仍用全局 flash，保持异族非对称。
     const roleOverrides = llm.testWrite
       ? {
           llmModelByRole: {
+            decision: `direct:${llm.testWrite.model}`,
             'test-write': `direct:${llm.testWrite.model}`,
             integration: `direct:${llm.testWrite.model}`,
           },

@@ -1,6 +1,7 @@
 import type { DecisionArtifactsV1 } from './decisionArtifactsSchema';
 import { parseDecisionArtifactsFromText } from './parseDecisionArtifacts';
 import { isPythonStdlibRoot } from '../python-contract/pythonStdlibRoots';
+import { isExternalPythonModuleRoot } from '../python-contract/pythonExternalModules';
 
 function moduleExportsForSemantic(
   modules: Array<{ name: string; exports: string[] }> | undefined,
@@ -113,6 +114,68 @@ const BUILTIN_EXPORT_NOISE = new Set([
   'union',
 ]);
 
+/**
+ * typing / dataclasses / enum / abc / collections 的「类型原语」噪声（T4 Run #66c）。
+ * decide 正文常写「返回一个 NamedTuple」「用 dataclass 定义」「Optional[Signal]」等，
+ * 这些是**导入的类型构造器**，被抽成契约 export → impl 合理不导出原语名 →
+ * `python-impl-export-missing` 误拦（与 #66b 库名同类：导入名 ≠ 模块 API）。
+ * 大小写不敏感（按 toLowerCase 比对）。
+ */
+const PYTHON_TYPING_DATACLASS_NOISE = new Set([
+  // typing
+  'namedtuple',
+  'typeddict',
+  'protocol',
+  'generic',
+  'typevar',
+  'newtype',
+  'callable',
+  'classvar',
+  'final',
+  'literal',
+  'annotated',
+  'iterable',
+  'iterator',
+  'generator',
+  'sequence',
+  'mapping',
+  'mutablemapping',
+  'frozenset',
+  'type',
+  'awaitable',
+  'coroutine',
+  'asynciterator',
+  'asynciterable',
+  'contextmanager',
+  'noreturn',
+  'anystr',
+  'overload',
+  'cast',
+  // dataclasses
+  'dataclass',
+  'field',
+  'fields',
+  'asdict',
+  'astuple',
+  'initvar',
+  'make_dataclass',
+  // enum
+  'enum',
+  'intenum',
+  'flag',
+  'intflag',
+  'auto',
+  // abc
+  'abc',
+  'abcmeta',
+  'abstractmethod',
+  // collections
+  'ordereddict',
+  'defaultdict',
+  'counter',
+  'deque',
+]);
+
 /** 异常类名（DecisionRecord 正文「抛出 KeyError」等），非模块 API。 */
 const PYTHON_EXCEPTION_NOISE = new Set([
   'KeyError',
@@ -148,6 +211,33 @@ const PANDAS_NUMPY_METHOD_NOISE = new Set([
   'set_index',
   'compute_all',
 ]);
+
+/**
+ * 第三方库的「展示名」噪声（T4 Run #66b）：DecisionRecord 正文常写「使用 NumPy 计算…」，
+ * `NumPy`/`Pandas` 等被 PascalCase 抽取或合成为契约 export → impl 合理不导出库名 →
+ * `python-impl-export-missing` 误拦。库名永远不是模块级 API。
+ * `isExternalPythonModuleRoot` 已覆盖 import 名（numpy/pandas/yaml…）；此集合补展示名
+ * 与 import 名不一致的常见库（如 PyYAML→pyyaml、scikit-learn→sklearn）。
+ */
+const PYTHON_LIBRARY_DISPLAY_NOISE = new Set([
+  'numpy',
+  'pandas',
+  'scipy',
+  'matplotlib',
+  'seaborn',
+  'sklearn',
+  'scikitlearn',
+  'pyyaml',
+  'tensorflow',
+  'pytorch',
+  'torch',
+  'requests',
+  'pytest',
+]);
+
+function normalizeLibraryName(name: string): string {
+  return name.trim().toLowerCase().replace(/[-_]/g, '');
+}
 
 /** DataFrame 指标输出列名 / 常量，非模块 export（T4 Run #60）。 */
 const INDICATOR_OUTPUT_COLUMN_NOISE = new Set(['dif', 'dea', 'hist', 'cci', 'nan']);
@@ -199,6 +289,9 @@ function isNoiseExportName(name: string): boolean {
   if (BUILTIN_EXPORT_NOISE.has(n.toLowerCase())) {
     return true;
   }
+  if (PYTHON_TYPING_DATACLASS_NOISE.has(n.toLowerCase())) {
+    return true;
+  }
   if (MARKET_INDEX_EXPORT_NOISE.has(n)) {
     return true;
   }
@@ -212,6 +305,10 @@ function isNoiseExportName(name: string): boolean {
     return true;
   }
   if (isPythonStdlibRoot(n)) {
+    return true;
+  }
+  // 第三方库名（import 根名 numpy/pandas/yaml… 或展示名 NumPy/PyYAML…）永非模块 API
+  if (isExternalPythonModuleRoot(n) || PYTHON_LIBRARY_DISPLAY_NOISE.has(normalizeLibraryName(n))) {
     return true;
   }
   if (isIndicatorColumnNoise(n)) {

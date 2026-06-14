@@ -13,6 +13,230 @@
 
 ---
 
+## 运行 #72 — 2026-06-14（稳定性轮次 run9：decide→pro 后 decide 全清，broker 行为收敛耗尽 + 超时 ❌）
+
+| 字段 | 值 |
+|------|-----|
+| 命令 | `feedback:live:t4`（全新工作区 `/tmp/t4-acc/run9`，无 `--resume`） |
+| 耗时 | ~54min（trace 3262s；44 calls；in 276223 / out 217748 tok） |
+| headless 判定 | **FAIL** `fix chain exhausted @ stage_fix_if_failed_broker` + `timeout 2400000ms` |
+
+### 里程碑（#71 decide→pro 验证 ✅）
+
+- **decide 阶段 0 次拒绝**（pro 稳定产 I-17 四节 + behaviorSpec + configContent）——#66A/#70/#71 共因已消。
+- indicators ✅、signals ✅、risk ✅ test_run 全绿（含三级 replan 自愈）；broker 进入 fix/testfix 收敛。
+
+### RCA（行为收敛天花板 + 时长，非确定性引擎缺陷）
+
+broker pytest 反复红，fix→replan_fix→replan_testfix 三级链耗尽仍未收敛 → `blockDeliveryOnTestFailure`；同时 pro 模型逐调用慢 + 重度 churn 使整轮越过 40min 超时。这是**模型行为收敛能力边界**（量化策略语义），fix/replan 链按设计运转但模型未在预算内收敛——与 2026-06-13 决策记录预判一致，非主干缺陷。
+
+### 判定（不再加引擎机制；属验收靶子/模型层）
+
+| 维度 | 结论 |
+|------|------|
+| 确定性引擎缺陷 | 本阶段 6 项已根治（#66A behaviorSpec 挂死 / #66B 库名噪声 / #67 typing 噪声 / #68 瞬态重试 / self-shadow gate / #70 arch-config gate）+ #71 decide→pro 路由；decide 链已稳 |
+| 剩余瓶颈 | signals/broker **量化行为语义收敛**（LLM 能力）+ pro 全程导致**单轮时长逼近/超 40min 超时** |
+| 连续 2–3 strict pass | ❌ 仍未达；最佳为单次 #66 ✅ |
+
+**建议（与决策记录 D2/D3/D4 一致）**：①叶子 impl/fix 维持 flash（快）、仅 decide/test-write/集成用 pro，避免全程 pro 的时长爆炸（本轮即栽在时长）；②对 signals/broker 量化语义设独立专项验收，不与平台正确性绑定；③平台 strict 及格线改用确定性多切片任务（数据管道/CRUD/状态机）——若其稳定连过即证架构 OK、量化语义卡的是模型，而非重写架构。
+
+---
+
+## 运行 #71 — 2026-06-14（稳定性轮次 run8：arch-config gate 早拦生效 ✅，broker decide I-17 缺节耗尽 ❌）
+
+| 字段 | 值 |
+|------|-----|
+| 命令 | `feedback:live:t4`（全新工作区 `/tmp/t4-acc/run8`，无 `--resume`） |
+| 耗时 | 1733.2s（24 calls） |
+| headless 判定 | **FAIL** `decision lint rejected after 2 retries @ stage_decide_broker`（缺 I-17 ### 关键设计决策/边界压力测试/AI 无法验证的假设） |
+
+### 里程碑（#70 验证 ✅）
+
+- `+138s` 全局架构决策被 **`[decisionLintRejected:arch-config]`** 早拦 → AFK 即时重试补 configContent → 继续推进（**#70 根治端到端生效**，不再到交付前才空内容团灭）。
+- 推进到 broker decide。
+
+### RCA（decide 类失败共因：flash 产结构化决策不稳）
+
+`stage_decide_broker` 连续 3 次（初 + 2 重试）缺 I-17 必需章节，content-lint 正确拒绝、AFK 正确重试（#66A 生效），但 **flash 反复漏节** → 耗尽。复盘 #66A(behaviorSpec 漏)/#70(configContent 漏)/本轮(I-17 漏)**同源**：decide 阶段要产结构化决策契约，flash 偶发不完整。
+
+### 根治（Run #71 · 模型路由，对齐 #65 异族出题人）
+
+| # | 机制 | 落点 |
+|---|------|------|
+| 1 | `decision` 角色路由到出题人(pro)：decide 阶段（全局架构 + 各切片）用 pro 产 I-17 四节 + behaviorSpec + configContent + modules[]；叶子 impl/fix 仍用全局 flash | `scripts/headless/run.mjs` `llmModelByRole.decision` |
+
+> 引擎侧三道 decide 硬校验（content-lint #66A / behaviorSpec / arch-config #70）作为安全网仍在；pro 提升首过率，gate+AFK 兜底重试。连续 strict 计数：#66 ✅ → #67–#71 ❌（均已根因落码；根治后重启连击）。
+
+---
+
+## 运行 #70 — 2026-06-14（稳定性轮次 run7：全切片绿、交付前 config.yaml 空内容失败 ❌ · 史上最深）
+
+| 字段 | 值 |
+|------|-----|
+| 命令 | `feedback:live:t4`（全新工作区 `/tmp/t4-acc/run7`，无 `--resume`） |
+| 耗时 | 1872.9s（36 calls；in 198478 / out 160363 tok） |
+| headless 判定 | **FAIL** `file-write empty content: stage=stage_write_config sourceKey=configContent target=config.yaml` |
+| instance | `/tmp/t4-acc/run7/.stagent/instances` |
+
+### 里程碑（self-shadow 离线根治后推进最深）
+
+| 阶段 | 状态 |
+|------|------|
+| indicators / signals / risk / broker / **main** test_run | ✅ 全绿（signals 经 `runtime_replan_testfix_signals` 收敛） |
+| **stage_write_config** | ❌ `configContent` 空 → file-write 空内容失败（与历史 Run #13 同类） |
+
+### RCA（架构决策漏出 config.yaml 正文，交付前一刻才暴露）
+
+`stage_write_config` 是被动 file-write，`sourceStageId=stage_decide_architecture_overview, sourceOutputKey=configContent`。架构决策的 decisionArtifacts.files 须含 `{key:"configContent", path:"config.yaml", content:…}`，由 `LlmTextStageRunner` 落入 `outputs.configContent`。本轮 LLM **漏出 configContent**（变量方差）→ outputs 空 → 跑了 ~31min 全切片绿后在交付前一刻空内容团灭。
+
+### 根治（Run #70 代码 · 确定性 gate + 复用 AFK 重试）
+
+| # | 机制 | 落点 |
+|---|------|------|
+| 1 | 批准架构决策时硬校验：计划含 `stage_write_config` 时，决策必须产出可解析的 config.yaml 正文（`configContent` 直出或 decisionArtifacts.files yaml），缺则拒绝（错误面带 `decisionLintRejected:arch-config` marker，复用 #66A 的 AFK 重试链，前置便宜重试而非交付前团灭） | `hitl/DecisionLintGate.evaluateApproveArchitectureConfigOrReject`、`HitlApproveDecision.ts` |
+| 2 | `buildArchitectureConfigRetryUserComment()` + headless 按 `arch-config` kind 注入「补 configContent」反馈；`configYamlFromDecideOutputs` SSOT 抽出 | `DecisionRecordVerify.ts`、`commitment/resolveArchitectureConfigYaml.ts`、`run.mjs` |
+| - | 单测：`decision-rejection.test.ts`（缺 config 拒绝 kind=arch-config / 有 config 放行 / 无 write_config 计划放行）；`@stagent/core` **917 pass** |
+
+> 连续 strict 计数：#66 ✅ → #67/#68/#69/#70 ❌（均已根因落码或外部阻断；根治后重启连击）。
+
+---
+
+## 离线根治 — 2026-06-14（架构评估结论 + 复发性假红测试 SSOT · 零 API）
+
+> **架构是否重写？否。** 证据（#66–#69）符合健康架构特征「失败单调前移、越来越具体」：缺陷均为局部、确定性、可 gate/SSOT/retry 收敛的点，或外部阻断（402）；主干（DAG + Plan Compiler + Gate/SSOT + fix/replan + 异族出题人 + integration 路由）已产出过完整 strict 交付（#66）。应重估的是**验收纪律**——按「先离线根治、再 Live 复验」收敛复发点，而非重写架构（与 2026-06-13 决策记录一致）。
+
+### 复发点根治：test_write 自遮蔽假红（run5/run6 indicators 反复红的成因之一）
+
+run5/run6 indicators `test_run` 反复红，其中 `test_cci_known_values` 含 `expected_cci = expected_cci(...)`：name 被赋值即全程视为函数局部，RHS 调用自身抛 `UnboundLocalError`。这是 **test_write 产出的结构性坏测试**，fix 链只改 impl **永远修不好**，只有重写测试可救。
+
+| # | 机制 | 落点 |
+|---|------|------|
+| 1 | `TestQualityLint` 新增 `test-self-shadowed-call`（hard）：`name = name(...)` 且 name 非参数/非更早绑定/非 global → UnboundLocalError 假红 → post test_write 硬阻断触发同 stage 重写（P1）/testfix | `TestQualityLint.ts` |
+| - | 单测：`test-quality-lint.test.ts` 命中 + 参数/重赋值不误报；`@stagent/core` **915 pass** |
+
+> 说明：模块级 `def name`/`import name` **不**使其安全（函数内赋值即遮蔽），故 guard 仅认参数 / 同函数更早赋值 / global，避免假阴同时杜绝假阳。
+
+---
+
+## 运行 #69 — 2026-06-14（稳定性轮次 run6：indicators 测试链中途 API 余额耗尽 402 ❌ · 非代码缺陷）
+
+| 字段 | 值 |
+|------|-----|
+| 命令 | `feedback:live:t4`（全新工作区 `/tmp/t4-acc/run6`，无 `--resume`） |
+| 耗时 | 518.0s（10 calls） |
+| headless 判定 | **FAIL** `LLM API 请求失败 [402] Insufficient Balance` @ `stage_fix_if_failed_indicators` |
+| instance | （`/tmp/t4-acc/run6/.stagent/instances`） |
+
+### RCA（外部阻断，非引擎缺陷）
+
+与文档 Run #52 同类：DeepSeek 账户余额在 indicators fix 链途中耗尽（连跑 T1 + run1/2/3 + run4/5/6 共约 7 次 T4 量级、每次约 290k tokens）。`curl /v1/chat/completions` 复核仍返回 `Insufficient Balance`。**非代码可修**，Live 循环暂停待充值（同 #52 处理）。
+
+> 另：run6 与 run5 同样在 indicators `test_run` 反复红（fix 链自愈中被 402 打断）——疑为 test_write 偶发假红测试（如 #68 记录的 `expected_cci` 自遮蔽类），待充值后复验 testfix 链能否收敛。
+
+### 稳定性验收当前结论（截至 #69）
+
+| 项 | 状态 |
+|----|------|
+| 单次 strict delivery pass | ✅ 已达成（#66，instance `a692cb2e`，83 pytest 全绿，完整 MVP） |
+| **连续 2–3 次 strict pass** | ❌ **未达成**（#66 ✅ → #67/#68/#69 ❌；#67/#68 为引擎根因已修，#69 为 API 余额外部阻断） |
+| 本阶段根治的引擎缺陷 | behaviorSpec 拒绝挂死(#66A)、库名 export 噪声(#66B)、typing 原语 export 噪声(#67)、LLM 瞬态掉线未重试(#68) —— 均含单测 |
+
+**待办（解除 API 阻断后）**：重置连击重跑 ≥3 次全新工作区 → 取得连续 2–3 次 strict pass → 收口 `STAGENT-PRD-ENGINEER.md` 能力矩阵/§7/附录B。
+
+---
+
+## 运行 #68 — 2026-06-14（稳定性轮次 run5：fix-chain LLM 调用瞬态掉线 `terminated` 整轮失败 ❌）
+
+| 字段 | 值 |
+|------|-----|
+| 命令 | `feedback:live:t4`（全新工作区 `/tmp/t4-acc/run5`，无 `--resume`） |
+| 耗时 | 938.6s（12 calls；in 49617 / out 59189 tok） |
+| headless 判定 | **FAIL** `workflowFailed: terminated` @ `stage_fix_if_failed_indicators` |
+| instance | `2cf8d99c-71c4-499b-af48-6d47578cf319` |
+
+### RCA（瞬态网络错误未重试 → 整轮失败）
+
+indicators 切片 pytest 2 红（`test_macd_constant_close…` NaN 容差、`test_cci_known_values` 测试自身 `expected_cci = expected_cci(...)` 自遮蔽 UnboundLocalError），fix 链正在自愈；但 `stage_fix_if_failed_indicators` 的一次 LLM 调用在 ~6 分钟后 `llm_error: "terminated"`（连接被掐断，非 idle 超时——idleMs=600s 未到）。`CoreLlmInvoker` 仅对**空响应/拒答**重试，**不对网络掉线重试** → 单次掉线让整轮 ~30 次调用的 T4 直接 `workflowFailed`。22 分钟长跑中任一调用掉线都会团灭，是稳定性的主要噪声源。
+
+### 根治（Run #68 代码 · 重试结构）
+
+| # | 机制 | 落点 |
+|---|------|------|
+| 1 | `CoreLlmInvoker` 抽出 `invokeOnce` + 外层瞬态重试循环（每次新建 AbortController/idle）；瞬态错误（terminated/ECONNRESET/socket hang up/fetch failed/und_err… 且非 idle-abort）退避重试 ≤2 次 | `core/CoreLlmInvoker.ts` |
+| 2 | `isTransientLlmError(err, idleAborted)` 谓词 + `MAX_TRANSIENT_LLM_RETRIES`；idle 超时主动 abort 不重试（genuine 卡死） | 同上 |
+| - | 单测：`llm-transient-retry.test.ts`（谓词 + 掉线重试成功 / 超上限放弃 / 非瞬态不重试）；`@stagent/core` **913 pass** |
+
+> 残留观察：indicators `test_cci_known_values` 自遮蔽是 test_write 产出的假红测试，本轮因瞬态掉线先死、未走到 testfix replan；留待后续轮次复验（testfix 链应能重写）。
+> 连续 strict 计数：#66 ✅ → #67 ❌ → #68 ❌（根治后重启连击）。
+
+---
+
+## 运行 #67 — 2026-06-13（稳定性轮次 run4：signals export 噪声 `NamedTuple` 早败 ❌）
+
+| 字段 | 值 |
+|------|-----|
+| 命令 | `feedback:live:t4`（全新工作区 `/tmp/t4-acc/run4`，无 `--resume`） |
+| 耗时 | 548.4s（14 calls；in 46997 / out 55404 tok） |
+| headless 判定 | **FAIL** `python-impl-export-missing` @ `stage_impl_signals` |
+| instance | `7c1a47c1-b536-423e-bcbf-7c425cc5278d` |
+
+### RCA（与 #66b 同类：导入名被当 export，本次是 typing 原语）
+
+`decide_signals` 合成 exports = 函数/条件名 + **`NamedTuple`**（`signals` exports 实测 `[…generate_long_signal, generate_short_signal, ma_convergence, NamedTuple, …]`）。`NamedTuple` 是 `typing` 的类型构造器（正文「返回一个 NamedTuple」），impl 合理不导出原语名 → `module-contract（export-missing）` 误拦。#66b 只覆盖库**包名**（numpy/pandas），未覆盖 **typing/dataclasses 成员原语**。
+
+### 根治（Run #67 代码 · 确定性噪声 SSOT）
+
+| # | 机制 | 落点 |
+|---|------|------|
+| 1 | `isNoiseExportName` 增加 `PYTHON_TYPING_DATACLASS_NOISE`：typing（NamedTuple/TypedDict/Protocol/Optional/Callable…）+ dataclasses（dataclass/field/asdict…）+ enum/abc/collections 原语，大小写不敏感 | `commitment/decisionRecordExports.ts` |
+| - | 单测：`pruneExportNoise` 剔除 NamedTuple/TypedDict/dataclass/Protocol/Enum，保留 `generate_*`/领域类名；`@stagent/core` **908 pass**（3 fail 为预存环境性 ADR 种子缺失） |
+
+> 连续 strict 计数：#66 ✅ → #67 ❌（streak 中断，根治后重启连击）。
+
+---
+
+## 运行 #66 — 2026-06-13（behaviorSpec 拒绝挂死 + NumPy export 噪声根治 → strict delivery ✅ GREEN）
+
+| 字段 | 值 |
+|------|-----|
+| 命令 | `node scripts/headless/run.mjs --live --scenario execute --live-tier 4 --keep --workspace /tmp/t4-run/task` |
+| 模型 | main `deepseek-v4-flash` / test-write+integration `deepseek-v4-pro`（异族出题人 + Run #65 integration 路由） |
+| 耗时 | 1323.9s（22min；49 stages；29 calls；in 147860 / out 143484 tok） |
+| headless 判定 | **PASS** `workflowCompleted` · **strict delivery 1/1** |
+| instance | `a692cb2e-…`（run3；run1=behaviorSpec 挂死，run2=NumPy export-missing 早败） |
+
+### 里程碑（史上首次 strict delivery GREEN）
+
+| 切片 | test_run |
+|------|----------|
+| indicators / signals / risk / broker / **main** | ✅ 全绿（signals 经 fix + `runtime_replan_fix_signals` 收敛） |
+| smoke_run / write_config / delivery_wrapup | ✅ |
+
+交付物：`config.yaml`（指标参数与需求逐项对齐：MA 5/6/7/8/9/11/20、BOLL 20+2、VOL 3+100、MACD 14+53+60、CCI 89、止损 15 点）、`indicators/`（compute_ma/boll/volume/macd/cci）、`signals/`（check_long/short_signal）、`risk/`（calculate_stop_loss/classify_order/should_stop_loss 四情形对冲）、`broker/`（BrokerAdapter 抽象 + SimBroker）、`main.py`、`tests/`（**复跑 83 passed**）、`DELIVERY.md`。
+
+### RCA（两个确定性引擎根因，先后暴露）
+
+**根因 A（run1 挂死）— 决策拒绝错误面不一致**：decide 阶段两条「批准被拒」路径文案不一致：内容 lint 拒绝恰好携带 `decisionLintRejected`（uiMsg 无 nls 时回退为 key），而 behaviorSpec 硬校验拒绝只发裸中文。AFK 驾驶员用「是否含 `decisionLintRejected`」判定重试 → behaviorSpec 拒绝（signals 缺 `decisionArtifacts.behaviorSpec`）永不重试 → decide stage 停 paused → 整轮挂死到 40min timeout。
+
+**根因 B（run2 早败）— 第三方库名被当 export**：`decide_indicators` 合成契约 exports `[calc_ma,calc_boll,calc_vol,calc_macd,calc_cci,NumPy]`，库展示名 `NumPy`（来自正文「使用 NumPy 计算…」）被抽成 export → impl 合理不导出库名 → `python-impl-export-missing` 误拦（与 #59/#60 datetime/index_sh 同类，但 PascalCase 库名漏网）。
+
+### 根治（本轮代码）
+
+| # | 机制 | 落点 |
+|---|------|------|
+| A1 | 决策拒绝 SSOT：`DECISION_LINT_REJECTED_MARKER` + `formatDecisionRejectionError(kind,detail)` + `isDecisionLintRejectedError` + `decisionRejectionKindFromError`；两条拒绝路径统一格式化，错误恒含可机读 marker + kind | `hitl/DecisionRejection.ts`、`hitl/DecisionLintGate.ts` |
+| A2 | `buildBehaviorSpecRetryUserComment()`：behaviorSpec 拒绝注入「补机读行为规格」反馈（而非 I-17 章节）；headless 用 SSOT 谓词 + 按 kind 选反馈 | `DecisionRecordVerify.ts`、`index.ts`、`scripts/headless/run.mjs` |
+| B1 | 第三方库名（import 根名 numpy/pandas/yaml… 或展示名 NumPy/PyYAML）不得作为 export | `commitment/decisionRecordExports.isNoiseExportName`（`isExternalPythonModuleRoot` + 展示名集合） |
+| - | 单测：`decision-rejection.test.ts`（5 例，含 behaviorSpec 拒绝可检测回归）、`decision-record-exports.test.ts`（NumPy/Pandas 剔除）；`@stagent/core` **907 pass**（3 fail 为预存环境性 ADR 校准种子缺失，详见末节） |
+
+> **判定**：架构按设计「失败单调前移」——run1 卡 signals decide（挂死），根治后 run3 一举推进到全切片 + main + smoke + delivery 全绿。证明主干（DAG + Plan Compiler + Gate/SSOT + fix/replan + 异族出题人 + integration 路由）在真实 T4 任务上可稳定产出高质量可交付 MVP。
+
+### 预存环境性单测缺口（非本轮回归）
+
+`detectAdrCriteria` / `evaluateAdrDetector` / `loadAdrCalibrationQuestions` 读取仓库外 `…/.stagent/charter/calibration/questions.jsonl`（gitignored 本地校准种子），本环境解析到 `/.stagent/…` 不存在 → 3 fail。建议把校准种子纳入仓库使单测自洽（需确认 ground-truth 数据，避免臆造）。
+
+---
+
 ## 运行 #63 — 2026-06-13（全新工作区；signals behavior-spec 与契约 exports 冲突）
 
 | 字段 | 值 |
