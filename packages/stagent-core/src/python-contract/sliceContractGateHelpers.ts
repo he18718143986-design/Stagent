@@ -3,6 +3,7 @@ import * as path from 'path';
 import type { GateResult, QualityGateContext } from '../QualityGate';
 import type { WorkflowInstance } from '../WorkflowDefinition';
 import {
+  collectAllProjectModuleNamesFromInstance,
   collectDeclaredDependenciesFromInstance,
   collectProjectModuleNames,
   collectSliceExportSymbolsFromInstance,
@@ -104,11 +105,19 @@ export function evaluateModuleContractPostMutateGate(ctx: QualityGateContext): G
       sliceArtifacts,
       globalArtifacts,
       sliceDecisionRecord,
-      crossSliceExports: collectSliceExportSymbolsFromInstance(
-        instance.stageRuntimes,
-        DECISION_ARTIFACTS_OUTPUT_KEY,
-        semantic,
-      ),
+      crossSliceExports: new Set([
+        ...collectSliceExportSymbolsFromInstance(
+          instance.stageRuntimes,
+          DECISION_ARTIFACTS_OUTPUT_KEY,
+          semantic,
+        ),
+        // 其它切片的模块名（store/pipeline…）——main `from store import …` 时模块名本身
+        // 不可 re-import，decide 却常把它列进 main 契约；同属下游噪声，豁免。
+        ...collectAllProjectModuleNamesFromInstance(
+          instance.stageRuntimes,
+          DECISION_ARTIFACTS_OUTPUT_KEY,
+        ).filter((n) => n !== semantic),
+      ]),
     });
     if (implIssue) {
       const message = `module-contract（${implIssue.code}）：${implIssue.message}`;
