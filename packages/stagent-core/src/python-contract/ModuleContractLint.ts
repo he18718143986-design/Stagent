@@ -249,8 +249,10 @@ export function lintImplExportsAgainstModuleContract(params: {
   sliceArtifacts: DecisionArtifactsV1 | null | undefined;
   globalArtifacts: DecisionArtifactsV1 | null | undefined;
   sliceDecisionRecord?: string | null;
+  /** 其它切片的导出符号；集成切片（main）契约误含下游函数时豁免 export-missing。 */
+  crossSliceExports?: ReadonlySet<string>;
 }): ModuleContractIssue | null {
-  const { workspaceRoot, implRelPath, semantic, sliceArtifacts, globalArtifacts, sliceDecisionRecord } =
+  const { workspaceRoot, implRelPath, semantic, sliceArtifacts, globalArtifacts, sliceDecisionRecord, crossSliceExports } =
     params;
   const exports = resolveModuleExports(
     semantic,
@@ -284,6 +286,11 @@ export function lintImplExportsAgainstModuleContract(params: {
 
   for (const sym of exports) {
     if (!importable.has(sym)) {
+      // 集成切片 main 的契约常被 decide 误塞下游切片函数（main 只编排、不导出它们）。
+      // 若该符号实为其它切片的导出且 main impl 未实现/转出，则豁免（非 main 的真实缺失）。
+      if (semantic === 'main' && crossSliceExports?.has(sym)) {
+        continue;
+      }
       return {
         code: 'python-impl-export-missing',
         message: `module-contract：${implRelPath} 未导出契约符号 ${sym}（${contractSource}）`,

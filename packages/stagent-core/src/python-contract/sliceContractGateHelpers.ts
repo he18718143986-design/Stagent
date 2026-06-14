@@ -5,6 +5,7 @@ import type { WorkflowInstance } from '../WorkflowDefinition';
 import {
   collectDeclaredDependenciesFromInstance,
   collectProjectModuleNames,
+  collectSliceExportSymbolsFromInstance,
 } from '../commitment/decisionArtifactsSchema';
 import { resolveSliceDecisionRecord } from '../commitment/sliceContractExports';
 import { DECISION_ARTIFACTS_OUTPUT_KEY } from '../WorkflowOutputKeys';
@@ -103,6 +104,11 @@ export function evaluateModuleContractPostMutateGate(ctx: QualityGateContext): G
       sliceArtifacts,
       globalArtifacts,
       sliceDecisionRecord,
+      crossSliceExports: collectSliceExportSymbolsFromInstance(
+        instance.stageRuntimes,
+        DECISION_ARTIFACTS_OUTPUT_KEY,
+        semantic,
+      ),
     });
     if (implIssue) {
       const message = `module-contract（${implIssue.code}）：${implIssue.message}`;

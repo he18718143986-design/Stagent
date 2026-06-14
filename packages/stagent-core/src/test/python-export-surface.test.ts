@@ -201,6 +201,40 @@ test('lintImplExportsAgainstModuleContract accepts integration slice re-exportin
   assert.equal(issue, null);
 });
 
+test('lintImplExportsAgainstModuleContract exempts main from downstream symbol it inlines (crossSliceExports)', () => {
+  // main 决策误把 pipeline 的 import_tasks_from_csv 列进 main 契约；本轮 main.py 内联实现、
+  // 既不定义也不 import 该符号。它是 pipeline 的导出 → 通过 crossSliceExports 豁免，不判缺失。
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'export-surface-cross-'));
+  fs.writeFileSync(
+    path.join(dir, 'main.py'),
+    'import csv\nimport json\n\ndef main():\n    with open("t.csv") as f:\n        rows = list(csv.DictReader(f))\n    print(json.dumps(rows))\n',
+  );
+  const artifacts = {
+    version: 1 as const,
+    files: [],
+    modules: [{ name: 'main', exports: ['main', 'import_tasks_from_csv'] }],
+  };
+  const withoutCross = lintImplExportsAgainstModuleContract({
+    workspaceRoot: dir,
+    implRelPath: 'main.py',
+    semantic: 'main',
+    sliceArtifacts: artifacts,
+    globalArtifacts: null,
+  });
+  assert.equal(withoutCross?.code, 'python-impl-export-missing');
+  assert.equal(withoutCross?.symbol, 'import_tasks_from_csv');
+
+  const withCross = lintImplExportsAgainstModuleContract({
+    workspaceRoot: dir,
+    implRelPath: 'main.py',
+    semantic: 'main',
+    sliceArtifacts: artifacts,
+    globalArtifacts: null,
+    crossSliceExports: new Set(['import_tasks_from_csv', 'summarize']),
+  });
+  assert.equal(withCross, null);
+});
+
 test('lintPythonExportContractFromPaths accepts test importing a re-exported name from main', () => {
   const testPy = 'from main import import_tasks_from_csv\n';
   const issues = lintPythonExportContractFromPaths(
