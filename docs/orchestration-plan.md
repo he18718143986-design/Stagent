@@ -54,11 +54,17 @@
 
 → 故本会话**未**为子任务 2 启动 worktree 子代理（避免重复造轮子）。`docs/live-findings-2026-06-15.md` L101「落地 ADR-0006 per-role env 解耦」可视为**已完成**。
 
-### 待指挥会话定夺的「方案 B」候选（均为真实、隔离项）
+### 「方案 B」已完成项（worktree 子代理 + 指挥会话验证）
+
+| 项 | 状态 | PR | 说明 |
+|----|------|----|------|
+| `missing l10n key: stagent.planCompleteness.*` 告警 | ✅ 完成 | #13 / `cursor/l10n-plan-completeness-nls-3713` | 调研确认 `package.nls.json` 全仓缺失且从未提交。**只补 planCompleteness 命名空间**（增量）：新增该 catalog（21 key）+ 修复 `lintMsg.ts` fallback **丢弃 `...args`** 的潜在 bug（经 worktree 子代理验证时发现）。验证：新测 2/2、核心套件 9 失败零新增、根 vitest 204/204。 |
+
+### 待指挥会话定夺的「方案 B」候选
 
 | 候选 | 性质 | 风险/说明 |
 |------|------|-----------|
-| 缺失 `package.nls.json` 导致 `missing l10n key` 告警 | 结构性 | 该 catalog 文件**全仓缺失**（非 gitignore、未跟踪），`uiStrings.ts` 从 `packages/stagent-core/package.nls.json` 读取失败 → 所有 l10n key 回退原样。**根因是整份 catalog 缺失**（疑似 CI 嵌套布局下才存在），非"补几个 key"，需先调研是否由构建生成，**暂不轻改**。 |
+| 其余 l10n 命名空间（lint/contract/decisionLint/gate/quality/hitl/rule20）catalog | 增量 | 同 planCompleteness 模式逐命名空间补；当前维持回退，无回归。 |
 | ADR-0005 Node/TS 适配接缝 | 中等、可 mock | 复用 `LanguageTestQualityAdapter` 抽象，加 node 对偶；范围较大，建议拆小切片。 |
 
 ---
