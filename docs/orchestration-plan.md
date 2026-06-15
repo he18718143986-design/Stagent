@@ -205,8 +205,9 @@ runtime-replan/、execution/DeliveryBlockOnTestFailure.ts、test/smoke-stage.tes
 | 2C | **PR/CI-ready 输出**（交付收口产 分支+PR 描述+CI 片段+review artifact） | 中高 | 方案 B（mock 可验） | ✅ **首切片完成（待合并）** PR #19 / `cursor/pr-output-generator-3713`（4 新文件，dead-code-safe 无接线；`buildPrDescription`+`buildReviewSummary` 纯函数；新测 12/12、核心 9 失败零新增、vitest 204）。后续：交付收口接线（用 TaskBrief/DoD/qualityReport 组装）。 | 零（新 pr-output/*，不碰生效路径） |
 | #4 | **结构化任务简报 schema**（goal/non-goals/boundaries/acceptance + 范围蠕变校验器） | 中 | 方案 B（mock 可验） | ✅ **首切片完成（待合并）** PR #18 / `cursor/task-brief-schema-3713`（6 新文件，dead-code-safe 无接线；新测 18/18、核心 9 失败零新增、vitest 204）。后续：接 polish/grill 填充 + 作验收单一真源 + 范围蠕变门（先 warn）。 | 零（新 task-brief/*，不碰生效路径） |
 
-> 已合并 main：PR #16（2B 规则沉淀首切片）、#17（2A 能力契约首切片）。待合并：#18（#4 任务简报首切片）。
-> **接线/生效与 live 切片（2A 接线、2B warn→block、Node PR-4）等 1b 合并后再做**（避免改执行/门行为干扰 1b 的 T6 归因）。
+> 已合并 main：#11 A1、#13 l10n、#14 1b decide 契约修复、#15 mvp-acceptance Node、#16 2B 规则沉淀、#17 2A 能力契约、#18 #4 任务简报、#19 2C PR 输出。
+> **进行中**：子任务 1c（test-slice-import 门 order-aware 调和，基于最新 main + A1 smoke）。
+> **接线/生效整合（2A 接线、2B warn→block、#4 接 polish/grill、2C 接交付收口、Node PR-4）** 待 T6 真正 strict-pass 后做带 live 验证的整合。
 
 > 优先 2B（最高杠杆：引擎越用越强）；2A 次之（安全 + 解锁并行）。两者文件面与 1b 的 `python-contract`/decide 契约**零重叠**，可并行。
 
