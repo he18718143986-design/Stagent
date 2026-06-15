@@ -265,6 +265,50 @@ test('lintImplExportsAgainstModuleContract tolerates main CLI entry `main` not i
   assert.equal(issue, null);
 });
 
+test('lintImplExportsAgainstModuleContract：main 入口同义词可互换（契约 cli / impl run）', () => {
+  // T6 sub-task 1b：decide 把 main 契约定为 cli，但 impl 写 run（约定俗成同一入口）→ 不应判缺失。
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'impl-main-cli-run-'));
+  const implPath = 'main.py';
+  fs.writeFileSync(
+    path.join(dir, implPath),
+    'def run():\n    return None\n\n\nif __name__ == "__main__":\n    run()\n',
+  );
+  const slice = {
+    version: 1 as const,
+    files: [],
+    modules: [{ name: 'main', exports: ['cli'] }],
+  };
+  const issue = lintImplExportsAgainstModuleContract({
+    workspaceRoot: dir,
+    implRelPath: implPath,
+    semantic: 'main',
+    sliceArtifacts: slice,
+    globalArtifacts: null,
+  });
+  assert.equal(issue, null);
+});
+
+test('lintImplExportsAgainstModuleContract：main 缺非入口符号仍判缺失（同义词豁免不放水）', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'impl-main-missing-real-'));
+  const implPath = 'main.py';
+  fs.writeFileSync(path.join(dir, implPath), 'def run():\n    return None\n');
+  const slice = {
+    version: 1 as const,
+    files: [],
+    modules: [{ name: 'main', exports: ['orchestrate_pipeline'] }],
+  };
+  const issue = lintImplExportsAgainstModuleContract({
+    workspaceRoot: dir,
+    implRelPath: implPath,
+    semantic: 'main',
+    sliceArtifacts: slice,
+    globalArtifacts: null,
+  });
+  assert.ok(issue);
+  assert.equal(issue?.code, 'python-impl-export-missing');
+  assert.equal(issue?.symbol, 'orchestrate_pipeline');
+});
+
 test('lintImplExportsAgainstModuleContract still blocks non-entry extra export on main', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'impl-main-extra-'));
   const implPath = 'main.py';

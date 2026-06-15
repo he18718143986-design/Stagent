@@ -119,6 +119,30 @@ test('resolveModuleExports：污染 slice + 干净 global → 净化为 [import_
   }
 });
 
+test('sanitizeCrossSliceContamination：类方法过度列举（store=[TaskStore,add,...]）→ 回退 global [TaskStore]', () => {
+  // 真实样本（hkTy5j run#1）：slice decide_store 把 TaskStore 的方法名也列为模块级 export。
+  const pollutedStore = ['add', 'delete', 'get', 'load_json', 'next_id', 'save', 'save_json', 'TaskStore', 'update'];
+  const sliceModules = [{ name: 'store', exports: pollutedStore }];
+  const globalModules = [
+    { name: 'store', exports: ['TaskStore'] },
+    { name: 'pipeline', exports: ['import_tasks_from_csv', 'summarize'] },
+  ];
+  const cleaned = sanitizeCrossSliceContamination('store', pollutedStore, sliceModules, globalModules);
+  assert.deepEqual(cleaned, ['TaskStore']);
+});
+
+test('sanitizeCrossSliceContamination：合法 refine（替换 coarse 符号）不被 superset 规则误伤', () => {
+  // global coarse=[compute]；slice 用具体函数替换（不含 compute）→ 非 superset → 保留 slice。
+  const sliceRefined = ['compute_ma', 'compute_boll', 'compute_cci'];
+  const out = sanitizeCrossSliceContamination(
+    'indicators',
+    sliceRefined,
+    [{ name: 'indicators', exports: sliceRefined }],
+    [{ name: 'indicators', exports: ['compute'] }],
+  );
+  assert.deepEqual(out, sliceRefined);
+});
+
 test('resolveModuleExports：干净 slice 契约不受影响', () => {
   const slice = {
     version: 1 as const,
