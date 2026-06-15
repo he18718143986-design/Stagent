@@ -1,12 +1,18 @@
 import React, { useState } from 'react'
-import { humanizeJargon } from '../../plainLanguage'
 import type { StageArtifactHint } from '@stagent/core'
-import { simpleTheme } from '../../theme'
-import type { CockpitScreenProps } from '../../types'
-import { HowToUsePanel } from '../../components/HowToUsePanel'
-import { TechnicalDetailsCollapsible } from '../../components/TechnicalDetailsCollapsible'
+import { humanizeJargon } from '../plainLanguage'
+import { simpleTheme } from '../theme'
+import type { CockpitScreenProps } from '../types'
+import { HowToUsePanel } from '../components/HowToUsePanel'
+import { TechnicalDetailsCollapsible } from '../components/TechnicalDetailsCollapsible'
+import { QualityReportPanel } from '../../QualityReportPanel'
 
-export function SimpleDeliveryScreen({ engine, form, send, onNewTask }: CockpitScreenProps): React.JSX.Element {
+/**
+ * 统一交付屏(渐进式披露)。
+ * 英雄结果 + 下载/打开 + 怎么用常驻;质量报告 / 文件清单 / DELIVERY.md
+ * 折叠进技术报告(默认开合跟随 showTechnical)。
+ */
+export function DeliveryScreen({ engine, form, send, onNewTask }: CockpitScreenProps): React.JSX.Element {
   const { state } = engine
   const [showHelp, setShowHelp] = useState(false)
   const title = state.workflow?.meta.title || form.draft.trim() || '你的成果'
@@ -14,6 +20,10 @@ export function SimpleDeliveryScreen({ engine, form, send, onNewTask }: CockpitS
 
   const testTotal = state.qualityReport?.verificationRows.reduce((n, r) => n + r.totalRuns, 0) ?? 0
   const testPass = state.qualityReport?.verificationRows.reduce((n, r) => n + r.passCount, 0) ?? 0
+
+  const deliveryArtifact = Object.values(state.artifacts)
+    .flat()
+    .find((a: StageArtifactHint) => /DELIVERY\.md/i.test(a.filePath))
 
   const openFolder = (): void => {
     if (workspace) {
@@ -32,31 +42,41 @@ export function SimpleDeliveryScreen({ engine, form, send, onNewTask }: CockpitS
           ✓
         </div>
         <h1 className="text-3xl font-bold text-stagent-success mb-1">做好了！</h1>
-        <p className="text-stone-600">已经测试通过，可以直接用了</p>
+        <p className="text-stone-600">已经测试通过,可以直接用了</p>
       </div>
+
       <div className={simpleTheme.card}>
         <h2 className="font-semibold text-stone-800 mb-4">你的成果</h2>
         <div className="flex flex-col items-center text-center gap-3">
           <div className="text-4xl">📁</div>
           <div className="font-bold text-lg text-stone-800">{humanizeJargon(title)}</div>
-          <button type="button" className={`${simpleTheme.primaryBtn} !bg-stagent-success hover:!bg-green-700`} onClick={openFolder}>
-            ⬇ 下载（双击就能用）
+          <button
+            type="button"
+            className={`${simpleTheme.primaryBtn} !bg-stagent-success hover:!bg-green-700`}
+            onClick={openFolder}
+          >
+            ⬇ 下载(双击就能用)
           </button>
-          <button type="button" className={`${simpleTheme.secondaryBtn} !border-stagent-success !text-stagent-success`} onClick={() => setShowHelp(true)}>
-            ❓ 怎么用？
+          <button
+            type="button"
+            className={`${simpleTheme.secondaryBtn} !border-stagent-success !text-stagent-success`}
+            onClick={() => setShowHelp(true)}
+          >
+            ❓ 怎么用?
           </button>
         </div>
       </div>
+
       {testTotal > 0 && (
         <div className="flex items-center gap-2 p-3 rounded-xl bg-green-50 border border-green-100 text-sm text-stagent-success">
           <span>🛡️</span>
-          <span>
-            全部 {testPass} 项测试通过 ✓
-          </span>
+          <span>全部 {testPass} 项测试通过 ✓</span>
         </div>
       )}
-      <TechnicalDetailsCollapsible title="▼ 技术报告（给开发者看）" defaultOpen={false}>
+
+      <TechnicalDetailsCollapsible title="技术报告(给开发者看)">
         <div className="space-y-3 py-2">
+          {state.qualityReport && <QualityReportPanel report={state.qualityReport} />}
           <div>
             <div className="font-medium text-stone-700 mb-1">做了什么</div>
             <ul className="list-disc pl-4 space-y-0.5">
@@ -69,14 +89,6 @@ export function SimpleDeliveryScreen({ engine, form, send, onNewTask }: CockpitS
                 ))}
             </ul>
           </div>
-          {state.qualityReport && (
-            <div>
-              <div className="font-medium text-stone-700 mb-1">测试情况</div>
-              <div className="text-stagent-success">
-                {testPass}/{testTotal || testPass} 通过
-              </div>
-            </div>
-          )}
           <div>
             <div className="font-medium text-stone-700 mb-1">文件清单</div>
             <ul className="list-disc pl-4">
@@ -88,8 +100,20 @@ export function SimpleDeliveryScreen({ engine, form, send, onNewTask }: CockpitS
                 ))}
             </ul>
           </div>
+          {deliveryArtifact && (
+            <button
+              type="button"
+              className="text-blue-600 hover:underline"
+              onClick={() =>
+                void send({ type: 'openArtifactFile', stageId: '', filePath: deliveryArtifact.filePath })
+              }
+            >
+              打开 DELIVERY.md
+            </button>
+          )}
         </div>
       </TechnicalDetailsCollapsible>
+
       <button
         type="button"
         className="w-full flex items-center justify-between p-4 rounded-xl bg-orange-50 border border-orange-100 text-stone-700 hover:bg-orange-100/80"
@@ -98,7 +122,7 @@ export function SimpleDeliveryScreen({ engine, form, send, onNewTask }: CockpitS
           onNewTask()
         }}
       >
-        <span>💬 想再改点什么？跟我说一声</span>
+        <span>💬 想再改点什么?跟我说一声</span>
         <span>→</span>
       </button>
     </div>

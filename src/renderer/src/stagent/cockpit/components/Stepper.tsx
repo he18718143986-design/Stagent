@@ -1,17 +1,20 @@
 import React from 'react'
-import type { SimpleStep } from '../deriveCockpitStep'
-import { SIMPLE_STEP_LABELS } from '../deriveCockpitStep'
+import type { Step } from '../deriveCockpitStep'
+import { STEP_LABELS } from '../deriveCockpitStep'
 
-export function SimpleStepper({ step }: { step: SimpleStep }): React.JSX.Element {
+/** 统一进度条:单一 5 步、从 1 编号,两种密度共用。 */
+export function Stepper({ step }: { step: Step }): React.JSX.Element {
   return (
     <nav className="flex items-center justify-center gap-2 sm:gap-4 px-4 py-5 flex-wrap" aria-label="进度">
-      {SIMPLE_STEP_LABELS.map((label, i) => {
-        const n = (i + 1) as SimpleStep
+      {STEP_LABELS.map((label, i) => {
+        const n = (i + 1) as Step
         const done = step > n
         const active = step === n
         return (
           <React.Fragment key={label}>
-            {i > 0 && <div className={`hidden sm:block w-8 h-0.5 ${done ? 'bg-stagent-success' : 'bg-stone-200'}`} />}
+            {i > 0 && (
+              <div className={`hidden sm:block w-8 h-0.5 ${done ? 'bg-stagent-success' : 'bg-stone-200'}`} />
+            )}
             <div
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
                 active
