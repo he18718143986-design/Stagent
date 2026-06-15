@@ -20,6 +20,10 @@ export function DeliveryScreen({ engine, form, send, onNewTask }: CockpitScreenP
 
   const testTotal = state.qualityReport?.verificationRows.reduce((n, r) => n + r.totalRuns, 0) ?? 0
   const testPass = state.qualityReport?.verificationRows.reduce((n, r) => n + r.passCount, 0) ?? 0
+  const afkPassed = state.qualityReport ? state.qualityReport.afk.passed : undefined
+  const testsAllPassed = testTotal === 0 ? undefined : testPass >= testTotal
+  // 仅当确有报告且明确未通过时才示警,避免无报告时误判。
+  const hasConcern = afkPassed === false || testsAllPassed === false
 
   const deliveryArtifact = Object.values(state.artifacts)
     .flat()
@@ -38,11 +42,19 @@ export function DeliveryScreen({ engine, form, send, onNewTask }: CockpitScreenP
   return (
     <div className="max-w-lg w-full mx-auto space-y-4">
       <div className="text-center py-4">
-        <div className="w-16 h-16 mx-auto rounded-full bg-stagent-success text-white flex items-center justify-center text-3xl mb-3">
-          ✓
+        <div
+          className={`w-16 h-16 mx-auto rounded-full text-white flex items-center justify-center text-3xl mb-3 ${
+            hasConcern ? 'bg-amber-500' : 'bg-stagent-success'
+          }`}
+        >
+          {hasConcern ? '!' : '✓'}
         </div>
-        <h1 className="text-3xl font-bold text-stagent-success mb-1">做好了！</h1>
-        <p className="text-stone-600">已经测试通过,可以直接用了</p>
+        <h1 className={`text-3xl font-bold mb-1 ${hasConcern ? 'text-amber-600' : 'text-stagent-success'}`}>
+          {hasConcern ? '做完了，但有检查没通过' : '做好了！'}
+        </h1>
+        <p className="text-stone-600">
+          {hasConcern ? '部分自动检查未通过，建议先看下方技术报告再使用' : '已经测试通过，可以直接用了'}
+        </p>
       </div>
 
       <div className={simpleTheme.card}>
@@ -67,14 +79,22 @@ export function DeliveryScreen({ engine, form, send, onNewTask }: CockpitScreenP
         </div>
       </div>
 
-      {testTotal > 0 && (
-        <div className="flex items-center gap-2 p-3 rounded-xl bg-green-50 border border-green-100 text-sm text-stagent-success">
-          <span>🛡️</span>
-          <span>全部 {testPass} 项测试通过 ✓</span>
-        </div>
-      )}
+      {testTotal > 0 &&
+        (testsAllPassed ? (
+          <div className="flex items-center gap-2 p-3 rounded-xl bg-green-50 border border-green-100 text-sm text-stagent-success">
+            <span>🛡️</span>
+            <span>全部 {testPass} 项测试通过 ✓</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-700">
+            <span>⚠️</span>
+            <span>
+              {testPass}/{testTotal} 项测试通过（部分未通过，详见技术报告）
+            </span>
+          </div>
+        ))}
 
-      <TechnicalDetailsCollapsible title="技术报告(给开发者看)">
+      <TechnicalDetailsCollapsible title="技术报告(给开发者看)" defaultOpen={hasConcern || undefined}>
         <div className="space-y-3 py-2">
           {state.qualityReport && <QualityReportPanel report={state.qualityReport} />}
           <div>

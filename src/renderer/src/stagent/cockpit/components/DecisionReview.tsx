@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 
 function computeDecisionChecks(text: string): { label: string; ok: boolean }[] {
   const scenarioCount = (text.match(/场景\s*[0-9一二三四五六七八九十]/g) || []).length
@@ -17,6 +17,7 @@ export function DecisionReview({
   stageId,
   onApprove,
   onReview,
+  initialRecord = '',
 }: {
   stageId: string
   onApprove: (decisionRecord: string) => void
@@ -24,8 +25,18 @@ export function DecisionReview({
     stageId: string,
     decisionRecord: string,
   ) => Promise<{ ok: boolean; review?: string; model?: string; error?: string }>
+  /** 决策阶段 LLM 已生成的决策记录,预填到文本框供用户审阅/修改后批准。 */
+  initialRecord?: string
 }): React.JSX.Element {
-  const [record, setRecord] = useState('')
+  const [record, setRecord] = useState(initialRecord)
+  const userEdited = useRef(false)
+
+  // 决策记录可能在挂载后才到达(stageOutput 晚于 paused 状态);用户未手动改过时跟随预填。
+  useEffect(() => {
+    if (!userEdited.current && initialRecord && !record) {
+      setRecord(initialRecord)
+    }
+  }, [initialRecord, record])
   const [reviewing, setReviewing] = useState(false)
   const [review, setReview] = useState<string | null>(null)
   const [reviewErr, setReviewErr] = useState<string | null>(null)
@@ -60,7 +71,10 @@ export function DecisionReview({
         className="w-full text-sm border border-gray-300 rounded px-2 py-1 resize-y min-h-[6rem] font-mono"
         placeholder="记录此处所做的关键决策、取舍与依据…"
         value={record}
-        onChange={(e) => setRecord(e.target.value)}
+        onChange={(e) => {
+          userEdited.current = true
+          setRecord(e.target.value)
+        }}
       />
       <div className="rounded border border-purple-100 bg-white p-2">
         <div className="text-xs font-medium text-gray-600 mb-1">
