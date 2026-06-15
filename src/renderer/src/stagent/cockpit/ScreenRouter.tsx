@@ -1,20 +1,26 @@
 import React from 'react'
-import { deriveProStep, deriveSimpleStep } from './deriveCockpitStep'
 import { useCockpitContext } from './CockpitContext'
 import type { CockpitEngineSlice, CockpitFormState } from './types'
 import type { FrontendMessage } from '@stagent/core'
-import { SimpleIntentScreen } from './screens/simple/SimpleIntentScreen'
-import { SimpleClarifyScreen } from './screens/simple/SimpleClarifyScreen'
-import { SimplePlanningScreen } from './screens/simple/SimplePlanningScreen'
+import { IntentScreen } from './screens/IntentScreen'
+import { ClarifyScreen } from './screens/ClarifyScreen'
+import { PlanningScreen } from './screens/PlanningScreen'
 import { SimpleExecutionScreen } from './screens/simple/SimpleExecutionScreen'
 import { SimpleDeliveryScreen } from './screens/simple/SimpleDeliveryScreen'
-import { ProIntentScreen } from './screens/pro/ProIntentScreen'
-import { ProClarifyScreen } from './screens/pro/ProClarifyScreen'
-import { ProPlanningScreen } from './screens/pro/ProPlanningScreen'
-import { ProSignOffScreen } from './screens/pro/ProSignOffScreen'
 import { ProExecutionScreen } from './screens/pro/ProExecutionScreen'
 import { ProDeliveryScreen } from './screens/pro/ProDeliveryScreen'
 
+function Loading({ text }: { text: string }): React.JSX.Element {
+  return (
+    <div className="max-w-lg mx-auto text-center py-12 text-stagent-orange animate-pulse">{text}</div>
+  )
+}
+
+/**
+ * 统一屏路由(渐进式披露)。意图 / 澄清 / 规划三屏已合并为单版,
+ * 由屏内的 showTechnical 控制展开密度;执行 / 交付屏暂仍按密度选择
+ * 旧 Simple/Pro 版本(阶段 D 合并)。
+ */
 export function ScreenRouter({
   engine,
   form,
@@ -34,59 +40,32 @@ export function ScreenRouter({
   onStartClarifyFlow?: () => void
   clarifyPending?: boolean
 }): React.JSX.Element {
-  const { uiMode } = useCockpitContext()
+  const { showTechnical } = useCockpitContext()
   const { state } = engine
   const props = { engine, form, onNewTask, send, onStartClarifyFlow, clarifyPending }
 
-  if (uiMode === 'simple') {
-    const simpleStep = deriveSimpleStep(state)
-    if (simpleStep === 1) {
-      if (state.clarify?.length) {
-        return <SimpleClarifyScreen {...props} />
-      }
-      if (clarifyPending && state.phase === 'input') {
-        return (
-          <div className="max-w-lg mx-auto text-center py-12 text-stagent-orange animate-pulse">
-            正在理解你的需求…
-          </div>
-        )
-      }
-      return <SimpleIntentScreen {...props} />
-    }
-    if (simpleStep === 2) {
-      if (state.phase === 'input' && state.clarify?.length) {
-        return <SimpleClarifyScreen {...props} />
-      }
-      if (state.phase === 'confirm' && state.workflow) {
-        return <SimplePlanningScreen {...props} />
-      }
-      return (
-        <div className="max-w-lg mx-auto text-center py-12 text-stagent-orange animate-pulse">
-          {state.busy?.message ?? (clarifyPending ? '正在理解你的需求…' : '准备中…')}
-        </div>
-      )
-    }
-    if (simpleStep === 3) {
-      return <SimpleExecutionScreen engine={engine} send={send} />
-    }
-    return <SimpleDeliveryScreen {...props} />
+  if (state.completed) {
+    return showTechnical ? <ProDeliveryScreen {...props} /> : <SimpleDeliveryScreen {...props} />
   }
 
-  const proStep = deriveProStep(state)
-  if (proStep === 0) {
-    return <ProIntentScreen {...props} showSettings={showSettings} setShowSettings={setShowSettings} />
+  if (state.phase === 'execution') {
+    return showTechnical ? (
+      <ProExecutionScreen engine={engine} send={send} reviewDecision={engine.reviewDecision} />
+    ) : (
+      <SimpleExecutionScreen engine={engine} send={send} />
+    )
   }
-  if (proStep === 1) {
-    return <ProClarifyScreen {...props} />
+
+  if (state.phase === 'confirm') {
+    return <PlanningScreen {...props} />
   }
-  if (proStep === 2) {
-    return <ProPlanningScreen {...props} />
+
+  // phase === 'input'
+  if (state.clarify?.length) {
+    return <ClarifyScreen {...props} />
   }
-  if (proStep === 3) {
-    return <ProSignOffScreen {...props} />
+  if (clarifyPending || state.busy) {
+    return <Loading text={state.busy?.message ?? '正在理解你的需求…'} />
   }
-  if (proStep === 4) {
-    return <ProExecutionScreen engine={engine} send={send} reviewDecision={engine.reviewDecision} />
-  }
-  return <ProDeliveryScreen {...props} />
+  return <IntentScreen {...props} showSettings={showSettings} setShowSettings={setShowSettings} />
 }

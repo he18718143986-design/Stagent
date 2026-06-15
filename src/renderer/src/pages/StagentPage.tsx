@@ -11,8 +11,6 @@ import { SimpleStepper } from '../stagent/cockpit/components/SimpleStepper'
 import { ProStepper } from '../stagent/cockpit/components/ProStepper'
 import { deriveCockpitStep, deriveProStep, deriveSimpleStep } from '../stagent/cockpit/deriveCockpitStep'
 import { ScreenRouter } from '../stagent/cockpit/ScreenRouter'
-import { SettingsPanel } from '../stagent/cockpit/components/SettingsPanel'
-import { groupModels } from '../stagent/model-grouping'
 import TaskTree from './TaskTree'
 import SidebarShell from './SidebarShell'
 import FileEditor from './FileEditor'
@@ -48,7 +46,6 @@ function StagentPageInner(): React.JSX.Element {
   const pendingFolderThenClarifyRef = useRef(false)
   const awaitingClarifyRef = useRef(false)
 
-  const modelGroups = useMemo(() => groupModels(models), [models])
   const simpleStep = useMemo(() => {
     if (clarifyPending && state.phase === 'input') {
       return 2 as const
@@ -258,44 +255,6 @@ function StagentPageInner(): React.JSX.Element {
           <div className="sticky top-0 z-10 bg-amber-50 border-b border-amber-200 px-4 py-2 text-sm text-amber-800">
             ⚠ {state.switchBlocked.reason}
           </div>
-        )}
-
-        {!isSimple && (
-          <>
-            <div className="border-b border-gray-100 px-4 py-2 flex items-center gap-2">
-              <span className="text-xs text-gray-500 shrink-0">模型</span>
-              {models.length === 0 ? (
-                <span className="text-xs text-gray-400">无可用模型</span>
-              ) : (
-                <select
-                  className="text-xs border border-gray-300 rounded px-2 py-1 max-w-full"
-                  value={preferredModel}
-                  onChange={(e) => void setModel(e.target.value)}
-                >
-                  <option value="">默认（{models[0]?.name ?? '自动'}）</option>
-                  {modelGroups.map((g) => (
-                    <optgroup key={g.key} label={g.label}>
-                      {g.options.map((o) => (
-                        <option key={o.id} value={o.id}>
-                          {o.text}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
-              )}
-              <button
-                type="button"
-                className="ml-auto text-xs text-gray-500 hover:text-gray-800 hover:underline shrink-0"
-                onClick={() => setShowSettings((v) => !v)}
-              >
-                {showSettings ? '收起设置' : 'API 设置'}
-              </button>
-            </div>
-            {showSettings && (
-              <SettingsPanel load={getConfig} save={saveConfig} onClose={() => setShowSettings(false)} />
-            )}
-          </>
         )}
 
         {state.failed && state.phase !== 'execution' && (
