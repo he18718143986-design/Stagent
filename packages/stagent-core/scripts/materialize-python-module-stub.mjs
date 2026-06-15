@@ -77,9 +77,13 @@ function implWritePath(semantic) {
   return path.join(semantic, '__init__.py');
 }
 
+/** 约定俗成的 CLI 入口名（main/run/cli）：始终是函数（而非以 semantic 同名判为类）。 */
+const MAIN_ENTRY_NAMES = new Set(['main', 'run', 'cli']);
+
 function buildStubSource(semantic, exports) {
   const lines = exports.map((name) => {
-    if (name === semantic || /^[A-Z]/.test(name)) {
+    // 入口名（main/run/cli）为函数；其余「与模块同名或 PascalCase」为类。
+    if (!MAIN_ENTRY_NAMES.has(name) && (name === semantic || /^[A-Z]/.test(name))) {
       return `class ${name}:\n    def __init__(self, *args, **kwargs):\n        raise NotImplementedError("stub")`;
     }
     return `def ${name}(*args, **kwargs):\n    raise NotImplementedError("stub")`;
@@ -94,12 +98,18 @@ function main() {
 
   const cwd = process.cwd();
   const { slice, global, sliceDecisionRecord, error } = readArtifactsFromInstance(cwd, semantic);
-  const exports = resolveModuleExports(semantic, slice, global, sliceDecisionRecord);
+  let exports = resolveModuleExports(semantic, slice, global, sliceDecisionRecord);
   if (!exports?.length) {
-    console.error(
-      `materialize-python-module-stub: no exports for "${semantic}" in decisionArtifacts (${error ?? 'missing modules[]'})`,
-    );
-    process.exit(1);
+    // 子任务 1d (d)：main 切片契约常仅声明 `main`，被 pruneExportNoise 当噪声剔空 → 旧逻辑 exit 1，
+    // 阻断 workflow。main 是程序入口，缺声明时默认物化入口函数 stub（main），避免假阻断。
+    if (semantic === 'main') {
+      exports = ['main'];
+    } else {
+      console.error(
+        `materialize-python-module-stub: no exports for "${semantic}" in decisionArtifacts (${error ?? 'missing modules[]'})`,
+      );
+      process.exit(1);
+    }
   }
 
   const relPath = implWritePath(semantic);
