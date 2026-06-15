@@ -105,6 +105,77 @@ export function sanitizeModuleExports(semantic: string, exports: string[]): stri
   return cleaned;
 }
 
+/** 收集除 `semantic` 外其它模块的「模块名」与「声明导出符号」（跨切片归属判据）。 */
+function collectOtherModuleSymbols(
+  modules: Array<{ name: string; exports: string[] }> | undefined,
+  semantic: string,
+): { names: Set<string>; exports: Set<string> } {
+  const names = new Set<string>();
+  const exportsSet = new Set<string>();
+  for (const m of normalizeModuleExports(modules)) {
+    if (m.name === semantic) {
+      continue;
+    }
+    names.add(m.name);
+    for (const e of m.exports) {
+      exportsSet.add(e);
+    }
+  }
+  return { names, exports: exportsSet };
+}
+
+/**
+ * 跨切片契约污染净化（prevention-at-decide / ADR-0007 module-exports 篇）。
+ *
+ * 现象（T6 决定性回归，flash 与 pro 同样命中）：`stage_decide_pipeline` 把 store 的方法名
+ * （add/update/list_all）、其它模块名（store/statemachine）、models 的 `validate_task`、占位
+ * `DictReader` 全塞进 `pipeline.exports`。污染契约**反过来误导 impl** 写出 `from . import store`
+ * → 真实 ImportError，module-contract 门正确判红 → T6 卡在 smoke 之前。
+ *
+ * 判据（确定性，纯函数）：某模块 M 的 slice 契约导出若混入「另一模块的名字」或「另一模块声明的
+ * 导出符号」或「M 自身的模块名」，即判为被污染（合法 refine 不会列入他模块的名字/导出）。
+ * 净化策略：
+ *   1) **优先用 global 架构契约**——global decide 同时看见所有模块、最少跨切片串味，其 M 列表是
+ *      干净权威；被污染时回退到 global 的 M 列表（彻底清除方法名/占位等纯幻觉符号）。
+ *   2) global 无 M 列表时，**剥离**可判定的污染符号（他模块名/他模块导出/自身模块名）。
+ * 未被污染的契约**原样返回**，不影响既有任务（T4/T5）。
+ */
+export function sanitizeCrossSliceContamination(
+  semantic: string,
+  sliceExports: string[],
+  sliceModules: Array<{ name: string; exports: string[] }> | undefined,
+  globalModules: Array<{ name: string; exports: string[] }> | undefined,
+): string[] {
+  const fromSlice = collectOtherModuleSymbols(sliceModules, semantic);
+  const fromGlobal = collectOtherModuleSymbols(globalModules, semantic);
+  const otherNames = new Set([...fromSlice.names, ...fromGlobal.names]);
+  const otherExports = new Set([...fromSlice.exports, ...fromGlobal.exports]);
+  const isContaminant = (s: string): boolean =>
+    otherNames.has(s) || otherExports.has(s) || s === semantic;
+  const crossSliceContaminated = sliceExports.some(isContaminant);
+
+  // 类方法过度列举：slice 把某导出类的方法名也当模块级 export（T6 store=[TaskStore,add,get,
+  // delete,update,list_all,...]，global store=[TaskStore]）。判据：global 有非空 M 列表，且
+  // slice ⊇ global（含 global 全部符号）并有额外项 → 视为 over-list。合法 refine 是「替换」coarse
+  // 符号（slice 不会同时保留 global 全部符号再加项），故 superset+extras 是污染的强信号。
+  const globalEntry = normalizeModuleExports(globalModules).find((m) => m.name === semantic);
+  const globalExports = globalEntry?.exports ?? [];
+  const overListsGlobal =
+    globalExports.length > 0 &&
+    sliceExports.length > globalExports.length &&
+    globalExports.every((g) => sliceExports.includes(g));
+
+  if (!crossSliceContaminated && !overListsGlobal) {
+    return sliceExports;
+  }
+  // 被污染：优先回退到 global 的干净 M 列表（清除方法名/占位/跨切片符号等纯幻觉符号）。
+  if (globalExports.length > 0) {
+    return globalExports;
+  }
+  // 无 global 兜底：剥离可判定的污染符号（他模块名/他模块导出/自身模块名）。
+  return sliceExports.filter((s) => !isContaminant(s));
+}
+
 /** slice sidecar → slice decisionRecord 正文 → global architecture modules[]。 */
 export function resolveModuleExports(
   semantic: string,
@@ -114,7 +185,13 @@ export function resolveModuleExports(
 ): string[] | null {
   const sliceEntry = normalizeModuleExports(sliceArtifacts?.modules).find((m) => m.name === semantic);
   if (sliceEntry && sliceEntry.exports.length > 0) {
-    return sanitizeModuleExports(semantic, sliceEntry.exports);
+    const decontaminated = sanitizeCrossSliceContamination(
+      semantic,
+      sliceEntry.exports,
+      sliceArtifacts?.modules,
+      globalArtifacts?.modules,
+    );
+    return sanitizeModuleExports(semantic, decontaminated);
   }
   if (sliceDecisionRecord?.trim()) {
     const fromRecord = extractModuleExportsFromDecisionRecord(semantic, sliceDecisionRecord);

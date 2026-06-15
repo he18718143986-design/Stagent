@@ -1,6 +1,10 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { resolveModuleExports, sanitizeModuleExports } from '../commitment/decisionArtifactsSchema';
+import {
+  resolveModuleExports,
+  sanitizeCrossSliceContamination,
+  sanitizeModuleExports,
+} from '../commitment/decisionArtifactsSchema';
 import {
   extractModuleExportsFromDecisionRecord,
   pruneExportNoise,
@@ -31,6 +35,126 @@ test('resolveModuleExports prefers decisionRecord over global coarse exports', (
   const exports = resolveModuleExports('indicators', { version: 1, files: [], modules: [] }, global, RUN19_RECORD);
   assert.ok(exports?.includes('compute_ma'));
   assert.ok(!exports?.includes('compute') || exports.length > 1);
+});
+
+// ---- T6 decide 契约污染回归（sub-task 1b）----
+// 真实样本（--keep 工作区 stage_decide_pipeline 输出）：pipeline.exports 混入 store 方法名
+// add/update/list_all、其它模块名 store/statemachine、models 的 validate_task、占位 DictReader。
+const T6_POLLUTED_PIPELINE = [
+  'add',
+  'DictReader',
+  'import_tasks_from_csv',
+  'list_all',
+  'pipeline',
+  'statemachine',
+  'store',
+  'summarize',
+  'update',
+  'validate_task',
+];
+
+// stage_decide_pipeline 真实输出：四个模块同在（slice 契约自带其它模块）。
+const T6_SLICE_MODULES = [
+  { name: 'models', exports: ['Task', 'validate_task'] },
+  { name: 'store', exports: ['TaskStore'] },
+  { name: 'statemachine', exports: ['ALLOWED_TRANSITIONS', 'can_transition', 'apply_transition', 'InvalidTransition'] },
+  { name: 'pipeline', exports: T6_POLLUTED_PIPELINE },
+];
+
+// 架构 decide 的干净契约（同时看见所有模块，最少串味）。
+const T6_GLOBAL_MODULES = [
+  { name: 'models', exports: ['Task', 'validate_task'] },
+  { name: 'store', exports: ['TaskStore'] },
+  { name: 'statemachine', exports: ['ALLOWED_TRANSITIONS', 'can_transition', 'apply_transition', 'InvalidTransition'] },
+  { name: 'pipeline', exports: ['import_tasks_from_csv', 'summarize'] },
+  { name: 'main', exports: ['run'] },
+];
+
+test('sanitizeCrossSliceContamination：污染 pipeline 契约 → 回退 global 干净列表', () => {
+  const cleaned = sanitizeCrossSliceContamination(
+    'pipeline',
+    T6_POLLUTED_PIPELINE,
+    T6_SLICE_MODULES,
+    T6_GLOBAL_MODULES,
+  );
+  assert.deepEqual([...cleaned].sort(), ['import_tasks_from_csv', 'summarize']);
+});
+
+test('sanitizeCrossSliceContamination：无 global 兜底也剥离他模块名/他模块导出', () => {
+  const cleaned = sanitizeCrossSliceContamination(
+    'pipeline',
+    T6_POLLUTED_PIPELINE,
+    T6_SLICE_MODULES,
+    undefined,
+  );
+  // store/statemachine（模块名）、validate_task（models 导出）、pipeline（自身名）必被剥离
+  assert.ok(!cleaned.includes('store'));
+  assert.ok(!cleaned.includes('statemachine'));
+  assert.ok(!cleaned.includes('validate_task'));
+  assert.ok(!cleaned.includes('pipeline'));
+  // 合法符号保留
+  assert.ok(cleaned.includes('import_tasks_from_csv'));
+  assert.ok(cleaned.includes('summarize'));
+});
+
+test('sanitizeCrossSliceContamination：未污染契约原样返回（不影响 T4/T5）', () => {
+  const clean = ['compute_ma', 'compute_boll'];
+  const out = sanitizeCrossSliceContamination(
+    'indicators',
+    clean,
+    [{ name: 'indicators', exports: clean }, { name: 'signals', exports: ['generate'] }],
+    undefined,
+  );
+  assert.deepEqual(out, clean);
+});
+
+test('resolveModuleExports：污染 slice + 干净 global → 净化为 [import_tasks_from_csv, summarize]', () => {
+  const slice = { version: 1 as const, files: [], modules: T6_SLICE_MODULES };
+  const global = { version: 1 as const, files: [], modules: T6_GLOBAL_MODULES };
+  const exports = resolveModuleExports('pipeline', slice, global);
+  assert.deepEqual(exports, ['import_tasks_from_csv', 'summarize']);
+  // 关键：方法名/模块名/占位全部清除（否则 module-contract 门误导 impl → ImportError）
+  for (const poison of ['add', 'update', 'list_all', 'store', 'statemachine', 'DictReader', 'validate_task', 'pipeline']) {
+    assert.ok(!exports?.includes(poison), `应剥离污染符号 ${poison}`);
+  }
+});
+
+test('sanitizeCrossSliceContamination：类方法过度列举（store=[TaskStore,add,...]）→ 回退 global [TaskStore]', () => {
+  // 真实样本（hkTy5j run#1）：slice decide_store 把 TaskStore 的方法名也列为模块级 export。
+  const pollutedStore = ['add', 'delete', 'get', 'load_json', 'next_id', 'save', 'save_json', 'TaskStore', 'update'];
+  const sliceModules = [{ name: 'store', exports: pollutedStore }];
+  const globalModules = [
+    { name: 'store', exports: ['TaskStore'] },
+    { name: 'pipeline', exports: ['import_tasks_from_csv', 'summarize'] },
+  ];
+  const cleaned = sanitizeCrossSliceContamination('store', pollutedStore, sliceModules, globalModules);
+  assert.deepEqual(cleaned, ['TaskStore']);
+});
+
+test('sanitizeCrossSliceContamination：合法 refine（替换 coarse 符号）不被 superset 规则误伤', () => {
+  // global coarse=[compute]；slice 用具体函数替换（不含 compute）→ 非 superset → 保留 slice。
+  const sliceRefined = ['compute_ma', 'compute_boll', 'compute_cci'];
+  const out = sanitizeCrossSliceContamination(
+    'indicators',
+    sliceRefined,
+    [{ name: 'indicators', exports: sliceRefined }],
+    [{ name: 'indicators', exports: ['compute'] }],
+  );
+  assert.deepEqual(out, sliceRefined);
+});
+
+test('resolveModuleExports：干净 slice 契约不受影响', () => {
+  const slice = {
+    version: 1 as const,
+    files: [],
+    modules: [
+      { name: 'store', exports: ['TaskStore'] },
+      { name: 'pipeline', exports: ['import_tasks_from_csv', 'summarize'] },
+    ],
+  };
+  const global = { version: 1 as const, files: [], modules: T6_GLOBAL_MODULES };
+  assert.deepEqual(resolveModuleExports('store', slice, global), ['TaskStore']);
+  assert.deepEqual(resolveModuleExports('pipeline', slice, global), ['import_tasks_from_csv', 'summarize']);
 });
 
 test('synthesizeSliceDecisionArtifacts builds modules[] when sidecar missing', () => {

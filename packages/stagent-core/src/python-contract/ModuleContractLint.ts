@@ -291,6 +291,15 @@ export function lintImplExportsAgainstModuleContract(params: {
       if (semantic === 'main' && crossSliceExports?.has(sym)) {
         continue;
       }
+      // main 入口同义词可互换：契约要 cli/run/main 任一，impl 实现了其中任一即视为满足
+      // （三者是同一 CLI 入口的约定俗成别名，非「空心绿」——入口确实存在；T6 contract=cli / impl=run）。
+      if (
+        semantic === 'main' &&
+        MAIN_ENTRY_CONVENTIONAL_EXPORTS.has(sym) &&
+        [...MAIN_ENTRY_CONVENTIONAL_EXPORTS].some((alias) => importable.has(alias))
+      ) {
+        continue;
+      }
       return {
         code: 'python-impl-export-missing',
         message: `module-contract：${implRelPath} 未导出契约符号 ${sym}（${contractSource}）`,
