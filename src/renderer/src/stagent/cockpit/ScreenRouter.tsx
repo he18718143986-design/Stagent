@@ -1,14 +1,11 @@
 import React from 'react'
-import { useCockpitContext } from './CockpitContext'
 import type { CockpitEngineSlice, CockpitFormState } from './types'
 import type { FrontendMessage } from '@stagent/core'
 import { IntentScreen } from './screens/IntentScreen'
 import { ClarifyScreen } from './screens/ClarifyScreen'
 import { PlanningScreen } from './screens/PlanningScreen'
-import { SimpleExecutionScreen } from './screens/simple/SimpleExecutionScreen'
-import { SimpleDeliveryScreen } from './screens/simple/SimpleDeliveryScreen'
-import { ProExecutionScreen } from './screens/pro/ProExecutionScreen'
-import { ProDeliveryScreen } from './screens/pro/ProDeliveryScreen'
+import { ExecutionScreen } from './screens/ExecutionScreen'
+import { DeliveryScreen } from './screens/DeliveryScreen'
 
 function Loading({ text }: { text: string }): React.JSX.Element {
   return (
@@ -17,9 +14,8 @@ function Loading({ text }: { text: string }): React.JSX.Element {
 }
 
 /**
- * 统一屏路由(渐进式披露)。意图 / 澄清 / 规划三屏已合并为单版,
- * 由屏内的 showTechnical 控制展开密度;执行 / 交付屏暂仍按密度选择
- * 旧 Simple/Pro 版本(阶段 D 合并)。
+ * 统一屏路由(渐进式披露)。意图 / 澄清 / 规划 / 执行 / 交付五屏均已合并为
+ * 单版,由屏内的 showTechnical 控制展开密度;不再按 uiMode 分叉。
  */
 export function ScreenRouter({
   engine,
@@ -40,20 +36,15 @@ export function ScreenRouter({
   onStartClarifyFlow?: () => void
   clarifyPending?: boolean
 }): React.JSX.Element {
-  const { showTechnical } = useCockpitContext()
   const { state } = engine
   const props = { engine, form, onNewTask, send, onStartClarifyFlow, clarifyPending }
 
   if (state.completed) {
-    return showTechnical ? <ProDeliveryScreen {...props} /> : <SimpleDeliveryScreen {...props} />
+    return <DeliveryScreen {...props} />
   }
 
   if (state.phase === 'execution') {
-    return showTechnical ? (
-      <ProExecutionScreen engine={engine} send={send} reviewDecision={engine.reviewDecision} />
-    ) : (
-      <SimpleExecutionScreen engine={engine} send={send} />
-    )
+    return <ExecutionScreen engine={engine} send={send} />
   }
 
   if (state.phase === 'confirm') {
