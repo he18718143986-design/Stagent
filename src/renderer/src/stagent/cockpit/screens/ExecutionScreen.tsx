@@ -104,6 +104,7 @@ export function ExecutionScreen({
           <div className="font-medium text-purple-900 mb-2">需要你确认一个关键决策</div>
           <DecisionReview
             stageId={decisionStageId}
+            initialRecord={renderOutput(state.outputs[decisionStageId]?.decisionRecord)}
             onApprove={(decisionRecord) =>
               void send({ type: 'approveDecision', stageId: decisionStageId, decisionRecord })
             }
