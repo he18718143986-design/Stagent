@@ -148,3 +148,35 @@ flowchart TB
 
 > 核心设计原则（已被实测验证，ADR-0008）：**门的强度比模型档位更决定产物质量**；
 > 评审/修复循环必须绑定**可执行外部验证器**（测试 / 真实运行 / smoke），无锚点自检会"假性收敛"（业界自我纠正研究一致结论）。
+
+---
+
+## Harness 9 维自评 + 新思路（2026-06-15）
+
+> 以"好 Harness vs 差 Harness"9 维评估 Stagent，定位仍在"差/部分"一侧的维度并给出**超出现有计划**的新思路。
+> 结论：6/9 已是"好 Harness"，本评估的价值在于 3~4 个仍部分/缺口的维度。
+
+### 9 维评分
+
+| 维度 | Stagent 现状 | 评级 |
+|------|------|------|
+| 任务输入 | polish 润色 + grill 澄清 + behaviorSpec + DefinitionOfDone + Charter；**无显式"非目标/边界"字段** | 🟡 部分 |
+| 上下文 | `CodebaseContextProvider` + `InputContextPolicy`/预算/截断 + AGENTS.md/CONTEXT.md；**偏"塞"多于"检索"** | 🟡 部分 |
+| 工具 | 少量稳定可组合（llm-text/code-runner/file-*/patch）+ `NonLlmToolRunnerRegistry` + 命令 lint | ✅ 好 |
+| 权限 | `sandbox/resolveSandboxForStage` + HITL 高风险审批 + Charter 升级；**无显式 per-stage 写入范围/能力声明与强制** | ❌ 缺口 |
+| 验证 | 确定性 QualityGate + RED-GREEN + pytest/vitest + 静态分析 + smoke 真启动 + blockDeliveryOnTestFailure | ✅ 强项 |
+| 状态 | `.wf-state.json` + 需求/规划/DELIVERY.md + experiences.jsonl + `.trace.jsonl` | ✅ 强项 |
+| 失败处理 | 定位（DiagnosticRouter/FailurePatternAnalyzer）+ 回滚（runtime-replan rewind）；**"沉淀规则"只回灌 few-shot，未固化为门** | 🟡 部分 |
+| 团队协作 | 产物 + DELIVERY.md；**引擎本身不产出 PR/不接 CI** | ❌ 缺口 |
+| 可改进性 | headless 分层 eval（T1–T6、`--repeat`）+ trace + experiences + 失败聚类 | ✅ 强项 |
+
+### 超出现有计划的新思路（按价值）
+
+1. **（权限·新）每阶段"能力契约 + 写入范围"声明与强制**：给 `Stage` 加 `capabilities`（allowedWritePaths / allowedCommands / network / 高风险需 HITL），执行前校验；高风险命令（`rm -rf`/`git push`/`DROP`）强制审批。**一石二鸟**：补"最小权限+高风险审批"，并解锁并行多实例 worktree 隔离。
+2. **（失败处理·新·最高价值）规则沉淀闭环**：`失败模式 → 候选规则 → 遥测/置信度晋升 → 注入 QualityGate`。让每修一个 bug 引擎**永久变强**；对应图里"沉淀规则"+"feedback loop"，与 ADR-0008 强门思想契合（Totem/PR-Distiller 式，已被产品验证）。
+3. **（团队协作·新）PR/CI-ready 输出**：交付收口额外产出 分支 + 结构化 PR 描述（behaviorSpec/DoD/质量报告/产物核验）+ CI 工作流片段（让确定性门在 CI 复跑）+ review artifact，把"单机产物"推到"融入团队 PR/CI 流"。
+4. **（任务输入·强化）结构化任务简报 schema**：polish+grill 产出持久化 `{goal, non-goals, boundaries, acceptance}`，作为验收单一真源 + 范围蠕变门。
+5. **（上下文·强化）检索优先于塞入**：`CodebaseContextProvider` 升级为按需语义检索（符号/依赖图索引），减少长预算截断与幻觉。
+
+> 现有计划已覆盖：规则候选晋升雏形(💡)、Node 全交付、best-of-N、对抗审查、宪法门、Sprint 循环、并行隔离。
+> 上述 **①②③ 为本评估新增、尚不在路线图**；①②已登记到 `docs/orchestration-plan.md`（子任务 2A/2B），2B 附可粘贴 prompt。

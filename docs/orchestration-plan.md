@@ -183,3 +183,78 @@ runtime-replan/、execution/DeliveryBlockOnTestFailure.ts、test/smoke-stage.tes
 - 完成后把【分支名 + PR 链接 + T6 成功率】回报给指挥会话（看板在 PR #12，未并入 main，
   由指挥会话代填）。
 ```
+
+---
+
+## Harness 9 维自评 + 新思路（2026-06-15）
+
+> 完整评分表与论述见 `docs/stagent-full-flow.md` 同名节。摘要：以"好/差 Harness"9 维评估，Stagent 6/9 已达"好"（验证/状态/可改进性/工具/上下文部分/任务输入部分），缺口在 **权限 / 团队协作 / 失败处理的"沉淀规则"**。
+
+### 新增子任务登记（本评估产出，尚不在原路线图）
+
+| # | 子任务 | 价值 | 跑法 | 状态 | 与 1b 碰撞 |
+|---|------|------|------|------|-----------|
+| 2A | 每阶段**能力契约 + 写入范围**声明/强制（权限；并解锁并行隔离） | 高 | 方案 B（mock 可验）/ 部分 A | 待启动 | 低（动 stage 执行/code-runner/file-write，非 python-contract） |
+| 2B | **失败→规则沉淀闭环**（experiences/failures → 候选规则 → 影子/warn → 晋升为门） | 最高 | 方案 B（mock 可验） | prompt 见下 | 低（动 experiences/failure/quality-gate seam，非 decide 契约） |
+| 2C | **PR/CI-ready 输出**（交付收口产 分支+PR 描述+CI 片段+review artifact） | 中高 | 方案 A/B | 待启动 | 低 |
+
+> 优先 2B（最高杠杆：引擎越用越强）；2A 次之（安全 + 解锁并行）。两者文件面与 1b 的 `python-contract`/decide 契约**零重叠**，可并行。
+
+## 子任务 2B · 可直接粘贴 prompt（失败→规则沉淀闭环 · 安全首切片）
+
+> 用法：新建 Cloud Agent 会话粘贴；或本指挥会话用 worktree 子代理做。mock 可验、不烧 token。
+
+```text
+# 任务：失败→规则沉淀闭环 第一切片（候选规则 store + 提炼 + 影子/warn，不硬阻断）
+
+## 背景
+Stagent 失败处理已有「定位（DiagnosticRouter/FailurePatternAnalyzer）+ 回滚（runtime-replan rewind）」，
+但「沉淀规则」只回灌 experiences.jsonl 的 few-shot，**未固化为确定性门** → 同类 bug 可能反复。
+目标：建「失败模式 → 候选确定性规则 → 遥测/置信度晋升 → 注入 QualityGate」闭环（对应"好 Harness"
+的 失败处理·沉淀规则 + 可改进性·feedback loop；Totem/PR-Distiller 式，已被产品验证）。
+本任务作为【新子任务 2B / 新分支 / 新 PR】，与子任务 1b（decide 契约）文件面零重叠。
+
+## 先核查（避免重复造轮子）
+搜索是否已存在候选规则/学习规则/规则晋升机制（candidate-rule / learned-rule / rule-promotion /
+ruleStore 等）。若已部分存在，先回报现状再决定增量。
+
+## 范围（安全首切片，dead-code-safe，禁止硬阻断）
+1. 新增 CandidateRule 类型 + store（如 `<taskWorkspace>/.stagent/candidate-rules.jsonl`）：
+   { id, kind, matcher（正则或结构化）, message, sourceFindings[], serves, hits, acceptanceRate,
+     status: 'needs_review' | 'active' | 'blocked' }。
+2. 提炼器：从 experiences.jsonl + .wf-failures.jsonl + FailurePatternAnalyzer 输出，
+   对**可被确定性检测的复发失败模式**派生候选规则（挑选当前还没有对应门的新模式；
+   不要重复已有 ADR-0008 门如 collaborator-mock-only/placeholder-export）。
+3. 晋升策略：needs_review→active（serves≥N 且 acceptanceRate>X，或人工 approve）；
+   噪声规则→blocked（按遥测）。阈值可配置、有单测覆盖。
+4. **影子/warn 模式 only**：active 候选规则只产 **warning（日志/报告）**，**绝不 hard-block**，
+   直到人工/配置显式激活。保证坏规则零阻断风险（呼应 ADR-0008：门要强，但新规则先观察）。
+5. 在 QualityGate 注册表只加一个**接缝/挂钩**（供未来激活），本切片**不接入硬门**。
+   相关文件：WorkflowExperienceStore、FailurePatternAnalyzer、QualityGateIds/BuiltinQualityGates、
+   新增 candidate-rule 模块。
+
+## 验证（必须）
+- 先 npm run build:core；node --test packages/stagent-core/dist/test/*.test.js 保持
+  9 个既有失败、零新增；根 npm test 全绿。
+- 新增单测（mock fixture，不烧 token）：从 fixture experiences/failures 提炼出候选规则；
+  晋升阈值（needs_review→active / →blocked）；**影子模式断言：active 规则只 warn、绝不 hard-block**。
+- 不跑 live（本切片纯确定性可验）。
+
+## 硬性约束
+- 不提交密钥 / artifacts/ / examples/test1/；不碰 Electron GUI；只动引擎/测试/文档；
+  改门禁前先读 docs/STAGENT-PRD*.md + docs/adr/。
+- 分支用 cursor/rule-distillation-loop-<suffix>；commit/push 后开 PR，标题概述
+  「失败→规则沉淀闭环（首切片·影子模式）」，正文列：做了什么、提炼/晋升策略、为何影子不阻断、
+  验证结果（单测计数、核心 9 失败零新增）、新增/扩展的 ADR（建议新 ADR 或扩 ADR-0008/0009）。
+- 完成后把【分支名 + PR 链接】回报给指挥会话回填看板。
+
+## 后续（不在本切片）
+- 把 active 规则从 warn 升级为 hard-block（人工/置信度门控）；接入生效路径；
+  规则效果遥测看板。
+```
+
+### 备选：子任务 2A（能力契约）一句话规格
+
+若优先做 2A：给 `Stage` 加 `capabilities`（allowedWritePaths / allowedCommands / network:false /
+highRiskNeedsApproval），在 `code-runner`/`file-write` 执行前校验；高风险命令（rm -rf / git push /
+DROP）走 HITL 审批门；单测覆盖"越界写入/高风险命令被拦"。它同时是**并行多实例 worktree 写入隔离**的前提。
