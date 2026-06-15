@@ -258,9 +258,9 @@ function StagentPageInner(): React.JSX.Element {
         {selectedFile && showTechnical ? (
           <FileEditor filePath={selectedFile.path} name={selectedFile.name} onClose={() => setSelectedFile(null)} />
         ) : (
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto scroll-smooth">
             <Stepper step={step} />
-            <div className="max-w-3xl mx-auto px-4 pb-10">
+            <div key={step} className="max-w-3xl mx-auto px-4 pb-10 animate-fade-in">
               <ScreenRouter
                 engine={engineSlice}
                 form={form}
