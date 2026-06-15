@@ -13,7 +13,7 @@ export function CockpitHeader({
   onSelectTask: (key: string) => void
   onResume: (key: string) => void
 }): React.JSX.Element {
-  const { uiMode, toggleUiMode } = useCockpitContext()
+  const { uiMode, showTechnical, toggleShowTechnical } = useCockpitContext()
   const [menuOpen, setMenuOpen] = useState(false)
 
   return (
@@ -66,10 +66,24 @@ export function CockpitHeader({
       <div className="flex items-center gap-2">
         <button
           type="button"
-          className="text-xs text-stone-500 hover:text-stagent-orange underline-offset-2 hover:underline"
-          onClick={toggleUiMode}
+          role="switch"
+          aria-checked={showTechnical}
+          aria-label="技术细节"
+          className="flex items-center gap-1.5 text-xs text-stone-500 hover:text-stagent-orange"
+          onClick={toggleShowTechnical}
         >
-          {uiMode === 'simple' ? '专业模式' : '简单模式'}
+          <span>技术细节</span>
+          <span
+            className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
+              showTechnical ? 'bg-stagent-orange' : 'bg-stone-300'
+            }`}
+          >
+            <span
+              className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                showTechnical ? 'translate-x-3.5' : 'translate-x-0.5'
+              }`}
+            />
+          </span>
         </button>
       </div>
     </header>
