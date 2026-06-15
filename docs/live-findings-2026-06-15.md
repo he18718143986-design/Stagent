@@ -156,9 +156,27 @@
 2. **`python-test-slice-import-module-mismatch` 门**：禁止切片测试 `from <他模块> import`（如 `test_pipeline.py` 用真实 `from store import TaskStore`）——此门与 ADR-0008/0009「用真实协作者、不 mock 内部切片」原则**直接冲突**，是下一道该治理的门。
 3. **真实集成 bug**：生成的 pipeline 把 `priority` 以**字符串**传给 `validate_task`（要求 int）→ 全行跳过 → summary 全 0。此即 ADR-0008「空心绿」，**A1 工作流内 smoke 会判红并进 fix 链**——但本 run 在更早的 test-import 门即失败，未抵达 smoke。
 
+## sub-task 1c：test-slice-import 门 order-aware 调和（2026-06-15）
+
+承接 1b。实施 [ADR-0009 §1a](adr/0009-skills-alignment-values-correction.md)。
+
+**红样本证据**（`--keep` 工作区 `YhQAHN`，`tests/test_pipeline.py`）：`from store import TaskStore` / `from models import validate_task`——store/models 构建序在 pipeline 之前、已落盘、契约已声明对应符号，是 ADR-0008/0009 要求的**真实前序协作者**，却被 `python-test-slice-import-module-mismatch`（`modRoot !== semantic`）一律判红，挡在 A1 smoke 之前。
+
+**修法（调和，不放宽）**：`lintTestImportsAgainstModuleContract` 改 order-aware——允许 import 已声明且构建序在前的兄弟切片（按其契约 exports 校验符号），仍拦 `__init__` / 未声明 / 前向（未落盘）切片；构建序优先工作流 `collectSliceBuildOrder`（impl 落盘序）、回退 global modules 声明序；两生产门（`sliceContractGateHelpers` / `postStageGates`）传入工作流序。L174 自模块 patch 检查保持 `continue`（跨切片 patch 委托 cross-module checker），二者策略一致。未删任何拦截。
+
+**验证（`feedback:live:t6:batch` N=3，flash + decision/test-write/integration=pro，`artifacts/t6_1c_smoke_reached.log`）**：strict-pass 0/3，但——
+
+- **② 已解除、T6 首次抵达并通过 A1 smoke**：**run#1**（`HjrlhJ`）workflow **completed**，`stage_test_run_smoke=done(exit 0)`、`fix_if_failed_smoke=skipped`、`delivery=done`；其 `test_pipeline.py` 的 `from store/models import` 经 order-aware 门**放行**。产物真实运行 `python main.py` → `{"imported":3, "summary":{"todo":3,...}}` **非平凡**（真实可交付，A1 smoke 据此判绿）。仅 **post-strict** mvp-acceptance 的 pytest 复跑失败——`test_main` **隔离 bug**（依赖 cwd `tasks.csv`），属 smoke 之后的层。
+- **① I-17/I-18**：本 batch **0 次**出现（decide 内容 lint 未阻断）。
+- **③ pipeline priority 类型 bug**：本 batch **未出现**（run#1 真实导入成功）。
+- 其余两 run 为 test 生成质量的 run 间方差（**非** test-slice-import 误拦）：run#2 `materialize_stub_main` 验证 exit 1（smoke 之前）；run#3 `test_main.py` 写 `from main import TaskStore`（模型把 store 的类误 import 自 main，门**正确**判 `python-module-contract-violation`）。
+
+**结论**：1c 达成验收——**② 不再阻断，T6 抵达并通过 A1 smoke、workflow 完成、产物真实非平凡**。T6 端到端 strict-pass 仍 0/3，剩余阻断为 test 生成质量方差与 post-strict test 隔离（均在 smoke 域之外、与 1c 无关）。
+
 ## 待验证 / 下一步
-- **【高优先·承接 1b】放宽 `python-test-slice-import-module-mismatch`**：允许切片测试 `from <他项目模块> import <该模块已声明 export>`（真实协作者，对齐 ADR-0008/0009），保留对未声明符号/不存在模块的拦截。这是 T6 抵达 smoke 的下一道门。
-- **decide 内容 lint（I-17/I-18）稳定性**：slice decide 的「AI 无法验证的假设 / 边界压力测试」节完整性（decide-prompt 或 lint 阈值）。
+- **test 生成质量方差**：① `from main import TaskStore` 等错误自模块 import（应 `from store import`）；② `materialize_stub_main` 验证偶发 exit 1；③ `test_main` 隔离 bug（依赖 cwd `tasks.csv`，应自建 fixture/tmp）。
+- **status 透传语义 bug**：pipeline 导入未透传 CSV `status` 列（全计 todo）——超出 A1 smoke「非平凡」判据，属行为正确性（behaviorSpec/test 覆盖）。
+- **decide 内容 lint（I-17/I-18）稳定性**：slice decide 的「AI 无法验证的假设 / 边界压力测试」节完整性（历史偶发，本 batch 未现）。
 - **非对称成本配置**：`LLM_MODEL=deepseek-v4-flash` + `LLM_MODEL_TEST_WRITE=deepseek-v4-pro`（已写入 `.env.local`）→ 待第二阻碍缓解后再跑，验证「叶子 flash、decide/集成 pro」既省又能过（否则大概率同样卡在 forward-slice import）。
 - 落地 [ADR-0006](adr/0006-difficulty-aware-model-routing.md) per-role env 解耦（让「只升级 decide」成为最省配置）。
 - 落地 [ADR-0005](adr/0005-node-ts-language-adapter.md)：`nodeTestQualityAdapter` + seam 接入 + Node 栈引导 + Node 确定性 tier（T6n）。
