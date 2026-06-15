@@ -61,4 +61,51 @@ describe('DeliveryScreen (unified)', () => {
     fireEvent.click(screen.getByRole('button', { name: /怎么用/ }))
     expect(screen.getByText('三步就能上手')).toBeTruthy()
   })
+
+  it('shows honest copy when the AFK quality gate did not pass', () => {
+    const qualityReport = {
+      afk: {
+        passed: false,
+        stableVerificationPasses: 0,
+        verificationStages: 1,
+        humanInterventions: 3,
+        runtimeReplanCount: 0,
+        dodDeliverablesSatisfied: 0,
+        dodDeliverablesTotal: 1,
+        charterCoverageRate: 0,
+        flakyStages: [],
+        dodConfigured: true,
+        reasons: ['tests failed'],
+      },
+      verificationRows: [{ stageId: 's1', passCount: 0, totalRuns: 1, stable: false, flaky: false }],
+      engineSummary: 'x',
+    }
+    render(
+      <DeliveryScreen
+        engine={{
+          state: { ...initialStagentState, completed: true, workflow, qualityReport },
+          stages: [],
+          models: [],
+          preferredModel: '',
+          setModel: vi.fn(),
+          getConfig: vi.fn(),
+          saveConfig: vi.fn(),
+          reviewDecision: vi.fn(),
+        }}
+        form={{
+          draft: '',
+          setDraft: vi.fn(),
+          taskType: 'auto',
+          setTaskType: vi.fn(),
+          workspacePath: '/tmp/ws',
+          setWorkspacePath: vi.fn(),
+        }}
+        onNewTask={vi.fn()}
+        send={vi.fn(async () => {})}
+      />,
+    )
+    expect(screen.getByText(/有检查没通过/)).toBeTruthy()
+    expect(screen.queryByText('做好了！')).toBeNull()
+    expect(screen.getByText(/0\/1 项测试通过/)).toBeTruthy()
+  })
 })
