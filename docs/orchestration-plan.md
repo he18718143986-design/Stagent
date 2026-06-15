@@ -65,12 +65,14 @@
 |----|------|----|------|
 | `missing l10n key: stagent.planCompleteness.*` 告警 | ✅ 完成 | #13 / `cursor/l10n-plan-completeness-nls-3713` | 调研确认 `package.nls.json` 全仓缺失且从未提交。**只补 planCompleteness 命名空间**（增量）：新增该 catalog（21 key）+ 修复 `lintMsg.ts` fallback **丢弃 `...args`** 的潜在 bug（经 worktree 子代理验证时发现）。验证：新测 2/2、核心套件 9 失败零新增、根 vitest 204/204。 |
 
-### 待指挥会话定夺的「方案 B」候选
+### 「方案 B」候选 — 核查后更新（2026-06-15）
 
-| 候选 | 性质 | 风险/说明 |
-|------|------|-----------|
-| 其余 l10n 命名空间（lint/contract/decisionLint/gate/quality/hitl/rule20）catalog | 增量 | 同 planCompleteness 模式逐命名空间补；当前维持回退，无回归。 |
-| ADR-0005 Node/TS 适配接缝 | 中等、可 mock | 复用 `LanguageTestQualityAdapter` 抽象，加 node 对偶；范围较大，建议拆小切片。 |
+| 候选 | 现状（已核查） | 结论 |
+|------|----------------|------|
+| ADR-0005 Node/TS 适配（"最小切片"） | **PR-1/2/3 已落地**：`nodeTestQualityAdapter`（9 类 + collaborator-mock-only、参数化 productionModules）、`TestQualityLint` seam + node 委托、`postStageGates` 按语言注入；`node-test-quality-adapter.test.js` **15/15**。 | 无方案 B 可做；仍开口的 **PR-4（Node 栈引导）/ PR-5（T6n live tier）/ PR-6（zip）** 属**重 live 或碰 disk-bootstrap → 方案 A**，且建议 1b 之后再做（复用已修好的 smoke 门、避免碰撞）。 |
+| 其余 l10n 命名空间 catalog | 多为**动态拼接 key**，只能覆盖部分；且 `package.nls.json` 仍在未合并的 **PR #13**。 | 低价值 + 需叠在 PR #13 上（PR 依赖链）。**暂不做**。 |
+
+> 经核查：两个原候选要么已完成（ADR-0005 PR-1/2/3），要么低价值（l10n 其余命名空间）。当前**没有**高价值且"轻量/可隔离/可 mock/不烧 token"的方案 B 任务；不制造并行 busywork。Node/TS 推进应作为 **1b 之后的方案 A 子任务**（PR-4 栈引导 → PR-5 T6n live 验证）。
 
 ---
 
