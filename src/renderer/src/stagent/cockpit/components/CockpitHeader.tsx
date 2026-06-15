@@ -13,14 +13,14 @@ export function CockpitHeader({
   onSelectTask: (key: string) => void
   onResume: (key: string) => void
 }): React.JSX.Element {
-  const { uiMode, showTechnical, toggleShowTechnical } = useCockpitContext()
+  const { showTechnical, toggleShowTechnical } = useCockpitContext()
   const [menuOpen, setMenuOpen] = useState(false)
 
   return (
     <header className="flex items-center justify-between px-4 py-2 border-b border-stone-200/60 bg-white/60 backdrop-blur-sm shrink-0">
       <div className="flex items-center gap-2">
         <span className="font-semibold text-stone-800">Stagent</span>
-        {uiMode === 'simple' && (
+        {!showTechnical && (
           <>
             <button
               type="button"
@@ -63,16 +63,16 @@ export function CockpitHeader({
           </>
         )}
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 shrink-0">
         <button
           type="button"
           role="switch"
           aria-checked={showTechnical}
           aria-label="技术细节"
-          className="flex items-center gap-1.5 text-xs text-stone-500 hover:text-stagent-orange"
+          className="flex items-center gap-1.5 text-xs text-stone-500 hover:text-stagent-orange shrink-0"
           onClick={toggleShowTechnical}
         >
-          <span>技术细节</span>
+          <span className="whitespace-nowrap">技术细节</span>
           <span
             className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
               showTechnical ? 'bg-stagent-orange' : 'bg-stone-300'

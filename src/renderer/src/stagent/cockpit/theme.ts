@@ -17,8 +17,3 @@ export const simpleTheme = {
   /** 建议项 / 标签胶囊。 */
   chip: 'text-sm px-3 py-1.5 rounded-full border border-stone-200 bg-white hover:border-stagent-orange hover:bg-orange-50 transition-colors',
 } as const
-
-export const proTheme = {
-  page: 'flex h-full min-h-0',
-  card: 'border border-gray-200 rounded-lg p-4 bg-white',
-} as const

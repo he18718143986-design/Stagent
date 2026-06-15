@@ -1,5 +1,5 @@
 /* ------------------------------------------------------------------ */
-/*  StagentPage — 双模式驾驶舱壳（简单 4 步 + 专业 6 屏）              */
+/*  StagentPage — 渐进式披露统一驾驶舱壳(单一 5 步,密度由 showTechnical 控制) */
 /* ------------------------------------------------------------------ */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -7,9 +7,8 @@ import type { FrontendMessage } from '@stagent/core'
 import { useStagentEngine } from '../stagent/useStagentEngine'
 import { CockpitProvider, useCockpitContext } from '../stagent/cockpit/CockpitContext'
 import { CockpitHeader } from '../stagent/cockpit/components/CockpitHeader'
-import { SimpleStepper } from '../stagent/cockpit/components/SimpleStepper'
-import { ProStepper } from '../stagent/cockpit/components/ProStepper'
-import { deriveCockpitStep, deriveProStep, deriveSimpleStep } from '../stagent/cockpit/deriveCockpitStep'
+import { Stepper } from '../stagent/cockpit/components/Stepper'
+import { deriveStep } from '../stagent/cockpit/deriveCockpitStep'
 import { ScreenRouter } from '../stagent/cockpit/ScreenRouter'
 import TaskTree from './TaskTree'
 import SidebarShell from './SidebarShell'
@@ -17,7 +16,7 @@ import FileEditor from './FileEditor'
 import type { FsNode } from './FileTree'
 
 function StagentPageInner(): React.JSX.Element {
-  const { uiMode } = useCockpitContext()
+  const { showTechnical } = useCockpitContext()
   const engine = useStagentEngine()
   const {
     state,
@@ -46,13 +45,12 @@ function StagentPageInner(): React.JSX.Element {
   const pendingFolderThenClarifyRef = useRef(false)
   const awaitingClarifyRef = useRef(false)
 
-  const simpleStep = useMemo(() => {
+  const step = useMemo(() => {
     if (clarifyPending && state.phase === 'input') {
       return 2 as const
     }
-    return deriveSimpleStep(state)
+    return deriveStep(state)
   }, [clarifyPending, state])
-  const proStep = deriveProStep(state)
 
   const form = useMemo(
     () => ({ draft, setDraft, taskType, setTaskType, workspacePath, setWorkspacePath }),
@@ -203,11 +201,9 @@ function StagentPageInner(): React.JSX.Element {
     setClarifyPending(false)
   }
 
-  const isSimple = uiMode === 'simple'
-
   return (
-    <div className={isSimple ? 'h-full flex flex-col bg-stagent-cream' : 'flex h-full min-h-0'}>
-      {!isSimple && (
+    <div className="flex h-full min-h-0 bg-stagent-cream">
+      {showTechnical && (
         <SidebarShell taskCount={state.tasks.length} onNewTask={newTask}>
           <TaskTree
             tasks={state.tasks}
@@ -240,11 +236,7 @@ function StagentPageInner(): React.JSX.Element {
         />
 
         {(state.busy || clarifyPending) && (
-          <div
-            className={`sticky top-0 z-10 px-4 py-2 text-sm ${
-              isSimple ? 'bg-orange-50 text-stagent-orange border-b border-orange-100' : 'bg-blue-50 text-blue-700 border-b border-blue-100'
-            }`}
-          >
+          <div className="sticky top-0 z-10 px-4 py-2 text-sm bg-orange-50 text-stagent-orange border-b border-orange-100">
             ⏳{' '}
             {state.busy
               ? `${state.busy.message}${state.busy.detail ? ` — ${state.busy.detail}` : ''}`
@@ -259,51 +251,27 @@ function StagentPageInner(): React.JSX.Element {
 
         {state.failed && state.phase !== 'execution' && (
           <div className="mx-4 mt-3 border border-red-200 bg-red-50 rounded-lg px-4 py-2 text-sm text-red-700">
-            ✗ 失败（{state.failed.errorType}）：{state.failed.reason}
+            ✗ 失败({state.failed.errorType}):{state.failed.reason}
           </div>
         )}
 
-        {selectedFile && !isSimple ? (
-          <FileEditor
-            filePath={selectedFile.path}
-            name={selectedFile.name}
-            onClose={() => setSelectedFile(null)}
-          />
+        {selectedFile && showTechnical ? (
+          <FileEditor filePath={selectedFile.path} name={selectedFile.name} onClose={() => setSelectedFile(null)} />
         ) : (
           <div className="flex-1 overflow-y-auto">
-            {isSimple ? (
-              <>
-                <SimpleStepper step={simpleStep} />
-                <div className="px-4 pb-10">
-                  <ScreenRouter
-                    engine={engineSlice}
-                    form={form}
-                    onNewTask={newTask}
-                    send={sendVoid}
-                    showSettings={showSettings}
-                    setShowSettings={setShowSettings}
-                    onStartClarifyFlow={startClarifyFlow}
-                    clarifyPending={clarifyPending}
-                  />
-                </div>
-              </>
-            ) : (
-              <>
-                <ProStepper step={proStep} />
-                <div className="max-w-5xl mx-auto p-5">
-                  <ScreenRouter
-                    engine={engineSlice}
-                    form={form}
-                    onNewTask={newTask}
-                    send={sendVoid}
-                    showSettings={showSettings}
-                    setShowSettings={setShowSettings}
-                    onStartClarifyFlow={startClarifyFlow}
-                    clarifyPending={clarifyPending}
-                  />
-                </div>
-              </>
-            )}
+            <Stepper step={step} />
+            <div className="max-w-3xl mx-auto px-4 pb-10">
+              <ScreenRouter
+                engine={engineSlice}
+                form={form}
+                onNewTask={newTask}
+                send={sendVoid}
+                showSettings={showSettings}
+                setShowSettings={setShowSettings}
+                onStartClarifyFlow={startClarifyFlow}
+                clarifyPending={clarifyPending}
+              />
+            </div>
           </div>
         )}
       </main>
