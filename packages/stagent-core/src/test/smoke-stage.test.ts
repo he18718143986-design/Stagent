@@ -9,6 +9,13 @@ import {
 } from '../disk-bootstrap/smokeStage';
 import { DELIVERY_WRAPUP_STAGE_ID } from '../disk-bootstrap/deliveryWrapupStage';
 import { CODE_RUNNER_EXIT_OUTPUT_KEY, VERIFY_OUT_OUTPUT_KEY } from '../WorkflowOutputKeys';
+import { findFixStageForTestRun } from '../gate-repair/GateRepairRouter';
+import {
+  isFixIfFailedStageId,
+  resolveTestRunStageIdFromFix,
+  stageHasDownstreamFixChain,
+} from '../runtime-replan/FixExhaustedRouter';
+import { isTestRunStageId } from '../workflow/StageIdPatterns';
 
 function llmStage(id: string, file: string): Stage {
   return {
@@ -104,6 +111,31 @@ test('injectSmokeStage Python server.py → serve 模式（长驻探活），不
   }
   // serve 模式不接产出断言/fix 链
   assert.equal(injected.find((s) => s.id === SMOKE_FIX_STAGE_ID), undefined);
+});
+
+test('smoke 阶段被 test_run 自修复路由识别（失败可走既有 fix 链回绕）', () => {
+  const stages = [
+    llmStage('stage_impl_main', 'main.py'),
+    fileWriteStage('stage_write_config', 'config.yaml'),
+    llmStage(DELIVERY_WRAPUP_STAGE_ID, 'DELIVERY.md'),
+  ];
+  const injected = injectSmokeStage(stages);
+  const definition = {
+    id: 'wf',
+    title: 'wf',
+    meta: { taskType: 'software' },
+    stages: injected,
+  } as never;
+
+  // smoke 是 test_run 语义 → 触发 trySelfHealAfterTestRunFailure 的软失败分支
+  assert.ok(isTestRunStageId(SMOKE_RUN_STAGE_ID));
+  // 找得到配对 fix → stageHasDownstreamFixChain 为真（失败转 fix 链而非 workflowFailed）
+  const fix = findFixStageForTestRun(definition, SMOKE_RUN_STAGE_ID);
+  assert.equal(fix?.id, SMOKE_FIX_STAGE_ID);
+  assert.equal(stageHasDownstreamFixChain(definition, SMOKE_RUN_STAGE_ID), true);
+  // fix 完成后 afterFixIfFailedStage 用此映射回绕重跑 smoke
+  assert.ok(isFixIfFailedStageId(SMOKE_FIX_STAGE_ID));
+  assert.equal(resolveTestRunStageIdFromFix(SMOKE_FIX_STAGE_ID), SMOKE_RUN_STAGE_ID);
 });
 
 test('injectSmokeStage 幂等：已存在历史 stage_smoke_run 不再注入', () => {
