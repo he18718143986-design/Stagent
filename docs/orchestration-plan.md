@@ -194,7 +194,7 @@ runtime-replan/、execution/DeliveryBlockOnTestFailure.ts、test/smoke-stage.tes
 
 | # | 子任务 | 价值 | 跑法 | 状态 | 与 1b 碰撞 |
 |---|------|------|------|------|-----------|
-| 2A | 每阶段**能力契约 + 写入范围**声明/强制（权限；并解锁并行隔离） | 高 | 方案 B（mock 可验）/ 部分 A | 待启动 | 低（动 stage 执行/code-runner/file-write，非 python-contract） |
+| 2A | 每阶段**能力契约 + 写入范围**声明/强制（权限；并解锁并行隔离） | 高 | 方案 B（mock 可验） | ✅ **首切片完成（待合并）** PR #17 / `cursor/stage-capability-contract-3713`（5 新文件，dead-code-safe 无接线；新测 14/14、核心 9 失败零新增、vitest 204）。后续：给 Stage 加 capabilities 字段 + 执行前接线（file-write/code-runner 拦截 + 高风险 HITL）+ 打通并行写入隔离。 | 低（仅新增 capability/*，未碰生效路径） |
 | 2B | **失败→规则沉淀闭环**（experiences/failures → 候选规则 → 影子/warn → 晋升为门） | 最高 | 方案 B（mock 可验） | ✅ **首切片完成（待合并）** PR #16 / `cursor/rule-distillation-loop-3713`（6 新文件，dead-code-safe 不硬阻断；新测 13/13、核心 9 失败零新增、vitest 204）。后续：warn→hard-block 接入生效门 + 真实遥测。 | 低（仅新增 rule-distillation/*，未碰生效路径） |
 | 2C | **PR/CI-ready 输出**（交付收口产 分支+PR 描述+CI 片段+review artifact） | 中高 | 方案 A/B | 待启动 | 低 |
 
