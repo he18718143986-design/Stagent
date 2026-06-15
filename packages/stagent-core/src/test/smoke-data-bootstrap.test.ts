@@ -7,9 +7,40 @@ import {
   extractCsvPathsFromYaml,
   seedSmokeCsvFixtures,
   inferCsvColumns,
+  inferEnumValues,
   inferFirstEnumValue,
   buildSeedCsv,
 } from '../disk-bootstrap/smokeDataBootstrap';
+
+const T6_MODELS_PY = `
+VALID_STATUSES = {"todo", "in_progress", "done", "cancelled"}
+def validate_task(data):
+    pass
+`;
+
+test('inferEnumValues 提取全部合法 status 值（子任务 1d (b)）', () => {
+  assert.deepEqual(inferEnumValues(T6_MODELS_PY), ['todo', 'in_progress', 'done', 'cancelled']);
+  assert.equal(inferFirstEnumValue(T6_MODELS_PY), 'todo');
+  assert.deepEqual(inferEnumValues('no enum here'), []);
+});
+
+test('buildSeedCsv status 列轮换多种合法值（供状态保真冒烟断言）', () => {
+  const csv = buildSeedCsv(['title', 'priority', 'status'], T6_MODELS_PY);
+  const lines = csv.trim().split('\n');
+  assert.equal(lines[0], 'title,priority,status');
+  const statuses = lines.slice(1).map((l) => l.split(',')[2]);
+  // 覆盖 ≥2 种不同 status（不再全是单一值）
+  assert.ok(new Set(statuses).size >= 2, `expected varied statuses, got ${statuses.join(',')}`);
+  // 全部为合法值
+  for (const s of statuses) {
+    assert.ok(['todo', 'in_progress', 'done', 'cancelled'].includes(s), `invalid status ${s}`);
+  }
+  // priority 全部 1..5（不越界）
+  for (const l of lines.slice(1)) {
+    const p = Number(l.split(',')[1]);
+    assert.ok(p >= 1 && p <= 5, `priority ${p} out of range`);
+  }
+});
 
 test('extractCsvPathsFromYaml 收集 mock_csv_path 等引用', () => {
   const yaml = `

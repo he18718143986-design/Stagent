@@ -19,6 +19,7 @@ import { semanticFromFixIfFailedStageId } from '../runtime-replan/FixExhaustedRo
 import { block, warn } from '../quality-gates/gateHelpers';
 import {
   coerceDecisionArtifacts,
+  collectPriorSiblingModules,
   lintImplExportsAgainstModuleContract,
   lintTestImportsAgainstModuleContract,
 } from './ModuleContractLint';
@@ -89,6 +90,7 @@ export function evaluateModuleContractPostMutateGate(ctx: QualityGateContext): G
       sliceArtifacts,
       globalArtifacts,
       sliceDecisionRecord,
+      priorSiblingModules: collectPriorSiblingModules(instance.definition, semantic),
     });
     if (testIssue) {
       const message = `module-contract（${testIssue.code}）：${testIssue.message}`;

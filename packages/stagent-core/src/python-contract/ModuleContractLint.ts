@@ -3,9 +3,11 @@ import * as path from 'path';
 import {
   type DecisionArtifactsV1,
   isDecisionArtifactsV1,
+  normalizeModuleExports,
   resolveModuleExports,
 } from '../commitment/decisionArtifactsSchema';
-import type { WorkflowInstance } from '../WorkflowDefinition';
+import type { WorkflowDefinition, WorkflowInstance } from '../WorkflowDefinition';
+import { isImplStageId, semanticNameFromImplStageId } from '../workflow/StageIdPatterns';
 import {
   extractExportedSymbols,
   extractModuleLevelConstants,
@@ -55,6 +57,75 @@ export function coerceDecisionArtifacts(value: unknown): DecisionArtifactsV1 | n
   return isDecisionArtifactsV1(value) ? value : null;
 }
 
+/** 全部已声明的项目模块名（global + slice decisionArtifacts.modules）。 */
+function collectDeclaredModuleNames(
+  sliceArtifacts: DecisionArtifactsV1 | null | undefined,
+  globalArtifacts: DecisionArtifactsV1 | null | undefined,
+): Set<string> {
+  const names = new Set<string>();
+  for (const m of normalizeModuleExports(globalArtifacts?.modules)) {
+    names.add(m.name);
+  }
+  for (const m of normalizeModuleExports(sliceArtifacts?.modules)) {
+    names.add(m.name);
+  }
+  return names;
+}
+
+/**
+ * 工作流真实「构建序」：按 `stage_impl_<semantic>` 落盘顺序（排除 bundle-write / conftest），
+ * 这是 per-slice test_run 时哪些兄弟切片已落盘的权威来源（决定 import 是否会 ImportError）。
+ */
+export function collectSliceBuildOrder(definition: WorkflowDefinition | undefined): string[] {
+  const order: string[] = [];
+  for (const s of definition?.stages ?? []) {
+    if (!isImplStageId(s.id) || s.id.endsWith('_stagent_bundle_write')) {
+      continue;
+    }
+    const sem = semanticNameFromImplStageId(s.id);
+    if (sem && sem !== 'conftest' && !order.includes(sem)) {
+      order.push(sem);
+    }
+  }
+  return order;
+}
+
+/** semantic 之前已落盘的兄弟切片集合（真实协作者）。 */
+export function collectPriorSiblingModules(
+  definition: WorkflowDefinition | undefined,
+  semantic: string,
+): Set<string> {
+  const order = collectSliceBuildOrder(definition);
+  const idx = order.indexOf(semantic);
+  if (idx <= 0) {
+    return new Set();
+  }
+  return new Set(order.slice(0, idx));
+}
+
+/**
+ * order-aware 判定：modRoot 是否为「semantic 的合法前序协作者」——已声明的项目模块、且构建序在
+ * semantic **之前**（已落盘，import 不会 ImportError）。优先用工作流构建序（authoritative），
+ * 缺省回退 global decisionArtifacts.modules 的声明顺序。
+ */
+function resolvePriorSiblingModules(
+  semantic: string,
+  sliceArtifacts: DecisionArtifactsV1 | null | undefined,
+  globalArtifacts: DecisionArtifactsV1 | null | undefined,
+  explicit?: ReadonlySet<string>,
+): ReadonlySet<string> {
+  if (explicit) {
+    return explicit;
+  }
+  // 回退：global 声明顺序（架构 decide 通常按依赖/构建序列出 modules）。
+  const ordered = normalizeModuleExports(globalArtifacts?.modules).map((m) => m.name);
+  const idx = ordered.indexOf(semantic);
+  if (idx > 0) {
+    return new Set(ordered.slice(0, idx));
+  }
+  return new Set();
+}
+
 export function lintTestImportsAgainstModuleContract(params: {
   workspaceRoot: string;
   testRelPath: string;
@@ -62,6 +133,8 @@ export function lintTestImportsAgainstModuleContract(params: {
   sliceArtifacts: DecisionArtifactsV1 | null | undefined;
   globalArtifacts: DecisionArtifactsV1 | null | undefined;
   sliceDecisionRecord?: string | null;
+  /** 已落盘前序兄弟切片（构建序在 semantic 之前）；缺省回退 global modules 声明顺序。 */
+  priorSiblingModules?: ReadonlySet<string>;
 }): ModuleContractIssue | null {
   const { workspaceRoot, testRelPath, semantic, sliceArtifacts, globalArtifacts, sliceDecisionRecord } =
     params;
@@ -92,6 +165,13 @@ export function lintTestImportsAgainstModuleContract(params: {
   const sliceEntry = sliceArtifacts?.modules?.find((m) => m.name === semantic);
   const contractSource =
     sliceEntry && (sliceEntry.exports?.length ?? 0) > 0 ? 'slice' : 'global';
+  const declaredModules = collectDeclaredModuleNames(sliceArtifacts, globalArtifacts);
+  const priorSiblings = resolvePriorSiblingModules(
+    semantic,
+    sliceArtifacts,
+    globalArtifacts,
+    params.priorSiblingModules,
+  );
 
   for (const imp of parsePythonFromImports(content)) {
     const modRoot = imp.module.split('.')[0]!;
@@ -99,9 +179,38 @@ export function lintTestImportsAgainstModuleContract(params: {
       continue;
     }
     if (modRoot !== semantic) {
-      const hint = FORBIDDEN_SLICE_TEST_MODULE_NAMES.has(modRoot)
+      // order-aware 调和（ADR-0008/0009「测真实协作者」）：允许 import 已声明且**构建序在前**的
+      // 兄弟切片（已落盘，不会 ImportError）；仍拦 __init__ / 未声明模块 / 前向（未落盘）切片。
+      const isForbiddenName = FORBIDDEN_SLICE_TEST_MODULE_NAMES.has(modRoot);
+      if (!isForbiddenName && declaredModules.has(modRoot) && priorSiblings.has(modRoot)) {
+        // 校验导入符号在该前序协作者契约 exports 中（防幻觉符号）。
+        const collaboratorExports = resolveModuleExports(modRoot, null, globalArtifacts);
+        const collaboratorSet = new Set(collaboratorExports ?? []);
+        for (const name of imp.names) {
+          if (
+            name === '*' ||
+            collaboratorSet.size === 0 ||
+            collaboratorSet.has(name) ||
+            (modRoot === 'main' && MAIN_ENTRY_CONVENTIONAL_EXPORTS.has(name))
+          ) {
+            continue;
+          }
+          return {
+            code: 'python-module-contract-violation',
+            message: `module-contract：${testRelPath} 从前序协作者 ${modRoot} import ${name}，但 ${modRoot} 契约 exports 未声明该符号（允许：${[...collaboratorSet].join(', ') || '（空）'}）`,
+            module: modRoot,
+            symbol: name,
+            testFile: testRelPath,
+            contractSource,
+          };
+        }
+        continue;
+      }
+      const hint = isForbiddenName
         ? `impl 落在 ${semantic}/__init__.py 时，测试仍须写 from ${semantic} import，不能写 from __init__ import`
-        : `切片 ${semantic} 的测试须写 from ${semantic} import`;
+        : declaredModules.has(modRoot)
+          ? `${modRoot} 是尚未落盘的前向切片（构建序不在 ${semantic} 之前），per-slice test_run 会 ImportError；只能 import 真实前序协作者切片`
+          : `切片 ${semantic} 的测试须写 from ${semantic} import（或已声明且前序落盘的协作者切片），不得 import 未声明模块 ${modRoot}`;
       return {
         code: 'python-test-slice-import-module-mismatch',
         message: `module-contract：${testRelPath} 使用 from ${modRoot} import，${hint}`,
@@ -172,6 +281,10 @@ export function lintTestPatchTargetsAgainstModuleContract(params: {
     }
     const modRoot = target.split('.')[0]!;
     if (modRoot !== semantic) {
+      // 第二处 modRoot !== semantic：本函数只校验「patch 本切片自身模块的未声明符号」。
+      // 跨切片 patch 目标交由 lintTestCrossModulePatchTargetsAgainstContracts 校验（按各模块契约），
+      // 故此处 skip 而非 block——与 L101 import 侧的 order-aware 调和一致：跨模块引用不在此处拦，
+      // 真实前序协作者允许、未声明符号由各自契约门拦。
       continue;
     }
     const symbol = target.split('.')[1]!;
