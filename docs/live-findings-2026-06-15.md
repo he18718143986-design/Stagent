@@ -128,8 +128,37 @@
 
 **结论**：A1（本次交付）正确实现并已证其能根治「main 空转/空心绿」；但 T6 端到端 strict-pass 被**另一独立回归**（decide 把跨切片符号塞进 pipeline/main 契约）阻断在 smoke 之前。该回归属 decide 契约质量（prompt/schema），需 live 复跑验证，**不宜在本次（A1）改动里顺手改门以免引入更大风险**，列为下一步。
 
+## sub-task 1b：decide 契约污染修复（prevention-at-decide，2026-06-15）
+
+实施 [ADR-0007 扩展](adr/0007-contract-guidance-prevention-at-impl.md)（prevention-at-decide：module-exports 契约净化）。
+
+**根因证据**（`--keep` 工作区 `stage_decide_*` 真实输出）：decide 产出的 module 契约系统性**过度列举**，三类，**均有 global 架构 decide 的干净对照**：
+- 跨切片污染：`pipeline.exports` 混入 store 方法名 `add/update/list_all`、模块名 `store/statemachine`、models 的 `validate_task`、占位 `DictReader`（global pipeline=`[import_tasks_from_csv, summarize]`）。
+- 类方法过度列举：`store.exports=[TaskStore, add, get, delete, update, list_all, ...]`（把 TaskStore 方法当模块级 export；global store=`[TaskStore]`）。
+- main 入口同义词：slice `main=[run, TaskStore]` → 净化后落到 global `main=[cli]`，但 impl 写 `run`。
+
+**修法**（确定性兜底 + prompt 预防；不放宽 module-contract 门）：
+- `sanitizeCrossSliceContamination`（接入 `resolveModuleExports`，impl/test-write prompt 与门共用 SSOT）：① 跨切片符号/模块名/自身名污染 → 优先回退 global 干净 M 列表；② slice ⊇ global 且有额外项（superset）→ 同样回退 global（清除类方法过度列举）；未污染原样返回。
+- `lintImplExportsAgainstModuleContract`：main 切片 `cli/run/main` 入口同义词互换豁免（入口确实存在、非空心绿；仍拦真缺失符号）。
+- `SLICE_MODULE_CONTRACT_SUFFIX`：decide prompt 明确 exports 只能是本切片自身顶层公开符号。
+
+**验证（成功率 + 真实运行，`artifacts/t6_decide_fix_verification.log`）**：`feedback:live:t6:batch` N=3，`LLM_MODEL=flash` + decision/test-write/integration=pro。
+
+| 批次 | commit | strict-pass | 失败门（均与契约污染无关了） |
+|---|---|---|---|
+| batch1（仅 cross-slice） | `5002124` | 0/3 | store(`add`) / main(`cli`) 契约污染 + 1 test 失败 |
+| batch2（+superset+同义词） | `8069cce` | 0/3 | decide 内容 lint(I-17/I-18) / test-slice-import 门 / test 失败 |
+
+**关键结论**：**契约污染失败模式已消除**——batch1 的 store/pipeline/main 契约污染失败在 batch2 **全部不再出现**，store/pipeline 切片真实通过（test_run 绿、fix 跳过）。真实运行核验：`python3 -c "import pipeline"` 不再 `ImportError`（修复前 `from . import store` 崩溃），pipeline 正确 `import csv/import models`。
+
+**T6 仍未 strict pass**，但阻断已**前移到与契约污染无关的独立问题**（非本 sub-task 范围）：
+1. **decide 内容 lint（I-17/I-18）**：slice decide 偶发缺「### AI 无法验证的假设」节 / 边界场景<2（decide 内容完整性，pro 仍偶发）。
+2. **`python-test-slice-import-module-mismatch` 门**：禁止切片测试 `from <他模块> import`（如 `test_pipeline.py` 用真实 `from store import TaskStore`）——此门与 ADR-0008/0009「用真实协作者、不 mock 内部切片」原则**直接冲突**，是下一道该治理的门。
+3. **真实集成 bug**：生成的 pipeline 把 `priority` 以**字符串**传给 `validate_task`（要求 int）→ 全行跳过 → summary 全 0。此即 ADR-0008「空心绿」，**A1 工作流内 smoke 会判红并进 fix 链**——但本 run 在更早的 test-import 门即失败，未抵达 smoke。
+
 ## 待验证 / 下一步
-- **【新增·高优先】decide 契约污染回归**：让 decide 产出的 module `exports` 只含该切片**自身**导出（禁止塞其它切片符号/方法名/模块名/占位）。候选：① 收紧 decide prompt 对「module exports」的定义；② 在 `resolveModuleExports` 做契约净化（剔除其它模块名/其它切片 exports）；③ 把 `crossSliceExports` 豁免从 `main`-only 泛化到所有集成切片（仅缓解，不根治 `add/update/list_all` 方法名污染）。修后用 T6 复跑验证能否抵达并通过 A1 smoke。
+- **【高优先·承接 1b】放宽 `python-test-slice-import-module-mismatch`**：允许切片测试 `from <他项目模块> import <该模块已声明 export>`（真实协作者，对齐 ADR-0008/0009），保留对未声明符号/不存在模块的拦截。这是 T6 抵达 smoke 的下一道门。
+- **decide 内容 lint（I-17/I-18）稳定性**：slice decide 的「AI 无法验证的假设 / 边界压力测试」节完整性（decide-prompt 或 lint 阈值）。
 - **非对称成本配置**：`LLM_MODEL=deepseek-v4-flash` + `LLM_MODEL_TEST_WRITE=deepseek-v4-pro`（已写入 `.env.local`）→ 待第二阻碍缓解后再跑，验证「叶子 flash、decide/集成 pro」既省又能过（否则大概率同样卡在 forward-slice import）。
 - 落地 [ADR-0006](adr/0006-difficulty-aware-model-routing.md) per-role env 解耦（让「只升级 decide」成为最省配置）。
 - 落地 [ADR-0005](adr/0005-node-ts-language-adapter.md)：`nodeTestQualityAdapter` + seam 接入 + Node 栈引导 + Node 确定性 tier（T6n）。
