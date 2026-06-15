@@ -26,6 +26,11 @@ export const SLICE_MODULE_CONTRACT_SUFFIX = `
 【本切片模块契约（decisionArtifacts.modules）】
 sidecar JSON 的 modules 须含**恰好一条**：{"name":"<本切片语义名>","exports":["公开符号1",...]}。
 - exports 为 test_write / impl 唯一允许的 from <name> import <symbol> 集合；禁止发明未列符号。
+- exports **只能是本切片自身**在该模块顶层 def/class 定义的公开符号。**严禁**列入：
+  ① 其它切片的符号（如在 pipeline 契约里列 store 的方法 add/update/list_all、models 的 validate_task）；
+  ② 任何模块名/包名（如 store、statemachine、pipeline 自身——模块名不是可 import 的符号）；
+  ③ 导入的占位/标准库别名（如 DictReader=csv.DictReader、import 进来的类型构造器）。
+  本切片只需把**别的切片**的能力当依赖调用（如 pipeline 接收 store 实例为参数），不得把它们列进本切片 exports。
 - 可与全局架构 modules[] 不一致时，以本切片 sidecar 为准。`;
 
 /** signals 等切片：decide 须产出 behaviorSpec 机读行为契约。 */
