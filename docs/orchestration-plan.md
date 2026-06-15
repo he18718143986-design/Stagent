@@ -122,3 +122,61 @@ runtime-replan/、execution/DeliveryBlockOnTestFailure.ts、test/smoke-stage.tes
   并附最终一次 T6 的 summary 段 + 产物核验证据（python <entry> 的真实产出）。
 - 完成后把分支名 / PR 链接回填到 docs/orchestration-plan.md 的子任务看板。
 ```
+
+## 子任务 1b · 可直接粘贴 prompt（decide 契约污染修复，接续 A1/PR #11）
+
+> 用法：在已跑过 A1 的同一会话里继续（它已有 A1 上下文），或在新会话粘贴本段。需配 `DEEPSEEK_API_KEY`。
+
+```text
+# 任务：修复 T6 的 decide 契约污染，让 T6 真正 strict pass（新子任务，接续 A1/PR #11）
+
+## 背景（接续）
+你已交付 A1（PR #11）：真实集成冒烟做成工作流内 smoke 阶段 + 接 fix/replan 回路，
+单测/mock/T1 全过、A1 确定性产物核验通过。但 T6 端到端连跑 0/4，失败均在 smoke 之前，
+根因是一个独立于 A1 的 decide 契约污染回归：
+- decide_pipeline 把跨切片符号（store 的 add/update/list_all、模块名 store/statemachine、
+  占位 DictReader）塞进 pipeline.exports；
+- 这误导 impl 写出顶层跨切片 import（from . import store）→ 真实 ImportError；
+- module-contract 门（python-forward-slice-import 家族）正确判红；
+- flash 与 pro 同样命中 → 确定性 decide 契约质量回归，非模型档位、非 A1 范围。
+本任务作为【新子任务 1b / 新分支 / 新 PR】，不要改动或扩大 PR #11。
+
+## 分支策略
+基于 A1 分支（cursor/t6-real-deliverable-governance-dac2）新建本任务分支（或在 PR #11
+合并后基于 main），确保验证 T6 端到端时 A1 的 smoke 阶段在场。分支后缀沿用你会话策略。
+
+## 步骤
+1. 证据先行（别凭代码猜根因）：从 --keep 的 T6 工作区导出 decide_pipeline 的真实输出，
+   确认 pipeline.exports 到底混入了哪些跨切片符号/模块名/占位，把样本贴进 PR/findings。
+   若根因不是 100% 确定，用 Debug 子代理做一轮假设验证。
+2. 先写确定性复现（mock 可验、不烧 token）：单测喂一份"被污染的 decide 契约"
+   （pipeline.exports 含跨切片符号/模块名/占位），断言净化/lint 能剥离或硬拦并给出清晰报错。
+   相关文件：commitment/sliceContractExports.ts、python-contract/ModuleContractLint.ts、
+   python-contract/PythonExportContractLint.ts、python-contract/ForwardSliceImportLint.ts、
+   python-contract/sliceContractGateHelpers.ts、plan-completeness/moduleContractChecks.ts。
+3. 实施 prevention-at-decide（组合，别只靠 prompt）：
+   - 选项1（decide 提示）：明确"模块 exports 只能是本切片自身的公开符号，不得列其它切片
+     符号/模块名/占位（如 DictReader）"。
+   - 选项2（确定性契约净化/lint）= 主力：对 decide 产出的 pipeline.exports 做确定性剥离/
+     硬拦跨切片符号、模块名、占位（纯 prompt 受 LLM 方差影响，"门强 > 模型档"，必须确定性兜底）。
+   - 禁止用选项3（放宽 module-contract 豁免）作为主修法：那门正确判红了真会 ImportError 的
+     pipeline，放宽 = 重造"空心绿"（ADR-0008）。仅当运行时证据证明确属误报才考虑，且收窄、
+     不得把豁免从 main-only 泛化到集成切片。
+4. 双重复验（别只看门绿）：
+   - 单测：先 npm run build:core；node --test packages/stagent-core/dist/test/*.test.js
+     保持 9 个既有失败、零新增；node --test scripts/headless/lib/*.test.mjs 全过；npm test 全绿。
+   - live：跑真正的 npm run feedback:live:t6:batch（N≥3，补上之前缺的脚本运行）。
+   - 产物独立真实运行核验：进 --keep 工作区跑 .venv/bin/python <entry>，断言产出非平凡。
+   - 验收定义：decide 修复后 T6 能跑到 smoke、smoke 判绿、且真实运行非平凡 = 真正 strict pass。
+   - 把 T6 成功率 + 真实运行证据写进 docs/live-findings-*.md。
+5. 记录决策：新 ADR 或扩 ADR-0007（prevention-at-decide：module exports 契约）。
+
+## 硬性约束
+- 不提交密钥 / artifacts/ / examples/test1/；不碰 Electron GUI（云端无显示器）；
+  只动 headless/引擎/测试/文档；改门禁前先读 docs/STAGENT-PRD*.md + docs/adr/。
+- commit/push 后开新 PR，标题概述「T6 decide 契约污染修复（prevention-at-decide）」，正文列：
+  根因证据（污染样本）、修法（选项1+2、为何不放宽门）、T6 成功率（:batch N≥3）、
+  产物真实运行证据、回归结果、更新/新增的 ADR/findings。
+- 完成后把【分支名 + PR 链接 + T6 成功率】回报给指挥会话（看板在 PR #12，未并入 main，
+  由指挥会话代填）。
+```
