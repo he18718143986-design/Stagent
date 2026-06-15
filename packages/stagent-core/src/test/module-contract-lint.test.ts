@@ -5,6 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { resolveModuleExports } from '../commitment/decisionArtifactsSchema';
 import {
+  collectPriorSiblingModules,
   lintImplExportsAgainstModuleContract,
   lintTestCrossModulePatchTargetsAgainstContracts,
   lintTestImportsAgainstModuleContract,
@@ -139,6 +140,130 @@ test('lintTestImportsAgainstModuleContract blocks other wrong project module nam
   });
   assert.ok(issue);
   assert.equal(issue?.code, 'python-test-slice-import-module-mismatch');
+});
+
+// ---- order-aware 调和（子任务 1c）：允许前序协作者，仍拦前向/未声明/__init__ ----
+const T6_GLOBAL = {
+  version: 1 as const,
+  files: [],
+  modules: [
+    { name: 'models', exports: ['Task', 'validate_task'] },
+    { name: 'store', exports: ['TaskStore'] },
+    { name: 'statemachine', exports: ['ALLOWED_TRANSITIONS', 'can_transition', 'apply_transition', 'InvalidTransition'] },
+    { name: 'pipeline', exports: ['import_tasks_from_csv', 'summarize'] },
+    { name: 'main', exports: ['main'] },
+  ],
+};
+
+function writeTest(rel: string, body: string): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mod-contract-order-'));
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true });
+  fs.writeFileSync(path.join(dir, rel), body);
+  return dir;
+}
+
+test('collectPriorSiblingModules：按 impl 落盘序取前序兄弟（排除 bundle-write/conftest）', () => {
+  const def = {
+    id: 'wf',
+    title: 'wf',
+    stages: [
+      { id: 'stage_impl_conftest' },
+      { id: 'stage_impl_models' },
+      { id: 'stage_impl_models_stagent_bundle_write' },
+      { id: 'stage_impl_store' },
+      { id: 'stage_impl_statemachine' },
+      { id: 'stage_impl_pipeline' },
+      { id: 'stage_impl_main' },
+    ],
+  } as never;
+  assert.deepEqual([...collectPriorSiblingModules(def, 'pipeline')].sort(), ['models', 'statemachine', 'store']);
+  assert.deepEqual([...collectPriorSiblingModules(def, 'models')], []);
+  assert.deepEqual([...collectPriorSiblingModules(def, 'main')].sort(), ['models', 'pipeline', 'statemachine', 'store']);
+});
+
+test('order-aware：允许 test_pipeline import 前序协作者 store/models（T6 真实样本）', () => {
+  const dir = writeTest(
+    'tests/test_pipeline.py',
+    'from pipeline import import_tasks_from_csv, summarize\nfrom store import TaskStore\nfrom models import validate_task\n',
+  );
+  const issue = lintTestImportsAgainstModuleContract({
+    workspaceRoot: dir,
+    testRelPath: 'tests/test_pipeline.py',
+    semantic: 'pipeline',
+    sliceArtifacts: null,
+    globalArtifacts: T6_GLOBAL,
+  });
+  assert.equal(issue, null);
+});
+
+test('order-aware：仍拦前向切片（test_store import 后续 pipeline → ImportError 风险）', () => {
+  const dir = writeTest('tests/test_store.py', 'from pipeline import import_tasks_from_csv\n');
+  const issue = lintTestImportsAgainstModuleContract({
+    workspaceRoot: dir,
+    testRelPath: 'tests/test_store.py',
+    semantic: 'store',
+    sliceArtifacts: null,
+    globalArtifacts: T6_GLOBAL,
+  });
+  assert.ok(issue);
+  assert.equal(issue?.code, 'python-test-slice-import-module-mismatch');
+  assert.match(issue?.message ?? '', /前向切片/);
+});
+
+test('order-aware：仍拦未声明模块（防幻觉）', () => {
+  const dir = writeTest('tests/test_pipeline.py', 'from nonexistent_mod import X\n');
+  const issue = lintTestImportsAgainstModuleContract({
+    workspaceRoot: dir,
+    testRelPath: 'tests/test_pipeline.py',
+    semantic: 'pipeline',
+    sliceArtifacts: null,
+    globalArtifacts: T6_GLOBAL,
+  });
+  assert.ok(issue);
+  assert.equal(issue?.code, 'python-test-slice-import-module-mismatch');
+  assert.match(issue?.message ?? '', /未声明模块/);
+});
+
+test('order-aware：仍拦 from __init__ import', () => {
+  const dir = writeTest('tests/test_pipeline.py', 'from __init__ import summarize\n');
+  const issue = lintTestImportsAgainstModuleContract({
+    workspaceRoot: dir,
+    testRelPath: 'tests/test_pipeline.py',
+    semantic: 'pipeline',
+    sliceArtifacts: null,
+    globalArtifacts: T6_GLOBAL,
+  });
+  assert.ok(issue);
+  assert.equal(issue?.code, 'python-test-slice-import-module-mismatch');
+  assert.match(issue?.message ?? '', /__init__/);
+});
+
+test('order-aware：前序协作者的未声明符号仍拦', () => {
+  const dir = writeTest('tests/test_pipeline.py', 'from store import bogus_helper\n');
+  const issue = lintTestImportsAgainstModuleContract({
+    workspaceRoot: dir,
+    testRelPath: 'tests/test_pipeline.py',
+    semantic: 'pipeline',
+    sliceArtifacts: null,
+    globalArtifacts: T6_GLOBAL,
+  });
+  assert.ok(issue);
+  assert.equal(issue?.code, 'python-module-contract-violation');
+  assert.equal(issue?.symbol, 'bogus_helper');
+});
+
+test('order-aware：显式 workflow 构建序（priorSiblingModules）优先于声明顺序', () => {
+  const dir = writeTest('tests/test_pipeline.py', 'from store import TaskStore\n');
+  // 即使 global 未声明 store 前序，显式 workflow 序提供 store 为前序 → 允许
+  const issue = lintTestImportsAgainstModuleContract({
+    workspaceRoot: dir,
+    testRelPath: 'tests/test_pipeline.py',
+    semantic: 'pipeline',
+    sliceArtifacts: null,
+    globalArtifacts: { version: 1, files: [], modules: [{ name: 'store', exports: ['TaskStore'] }, { name: 'pipeline', exports: ['import_tasks_from_csv'] }] },
+    priorSiblingModules: new Set(['models', 'store', 'statemachine']),
+  });
+  assert.equal(issue, null);
 });
 
 test('lintTestImportsAgainstModuleContract passes declared symbol', () => {

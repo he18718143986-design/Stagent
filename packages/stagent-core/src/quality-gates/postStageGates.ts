@@ -54,6 +54,7 @@ import {
 } from '../commitment/decisionArtifactsSchema';
 import {
   coerceDecisionArtifacts,
+  collectPriorSiblingModules,
   lintTestImportsAgainstModuleContract,
   lintTestCrossModulePatchTargetsAgainstContracts,
   lintTestPatchTargetsAgainstModuleContract,
@@ -147,6 +148,7 @@ export const BUILTIN_POST_STAGE_GATES: QualityGate[] = [
           semantic,
           sliceArtifacts,
           globalArtifacts,
+          priorSiblingModules: collectPriorSiblingModules(instance.definition, semantic),
         }) ??
         lintTestPatchTargetsAgainstModuleContract({
           workspaceRoot: ws,
