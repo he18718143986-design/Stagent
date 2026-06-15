@@ -425,6 +425,15 @@ function buildLiveConfigOverrides(spec) {
       overrides['grill.adaptiveMode'] = false
     }
   }
+  // best-of-N（子任务 3b）：STAGENT_BEST_OF_N=<N≥2> 时对 impl/test_write 切片开启候选择优。
+  const bestOfN = Number(process.env.STAGENT_BEST_OF_N)
+  if (Number.isInteger(bestOfN) && bestOfN >= 2) {
+    overrides['execution.bestOfN.enabled'] = true
+    overrides['execution.bestOfN.count'] = bestOfN
+    if (process.env.STAGENT_BEST_OF_N_ROLES) {
+      overrides['execution.bestOfN.roles'] = process.env.STAGENT_BEST_OF_N_ROLES.split(',').map((r) => r.trim())
+    }
+  }
   return overrides
 }
 

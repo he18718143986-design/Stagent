@@ -30,6 +30,9 @@ import {
   DECISION_ARTIFACTS_OUTPUT_KEY,
   PRIMARY_DECISION_OUTPUT_KEY,
 } from '../WorkflowOutputKeys';
+import { getStagentConfiguration } from '../settings/getStagentConfiguration';
+import { bestOfNCountForStage, readBestOfNConfig } from '../best-of-n/bestOfNStage';
+import { invokeBestOfNStageText } from './bestOfNStageInvoke';
 
 /** llm-text 工具全路径：LLM 调用 → 落盘/patch → quality/confidence/post-impl gates。 */
 export async function runLlmTextStage(
@@ -40,14 +43,22 @@ export async function runLlmTextStage(
   const { params, stage, runtime, panel } = ctx;
   const { debugLogLlmPreview, primaryOutputKey } = params;
 
-  let text = await invokeLlmTextForStage(ctx, attempt, panel);
+  const outKey = primaryOutputKey(stage);
+  // best-of-N（子任务 3b）：仅对单产物、非 decision/patch/bundle 的启用切片跑 N 候选并 Strict-QA 选优；
+  // 否则（默认关 / 角色未启用 / 不适用）保持既有单次行为。胜者仍走下方完整门/落盘/重试。
+  const bestOfNCount =
+    !stage.isDecisionStage && !stage.patchMode && !isMultiFileBundleStage(stage)
+      ? bestOfNCountForStage(stage.id, readBestOfNConfig(getStagentConfiguration()))
+      : 1;
+  let text =
+    bestOfNCount > 1
+      ? await invokeBestOfNStageText(ctx, attempt, panel, instanceKey, outKey, bestOfNCount)
+      : await invokeLlmTextForStage(ctx, attempt, panel);
   debugLogLlmPreview?.(stage.id, attempt, {
     chars: text.length,
     head: text.slice(0, LOG_PREVIEW_SHORT),
     tail: text.slice(Math.max(0, text.length - LOG_PREVIEW_SHORT)),
   });
-
-  const outKey = primaryOutputKey(stage);
   if (stage.isDecisionStage) {
     const semantic = semanticNameFromDecideStageId(stage.id);
     const parsed = parseDecisionArtifactsFromText(text, {
