@@ -110,7 +110,7 @@ export function evaluateDefinitionOfDone(params: {
 
   const smokeRequired = dod.verification?.smokeRequired === true;
   if (smokeRequired && !smokeStageDone) {
-    reasons.push('DoD 要求 stage_smoke_run 通过，但未完成');
+    reasons.push('DoD 要求 smoke 阶段通过，但未完成');
   }
 
   return {

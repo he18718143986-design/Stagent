@@ -4,7 +4,7 @@ import {
   summarizeVerificationRuns,
   type VerificationRunRecord,
 } from '../quality-gates/verificationFlaky';
-import { SMOKE_RUN_STAGE_ID } from '../disk-bootstrap/smokeStage';
+import { isSmokeStageId } from '../disk-bootstrap/smokeStage';
 import { evaluateDefinitionOfDone } from '../dod/DefinitionOfDone';
 import type { WorkflowInstance } from '../WorkflowDefinition';
 import { RUNTIME_REPLAN_OUTPUT_KEY } from '../runtime-replan/constants';
@@ -106,7 +106,7 @@ export function evaluateAfkAcceptance(
     reasons.push(`存在 ${humanInterventions} 次人工介入（重试/拍板/追问）`);
   }
 
-  const smokeIdx = instance.definition.stages.findIndex((s) => s.id === SMOKE_RUN_STAGE_ID);
+  const smokeIdx = instance.definition.stages.findIndex((s) => isSmokeStageId(s.id));
   const smokeDone =
     smokeIdx >= 0 && instance.stageRuntimes[smokeIdx]?.status === 'done';
   const dodEval = evaluateDefinitionOfDone({

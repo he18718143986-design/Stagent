@@ -14,7 +14,7 @@ import {
 import { isTestWriteStageId } from '../workflow/StageIdPatterns';
 import { writeOutputToFileOf } from '../workflow/StageToolConfigAccess';
 import { DELIVERY_WRAPUP_STAGE_ID } from './deliveryWrapupStage';
-import { looksLikeServeCommand, SMOKE_RUN_STAGE_ID } from './smokeStage';
+import { isSmokeStageId, looksLikeServeCommand, SMOKE_RUN_STAGE_ID } from './smokeStage';
 
 export const DEMO_GENERATE_STAGE_ID = 'stage_demo_generate';
 export const DEMO_RUN_STAGE_ID = 'stage_demo_run';
@@ -61,7 +61,7 @@ function hasImplDeliverable(stages: Stage[]): boolean {
 /** 从计划中推断体验模态：有非 smoke 的 serve 命令 → serve-probe，否则 oneShot-text。 */
 export function inferDemoModality(stages: Stage[]): DemoModalityPlan {
   for (const s of stages) {
-    if (!isCodeRunnerTool(s.tool) || s.id === SMOKE_RUN_STAGE_ID || s.id === DEMO_RUN_STAGE_ID) {
+    if (!isCodeRunnerTool(s.tool) || isSmokeStageId(s.id) || s.id === DEMO_RUN_STAGE_ID) {
       continue;
     }
     const cmd = (s.toolConfig as CodeRunnerConfig).command?.trim();
@@ -151,7 +151,11 @@ export function injectDemoStages(stages: Stage[], opts: InjectDemoOptions = {}):
   const configYaml = findWrittenConfigYaml(stages);
   const plan = inferDemoModality(stages);
   const deliveryIdx = stages.findIndex((s) => s.id === DELIVERY_WRAPUP_STAGE_ID);
+  // 锚点优先用 smoke 阶段（真启动通过后才体验）；smoke 在场时跳过其条件跳过的配对 fix 阶段，
+  // 避免 demo 依赖一个常被 skipIf 跳过的修复阶段。
+  const smokeStage = stages.find((s) => isSmokeStageId(s.id));
   const anchor =
+    smokeStage?.id ??
     (deliveryIdx >= 0 ? stages[deliveryIdx - 1] : stages[stages.length - 1])?.id ??
     SMOKE_RUN_STAGE_ID;
 
