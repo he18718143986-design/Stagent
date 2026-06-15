@@ -197,6 +197,10 @@ runtime-replan/、execution/DeliveryBlockOnTestFailure.ts、test/smoke-stage.tes
 | 2A | 每阶段**能力契约 + 写入范围**声明/强制（权限；并解锁并行隔离） | 高 | 方案 B（mock 可验） | ✅ **首切片完成（待合并）** PR #17 / `cursor/stage-capability-contract-3713`（5 新文件，dead-code-safe 无接线；新测 14/14、核心 9 失败零新增、vitest 204）。后续：给 Stage 加 capabilities 字段 + 执行前接线（file-write/code-runner 拦截 + 高风险 HITL）+ 打通并行写入隔离。 | 低（仅新增 capability/*，未碰生效路径） |
 | 2B | **失败→规则沉淀闭环**（experiences/failures → 候选规则 → 影子/warn → 晋升为门） | 最高 | 方案 B（mock 可验） | ✅ **首切片完成（待合并）** PR #16 / `cursor/rule-distillation-loop-3713`（6 新文件，dead-code-safe 不硬阻断；新测 13/13、核心 9 失败零新增、vitest 204）。后续：warn→hard-block 接入生效门 + 真实遥测。 | 低（仅新增 rule-distillation/*，未碰生效路径） |
 | 2C | **PR/CI-ready 输出**（交付收口产 分支+PR 描述+CI 片段+review artifact） | 中高 | 方案 A/B | 待启动 | 低 |
+| #4 | **结构化任务简报 schema**（goal/non-goals/boundaries/acceptance + 范围蠕变校验器） | 中 | 方案 B（mock 可验） | ✅ **首切片完成（待合并）** PR #18 / `cursor/task-brief-schema-3713`（6 新文件，dead-code-safe 无接线；新测 18/18、核心 9 失败零新增、vitest 204）。后续：接 polish/grill 填充 + 作验收单一真源 + 范围蠕变门（先 warn）。 | 零（新 task-brief/*，不碰生效路径） |
+
+> 已合并 main：PR #16（2B 规则沉淀首切片）、#17（2A 能力契约首切片）。待合并：#18（#4 任务简报首切片）。
+> **接线/生效与 live 切片（2A 接线、2B warn→block、Node PR-4）等 1b 合并后再做**（避免改执行/门行为干扰 1b 的 T6 归因）。
 
 > 优先 2B（最高杠杆：引擎越用越强）；2A 次之（安全 + 解锁并行）。两者文件面与 1b 的 `python-contract`/decide 契约**零重叠**，可并行。
 
