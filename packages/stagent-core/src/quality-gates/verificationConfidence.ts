@@ -1,6 +1,6 @@
 import { confidenceReasonMsg } from '../l10n/qualityMsg';
 import type { ConfidenceResult } from '../ConfidenceScorer';
-import { SMOKE_RUN_STAGE_ID } from '../disk-bootstrap/smokeStage';
+import { isSmokeStageId } from '../disk-bootstrap/smokeStage';
 import type { Stage, StageRuntime } from '../WorkflowDefinition';
 import {
   CODE_RUNNER_EXIT_OUTPUT_KEY,
@@ -22,7 +22,7 @@ export const VERIFICATION_PASS_CONFIDENCE_SCORE = 0.92;
 export function isVerificationStage(stage: Stage): boolean {
   return (
     isCodeRunnerTool(stage.tool) &&
-    (isTestRunStageId(stage.id) || stage.id === SMOKE_RUN_STAGE_ID)
+    (isTestRunStageId(stage.id) || isSmokeStageId(stage.id))
   );
 }
 
