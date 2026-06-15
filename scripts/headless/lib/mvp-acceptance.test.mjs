@@ -13,6 +13,7 @@ import {
   evaluateFixtureConsistency,
   evaluatePlaceholderExports,
   resolveWorkspaceArtifact,
+  dirHasTs,
 } from './mvp-acceptance.mjs'
 
 function tmpWs() {
@@ -215,4 +216,128 @@ test('evaluateFixtureConsistency: 子目录 CSV（config 声明）按真实路�
     evaluateFixtureConsistency(ws, [{ file: 'tasks.csv', requireColumns: ['title', 'priority', 'status'] }]),
     [],
   )
+})
+
+// ADR-0005 附录 B：Node/TS 支持（requireDirTs，T6n 前置）
+test('dirHasTs: 含非空 .ts → true；空目录/空文件 → false', () => {
+  const ws = tmpWs()
+  // 含非空 .ts
+  writeFile(ws, 'src/store/store.ts', 'export function add() { return 1 }\n')
+  assert.equal(dirHasTs(path.join(ws, 'src/store')), true)
+  // 空目录（不存在）
+  assert.equal(dirHasTs(path.join(ws, 'src/empty')), false)
+  // 空文件（size 0）
+  writeFile(ws, 'src/zero/zero.ts', '')
+  assert.equal(dirHasTs(path.join(ws, 'src/zero')), false)
+})
+
+test('evaluateTraceabilityRule: declarative pattern + requireDirTs (node)', () => {
+  const ws = tmpWs()
+  writeFile(ws, 'src/store/store.ts', 'export function add(title: string) { return 1 }\n')
+  const readText = (subs) => {
+    const parts = []
+    for (const sub of subs) {
+      const dir = path.join(ws, sub)
+      if (!fs.existsSync(dir)) continue
+      for (const f of fs.readdirSync(dir)) {
+        if (f.endsWith('.ts')) parts.push(fs.readFileSync(path.join(dir, f), 'utf8'))
+      }
+    }
+    return parts.join('\n')
+  }
+  const rule = {
+    id: 'crud-store',
+    dirs: ['src/store', 'tests'],
+    requireDirTs: 'src/store',
+    pattern: /\bfunction\s+add\b/,
+    hint: 'src/store add',
+  }
+  assert.equal(evaluateTraceabilityRule(ws, rule, readText), true)
+
+  // requireDirTs 不满足（目录无非空 .ts）→ false，即便 pattern 本可命中。
+  const ws2 = tmpWs()
+  assert.equal(evaluateTraceabilityRule(ws2, rule, () => 'function add() {}'), false)
+})
+
+test('assertStrictMvpPass language:node: 完整 Node/TS 工作区不抛', () => {
+  const ws = tmpWs()
+  writeFile(ws, 'config.json', '{"name":"todo"}\n')
+  writeFile(ws, 'src/store/store.ts', 'export function add(title: string, priority = 3) { return 1 }\n')
+  writeFile(ws, 'src/main.ts', 'import { add } from "./store/store"\nadd("x")\n')
+  writeFile(ws, 'tests/store.test.ts', 'import { add } from "../src/store/store"\nadd("x")\n')
+  writeFile(ws, 'DELIVERY.md', '# Delivery\n')
+  assert.doesNotThrow(() =>
+    assertStrictMvpPass(ws, {
+      outcome: 'workflowCompleted',
+      language: 'node',
+      moduleDirs: ['src/store'],
+      traceabilityRules: [
+        {
+          id: 'crud-store',
+          dirs: ['src/store', 'tests'],
+          requireDirTs: 'src/store',
+          pattern: /add/,
+          hint: 'src/store add',
+        },
+      ],
+    }),
+  )
+})
+
+test('assertStrictMvpPass language:node: 报错点名缺失项（.ts 模块/主入口/tests/config.json）', () => {
+  // 缺 .ts 模块目录 → missing non-empty <dir>/*.ts
+  const wsModule = tmpWs()
+  writeFile(wsModule, 'config.json', '{}\n')
+  writeFile(wsModule, 'src/main.ts', 'export {}\n')
+  writeFile(wsModule, 'tests/store.test.ts', 'test()\n')
+  writeFile(wsModule, 'DELIVERY.md', '# d\n')
+  const errModule = captureError(() =>
+    assertStrictMvpPass(wsModule, { outcome: 'workflowCompleted', language: 'node', moduleDirs: ['src/store'], requireTraceability: false }),
+  )
+  assert.match(String(errModule.message), /missing non-empty src\/store\/\*\.ts/)
+
+  // 缺 main 入口 → missing main entry (src/main.ts, main.ts, cli.ts, or src/index.ts)
+  const wsMain = tmpWs()
+  writeFile(wsMain, 'config.json', '{}\n')
+  writeFile(wsMain, 'src/store/store.ts', 'export function add() { return 1 }\n')
+  writeFile(wsMain, 'tests/store.test.ts', 'test()\n')
+  writeFile(wsMain, 'DELIVERY.md', '# d\n')
+  const errMain = captureError(() =>
+    assertStrictMvpPass(wsMain, { outcome: 'workflowCompleted', language: 'node', moduleDirs: ['src/store'], requireTraceability: false }),
+  )
+  assert.match(String(errMain.message), /missing main entry \(src\/main\.ts, main\.ts, cli\.ts, or src\/index\.ts\)/)
+
+  // 缺 tests → missing tests/*.test.ts (or *.spec.ts)
+  const wsTests = tmpWs()
+  writeFile(wsTests, 'config.json', '{}\n')
+  writeFile(wsTests, 'src/store/store.ts', 'export function add() { return 1 }\n')
+  writeFile(wsTests, 'src/main.ts', 'export {}\n')
+  writeFile(wsTests, 'DELIVERY.md', '# d\n')
+  const errTests = captureError(() =>
+    assertStrictMvpPass(wsTests, { outcome: 'workflowCompleted', language: 'node', moduleDirs: ['src/store'], requireTraceability: false }),
+  )
+  assert.match(String(errTests.message), /missing tests\/\*\.test\.ts \(or \*\.spec\.ts\)/)
+
+  // 缺 config.json → missing or empty config.json
+  const wsConfig = tmpWs()
+  writeFile(wsConfig, 'src/store/store.ts', 'export function add() { return 1 }\n')
+  writeFile(wsConfig, 'src/main.ts', 'export {}\n')
+  writeFile(wsConfig, 'tests/store.test.ts', 'test()\n')
+  writeFile(wsConfig, 'DELIVERY.md', '# d\n')
+  const errConfig = captureError(() =>
+    assertStrictMvpPass(wsConfig, { outcome: 'workflowCompleted', language: 'node', moduleDirs: ['src/store'], requireTraceability: false }),
+  )
+  assert.match(String(errConfig.message), /missing or empty config\.json/)
+})
+
+test('assertStrictMvpPass: 默认（不传 language）仍按 Python 报 missing non-empty <dir>/*.py', () => {
+  const ws = tmpWs()
+  writeFile(ws, 'config.yaml', 'x: 1\n')
+  const err = captureError(() => assertStrictMvpPass(ws, { outcome: 'workflowCompleted', moduleDirs: ['store'], requireTraceability: false }))
+  const msg = String(err.message)
+  assert.match(msg, /missing non-empty store\/\*\.py/)
+  // 仍走 Python 主入口/tests/config 文案，不得出现 Node 文案。
+  assert.match(msg, /missing main entry \(main\.py, cli\.py, or src\/main\.py\)/)
+  assert.match(msg, /missing tests\/test_\*\.py/)
+  assert.doesNotMatch(msg, /\*\.ts|config\.json/)
 })
