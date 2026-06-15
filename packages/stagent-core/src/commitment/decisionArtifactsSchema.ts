@@ -102,6 +102,12 @@ export function sanitizeModuleExports(semantic: string, exports: string[]): stri
   if (semantic === 'main' && cleaned.length === 1 && cleaned[0] === 'mode') {
     return ['main'];
   }
+  // 子任务 1d：main 切片入口名（`main` 在 SKIP_IDENT、或被当噪声）常被 pruneExportNoise 剔空，
+  // 但 main 是程序入口、契约不应为空——剔空时默认规范为入口函数 `main`，
+  // 使 prompt（契约指引）、module-contract 门、stub 物化三处都有据，避免「无指引→模型自造入口名(run_cli)」。
+  if (semantic === 'main' && cleaned.length === 0 && exports.length > 0) {
+    return ['main'];
+  }
   return cleaned;
 }
 
@@ -183,6 +189,16 @@ export function resolveModuleExports(
   globalArtifacts: DecisionArtifactsV1 | null | undefined,
   sliceDecisionRecord?: string | null,
 ): string[] | null {
+  // 子任务 1d：main 切片入口名（`main`/被净化剔空/被当自身名污染剔除）常使解析结果为空，
+  // 但 main 是程序入口、契约不应为空——任一来源**声明过** main 后若解析为空，默认规范为 [main]，
+  // 使 prompt（契约指引）/module-contract 门/stub 物化都有据，避免「无指引→模型自造入口名」。
+  const mainEntryFallback = (resolved: string[] | null, declaredNonEmpty: boolean): string[] | null => {
+    if (semantic === 'main' && declaredNonEmpty && (!resolved || resolved.length === 0)) {
+      return ['main'];
+    }
+    return resolved;
+  };
+
   const sliceEntry = normalizeModuleExports(sliceArtifacts?.modules).find((m) => m.name === semantic);
   if (sliceEntry && sliceEntry.exports.length > 0) {
     const decontaminated = sanitizeCrossSliceContamination(
@@ -191,7 +207,7 @@ export function resolveModuleExports(
       sliceArtifacts?.modules,
       globalArtifacts?.modules,
     );
-    return sanitizeModuleExports(semantic, decontaminated);
+    return mainEntryFallback(sanitizeModuleExports(semantic, decontaminated), true);
   }
   if (sliceDecisionRecord?.trim()) {
     const fromRecord = extractModuleExportsFromDecisionRecord(semantic, sliceDecisionRecord);
@@ -201,7 +217,7 @@ export function resolveModuleExports(
   }
   const globalEntry = normalizeModuleExports(globalArtifacts?.modules).find((m) => m.name === semantic);
   if (globalEntry && globalEntry.exports.length > 0) {
-    return sanitizeModuleExports(semantic, globalEntry.exports);
+    return mainEntryFallback(sanitizeModuleExports(semantic, globalEntry.exports), true);
   }
   return null;
 }
