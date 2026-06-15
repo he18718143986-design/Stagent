@@ -33,7 +33,7 @@
 | 1 | T6 真实可交付收口（smoke 做成工作流内阶段 + 接 fix/replan 回路 = A1） | P0 | 方案 A（重 live） | `cursor/t6-real-deliverable-governance-dac2` | ✅ **A1 已交付+验证**（PR #11）；但 T6 端到端仍 0/4，被独立的 decide 契约污染挡在 smoke 之前 → 拆出 #1b | #11 |
 | 1b | decide 契约污染修复（`decide_pipeline` 把跨切片符号塞进 `pipeline.exports` → 误导 impl 写跨切片 import → module-contract 门判红） | P0 | 方案 A（重 live） | `cursor/t6-decide-contract-pollution-dac2` | ✅ **已根治+真实运行证明**（PR #14）：store/pipeline 切片真过、`import pipeline` 不再 ImportError。核心 984/9 零新增、headless 25/25、vitest 204。T6 仍 0/3，但阻断**前移到独立问题** ①②③（见下） | #14 |
 | 1c | **test-slice-import 门 order-aware 调和**（②） | P0 | 方案 A（重 live） | `cursor/test-slice-import-reconcile-dac2` | ✅ **达成**（PR #20）：order-aware 放行前序真实协作者、仍拦 __init__/前向/未声明（L101+L174 两处）。**T6 真正抵达并通过 A1 smoke、workflow 完成、产物真实非平凡**（`python main.py → {"imported":3,...}`）。核心 1050/9 零新增、headless 30/30、vitest 204 | #20 |
-| 1d | **残留 bug 定向修 + 测试生成 prompt 加固**（快赢）：status 透传语义、test_main 隔离、误写 `from main import <协作者>`（prevention-at-impl，补 1c 门的预防侧） | P0 | 方案 A（重 live） | 待启动（建议 resume 1c/dac2 会话） | 待启动 | — |
+| 1d | **残留 bug 定向修 + 测试生成 prompt 加固**（快赢） | P0 | 方案 A（重 live） | `cursor/t6-residual-fixes-dac2` | ✅ **达成**（PR #22）：(a) 协作者 import 来源纪律 (b) status 透传 + smoke status 保真断言 (c) test_main tmp 隔离 (d) materialize_stub_main 引擎修。**T6 strict-pass 0/3 → 有效 2/4（~50%），两次均产物真实运行 + status 语义核验**。核心 1059/9 零新增、headless 30/30、vitest 240。剩余=生成方差 + ① | #22 |
 | 2 | per-role 模型路由 env 解耦（ADR-0006） | — | — | — | ✅ **已完成（无需做）** | 已在主干 |
 | 3 | best-of-N + 门控择优（难切片便宜模型并行采样，按 Strict QA 择优） | P1 | 方案 A | `cursor/best-of-n-gate-select-3713` | 🟢 **已解锁**（1c 后门/smoke 可靠）——**T6 strict-pass 残留 = 测试生成 run 间方差**，正是 best-of-N 的对症场景 | — |
 | 4 | 对抗式审查（异族/更强模型独立挑错回喂；**加分项，不替代确定性门**） | P2 | 方案 A | `cursor/adversarial-review-3713` | 排后（依赖 #1/#3） | — |
@@ -50,6 +50,13 @@
 - **① decide I-17/I-18** → 本 batch 0 次（未阻断）；仍为潜在 decide 质量轨。
 - **新的主阻断（残留）= 测试生成 run 间方差**：run#2 stub-main 验证 exit 1、run#3 模型误写 `from main import TaskStore`（被门**正确**拦）+ post-strict `test_main` 隔离 bug + **status 透传语义 bug**（超出 smoke 非平凡判据）。
   - → **这是 LLM 生成方差，正是子任务 3（best-of-N + 门控择优）的对症场景**（现已解锁：门/smoke 可靠）。另含 2 个可定向修的具体 bug（status 透传 / test_main 隔离）。
+
+**1d 后（2026-06-15 晚）**：(a)~(d) 已修，T6 strict-pass **0/3 → 有效 2/4（~50%，真实+status 核验）**。剩余两类（均深层、独立）：
+- **生成方差**（run#2 test_run 经 fix 链仍红、blockDeliveryOnTestFailure 正确拦；run 间生成不稳）→ **子任务 3 best-of-N**（系统解，对症方差）。
+- **① decide 内容 lint I-17/I-18**（run#3）→ 独立 decide 内容完整性轨。
+
+> ⛔ **基础设施阻断**：`DEEPSEEK_API_KEY` **余额耗尽（402）**。所有 live/方案 A 工作（best-of-N 验证、①、T6 batch）在**充值前不可跑**。无 token 的方案 B（如 best-of-N 选择策略纯函数核）可先行。
+> **best-of-N 拆分**：选择策略（候选按 Strict QA 择优，纯函数）= 方案 B 无 token 可现在做；执行器接线（跑 N 次采样 + T6 验证）= 方案 A 需充值后做。
 
 ---
 
