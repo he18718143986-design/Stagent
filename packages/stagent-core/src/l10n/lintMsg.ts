@@ -19,7 +19,7 @@ export function contractWarningMsg(kind: string, ...args: Array<string | number>
   return lintMsg(`stagent.contract.${kind}`, ...args);
 }
 
-export function planCompletenessMsg(type: string, ...args: Array<'expo' | string>): string {
+export function planCompletenessMsg(type: string, ...args: Array<'expo' | string | number>): string {
   if (type === 'missing-test-infrastructure' && args[0] === 'expo') {
     return lintMsg('stagent.planCompleteness.missingTestInfrastructureExpo');
   }
@@ -62,7 +62,7 @@ export function planCompletenessMsg(type: string, ...args: Array<'expo' | string
     return lintMsg('stagent.planCompleteness.missingTestRunPair', args[0], args[1]);
   }
   const camel = type.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
-  return lintMsg(`stagent.planCompleteness.${camel}`);
+  return lintMsg(`stagent.planCompleteness.${camel}`, ...args);
 }
 
 export function decisionLintMsg(code: string, ...args: Array<string | number>): string {
