@@ -78,6 +78,86 @@ function resolveArtifact(ws, rel) {
   return findFileByBasename(ws, path.basename(rel));
 }
 
+/** 从 config.yaml 抽取首个 *.csv 输入路径（用于 status 保真断言）。 */
+function declaredCsvPath(ws) {
+  const cfg = path.join(ws, 'config.yaml');
+  if (!fs.existsSync(cfg)) return null;
+  let text = '';
+  try {
+    text = fs.readFileSync(cfg, 'utf8');
+  } catch {
+    return null;
+  }
+  const m = /^\s*[\w.-]*(?:csv|input|data)[\w.-]*\s*:\s*['"]?([^'"\n#]+\.csv)['"]?/im.exec(text);
+  return m ? m[1].trim() : null;
+}
+
+/** 读取 CSV 的 status 列分布（非空值 → 出现次数）。无 status 列返回 null。 */
+function csvStatusDistribution(ws, csvRel) {
+  const abs = resolveArtifact(ws, csvRel);
+  if (!abs || !fs.existsSync(abs)) return null;
+  let text = '';
+  try {
+    text = fs.readFileSync(abs, 'utf8');
+  } catch {
+    return null;
+  }
+  const lines = text.split(/\r?\n/).filter((l) => l.trim() !== '');
+  if (lines.length < 2) return null;
+  const header = lines[0].split(',').map((c) => c.trim().toLowerCase());
+  const statusIdx = header.indexOf('status');
+  if (statusIdx < 0) return null;
+  const dist = {};
+  let rows = 0;
+  for (const line of lines.slice(1)) {
+    const cells = line.split(',');
+    rows += 1;
+    const v = (cells[statusIdx] ?? '').trim();
+    if (v) dist[v] = (dist[v] ?? 0) + 1;
+  }
+  return { dist, rows };
+}
+
+/** 在 JSON 里找「状态直方图」对象：值全为整数的扁平对象（顶层或一层嵌套）。 */
+function findIntHistogram(value) {
+  const isFlatIntObj = (o) =>
+    o && typeof o === 'object' && !Array.isArray(o) &&
+    Object.keys(o).length > 0 &&
+    Object.values(o).every((v) => typeof v === 'number' && Number.isInteger(v));
+  if (isFlatIntObj(value)) return value;
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    for (const v of Object.values(value)) {
+      if (isFlatIntObj(v)) return v;
+    }
+  }
+  return null;
+}
+
+/**
+ * status 保真断言（子任务 1d）：CSV 的 status 列含多种合法值时，产出的状态直方图必须**反映**之，
+ * 而非把所有行塌缩到单一状态（如 pipeline 丢弃 status → 全计 todo）。
+ * 保守触发：① CSV 有 status 列且 ≥2 个不同非空值；② 产出含状态直方图；③ 直方图各值之和 == CSV 行数
+ *（完整划分、无过滤/无非法行——种子 fixture 全合法时成立）。命中后：CSV 出现且为直方图键的状态若计数 0 → 判红。
+ * 返回 error 字符串或 null。
+ */
+function assertStatusFidelity(ws, parsedSummary) {
+  const csvRel = declaredCsvPath(ws);
+  if (!csvRel) return null;
+  const csv = csvStatusDistribution(ws, csvRel);
+  if (!csv) return null;
+  const distinct = Object.keys(csv.dist);
+  if (distinct.length < 2) return null;
+  const hist = findIntHistogram(parsedSummary);
+  if (!hist) return null;
+  const sum = Object.values(hist).reduce((a, b) => a + b, 0);
+  if (sum !== csv.rows) return null; // 有过滤/非法行 → 不确定，跳过（避免误判）
+  const dropped = distinct.filter((s) => s in hist && hist[s] === 0);
+  if (dropped.length > 0) {
+    return `status 未透传：CSV 含 status=${dropped.join('/')}（各 ${dropped.map((s) => csv.dist[s]).join('/')} 行），但产出统计该状态计数为 0（疑似导入时丢弃了 CSV 的 status 字段）`;
+  }
+  return null;
+}
+
 /** 从 config.yaml 抽取「输出类」键的 *.json 声明路径。 */
 function declaredOutputJsonPaths(ws) {
   const cfg = path.join(ws, 'config.yaml');
@@ -139,6 +219,11 @@ for (const rel of candidates) {
   }
   if (isTrivialJsonValue(parsed)) {
     errors.push(`产出无意义（全为零/空值）：${rel}（疑似空心绿：数据未导入或管道未生效）`);
+    continue;
+  }
+  const statusErr = assertStatusFidelity(ws, parsed);
+  if (statusErr) {
+    errors.push(`${statusErr}（${rel}）`);
   }
 }
 

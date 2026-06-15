@@ -84,20 +84,35 @@ export function inferCsvColumns(pyText: string): string[] {
 }
 
 /**
- * 推断 status/state 列的合法值：只认 LHS 名含 STATUS/STATE/VALID/ALLOWED 的字符串集合赋值
- * （如 `VALID_STATUSES = {"todo", ...}` → "todo"），避免误取 `__all__` 等无关集合。
- * 找不到返回 undefined（调用方对 status 列留空，多数实现把空状态默认为初始态）。
+ * 推断 status/state 列的全部合法值：只认 LHS 名含 STATUS/STATE/VALID/ALLOWED 的字符串集合赋值
+ * （如 `VALID_STATUSES = {"todo","in_progress","done","cancelled"}`），避免误取 `__all__` 等无关集合。
+ * 返回按出现序去重的值数组（空 = 推断不到）。
  */
-export function inferFirstEnumValue(pyText: string): string | undefined {
+export function inferEnumValues(pyText: string): string[] {
   const assignRe =
     /\b\w*(?:STATUS|STATE|VALID|ALLOWED|CHOICES)\w*\s*[:=]\s*[{[(]([^}\])]*)[)\]}]/gi;
   for (const m of pyText.matchAll(assignRe)) {
-    const first = /['"]([\w-]+)['"]/.exec(m[1] ?? '');
-    if (first?.[1]) {
-      return first[1];
+    const values: string[] = [];
+    const seen = new Set<string>();
+    for (const v of (m[1] ?? '').matchAll(/['"]([\w-]+)['"]/g)) {
+      const val = v[1];
+      if (val && !seen.has(val)) {
+        seen.add(val);
+        values.push(val);
+      }
+    }
+    if (values.length > 0) {
+      return values;
     }
   }
-  return undefined;
+  return [];
+}
+
+/**
+ * status/state 列首个合法值（兼容旧调用）。找不到返回 undefined（调用方对 status 列留空）。
+ */
+export function inferFirstEnumValue(pyText: string): string | undefined {
+  return inferEnumValues(pyText)[0];
 }
 
 const NUMERIC_COL_RE = /^(priority|level|rank|score|count|qty|quantity|num|amount|age|order|index|id|volume|open|high|low|close|price|value)$/i;
@@ -105,18 +120,20 @@ const DATE_COL_RE = /^(date|time|timestamp|datetime|created|updated)$/i;
 const STATUS_COL_RE = /^(status|state|type|kind|category)$/i;
 const TEXT_COL_RE = /^(title|name|description|label|text|summary|note|comment|message)$/i;
 
-function sampleValueForColumn(col: string, rowIndex: number, enumValue: string | undefined): string {
+function sampleValueForColumn(col: string, rowIndex: number, enumValues: string[]): string {
   if (DATE_COL_RE.test(col)) {
     return `2023-01-0${rowIndex + 1} 09:3${rowIndex}:00`;
   }
   if (NUMERIC_COL_RE.test(col)) {
     // priority 类常被校验 1..5；用 2/3 等安全值。
-    if (/^priority$/i.test(col)) return String(2 + rowIndex);
+    if (/^priority$/i.test(col)) return String(2 + (rowIndex % 4));
     return String(100 + rowIndex);
   }
   if (STATUS_COL_RE.test(col)) {
-    // 有枚举用枚举首值；否则留空（多数实现把空状态默认为初始态）。
-    return enumValue ?? '';
+    // 子任务 1d：按行**轮换**全部枚举值，使种子覆盖多种 status——这样「正确透传 status 的实现」
+    // 产出多状态统计，而「丢弃 status 的实现」统计单一状态，被 verify-smoke-output 的状态保真断言判红。
+    // 推断不到枚举则留空（多数实现把空状态默认为初始态）。
+    return enumValues.length > 0 ? enumValues[rowIndex % enumValues.length]! : '';
   }
   if (TEXT_COL_RE.test(col)) {
     return `Sample ${rowIndex + 1}`;
@@ -124,12 +141,18 @@ function sampleValueForColumn(col: string, rowIndex: number, enumValue: string |
   return `value${rowIndex + 1}`;
 }
 
-/** 用推断出的列 + 启发式值构造 N 行种子 CSV。 */
-export function buildSeedCsv(columns: string[], pyText: string, rows = 2): string {
-  const enumValue = inferFirstEnumValue(pyText);
+/**
+ * 用推断出的列 + 启发式值构造种子 CSV。行数默认覆盖全部枚举值（≥2，封顶 4 以保 priority 1..5 合法），
+ * 使 status 列出现多种合法值（供状态保真冒烟断言）。
+ */
+export function buildSeedCsv(columns: string[], pyText: string, rows?: number): string {
+  const enumValues = inferEnumValues(pyText);
+  const hasStatusCol = columns.some((c) => STATUS_COL_RE.test(c));
+  const rowCount =
+    rows ?? (hasStatusCol && enumValues.length > 1 ? Math.min(Math.max(enumValues.length, 2), 4) : 2);
   const header = columns.join(',');
-  const body = Array.from({ length: rows }, (_, i) =>
-    columns.map((c) => sampleValueForColumn(c, i, enumValue)).join(','),
+  const body = Array.from({ length: rowCount }, (_, i) =>
+    columns.map((c) => sampleValueForColumn(c, i, enumValues)).join(','),
   );
   return `${header}\n${body.join('\n')}\n`;
 }

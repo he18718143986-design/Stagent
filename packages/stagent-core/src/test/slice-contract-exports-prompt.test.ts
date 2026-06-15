@@ -111,6 +111,37 @@ test('buildSliceContractExportsPromptSuffix impl 含 export 表面规则（Run #
   const suffix = buildSliceContractExportsPromptSuffix(wf, runtimes, wf.stages[0]!);
   assert.ok(suffix?.includes('DataPipeline'));
   assert.ok(suffix?.includes('`_` 前缀'));
+  // (a) 协作者 import 来源纪律
+  assert.ok(suffix?.includes('from store import TaskStore'));
+  assert.ok(suffix?.includes('from main import'));
+  // (b) status 透传纪律（impl 分支）
+  assert.ok(suffix?.includes('透传'));
+  assert.ok(suffix?.includes('store.update'));
+});
+
+test('buildSliceContractExportsPromptSuffix test_write 含协作者来源 + 隔离/patch 纪律（子任务 1d）', () => {
+  const wf: WorkflowDefinition = {
+    id: 'wf',
+    version: '2.0',
+    meta: baseMeta,
+    stages: [llmStage('stage_test_write_main')],
+  };
+  const runtimes = [
+    {
+      stageId: 'stage_decide_main',
+      status: 'done' as const,
+      outputs: {
+        decisionArtifacts: { version: 1, files: [], modules: [{ name: 'main', exports: ['run'] }] },
+      },
+      retryCount: 0,
+    },
+  ];
+  const suffix = buildSliceContractExportsPromptSuffix(wf, runtimes, wf.stages[0]!);
+  // (a) 严禁 from main import 协作者
+  assert.ok(suffix?.includes('绝不 from main import'));
+  // (c) 测试隔离 + patch 目标
+  assert.ok(suffix?.includes('tmp_path'));
+  assert.ok(suffix?.includes('main.import_tasks_from_csv'));
 });
 
 test('buildCrossModulePatchExportsPromptSuffix lists peer module exports for main test_write（Run #49）', () => {
