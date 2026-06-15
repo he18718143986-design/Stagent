@@ -23,7 +23,7 @@ export function ConfirmStartModal({
       <div className={`relative ${simpleTheme.card} max-w-md w-full shadow-xl`}>
         <h3 className="text-lg font-bold text-stone-800 mb-2">{title ?? '确认开始制作？'}</h3>
         <p className="text-sm text-stone-600 mb-4">
-          接下来会自动开发并测试，大概需要 10–15 分钟。你可以先去忙别的。
+          接下来会自动开发并测试，中途若有需要会问你。你可以先去忙别的。
         </p>
         <ul className="text-sm text-stone-700 space-y-1 mb-6 list-disc pl-5">
           {summaryLines.map((line) => (

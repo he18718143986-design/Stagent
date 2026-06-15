@@ -70,11 +70,16 @@ export function buildSliceContractExportsPromptSuffix(
     `本切片 decisionArtifacts.modules（slice decide 优先）唯一允许的公开符号：`,
     ...exports.map((s) => `- ${s}`),
     `from ${mod} import <仅上述符号>；禁止 import 未列符号（含计划期示例名）。`,
+    // (a) 协作者 import 来源纪律（子任务 1d，补 order-aware 门的预防侧 / ADR-0007 prevention-at-impl）：
+    `需要其它切片的符号时，从该切片**各自模块名**直接 import（如 \`from store import TaskStore\`、\`from models import validate_task\`）；`,
+    `**严禁** \`from ${mod} import <其它切片符号>\`（如 \`from main import TaskStore\`——TaskStore 属 store，不属 main）；`,
+    `**禁止**把 Python 内置/标准库符号（\`PermissionError\`、\`FileNotFoundError\` 等）当作本切片或他切片的模块级符号 import——内置直接使用即可，不需 import，更不应列入契约。`,
   ];
 
   if (semantic === 'main') {
     lines.push(
       'main 切片 export 必须是入口函数名（main 或 run），禁止将 CLI 参数 --mode 误写为 export 符号。',
+      'main 仅编排：测试/实现需要协作者类与函数时从其真实模块 import（from store import TaskStore、from pipeline import import_tasks_from_csv），绝不 from main import 这些协作者。',
     );
   }
 
@@ -83,10 +88,21 @@ export function buildSliceContractExportsPromptSuffix(
     lines.push(
       'mock/patch 其它切片符号时须指向真实模块已声明 export（如 broker.SimBroker、indicators.compute_ma），禁止 patch 架构粗粒度名（如 compute_indicators）或本切片未声明符号。',
     );
+    // (c) 测试隔离 + patch 目标纪律（子任务 1d）：避免 post-strict 复跑因 cwd 文件缺失 / patch 落空而红。
+    lines.push(
+      '测试隔离：凡读写文件（config.yaml / CSV / 输出 JSON）的用例必须用 `tmp_path` + `monkeypatch.chdir(tmp_path)` 自建所需 fixture（含被读取的 CSV），禁止依赖工作区既有文件或当前工作目录状态。',
+      'patch 目标须是「被测模块**绑定后**的名字」：若 `main.py` 写 `from pipeline import import_tasks_from_csv`，则 patch `main.import_tasks_from_csv`（而非 `pipeline.import_tasks_from_csv`），否则 patch 落空、真实函数被调用导致 FileNotFoundError 等。',
+    );
   } else {
     lines.push(
       'impl 须在模块顶层 def/class 导出上表符号，供上述 test import。',
       '模块顶层**仅**导出契约符号；内部 helper 必须 `_` 前缀或定义在函数/类内部（禁止模块级未声明 class/def，如 DataPipeline）。',
+      // (b) 字段透传纪律（子任务 1d）：把外部数据导入领域对象时，须透传数据声明的所有字段（如 status），
+      // 缺省值仅用于「字段缺失/为空」时，不得在解析后丢弃已读到的值。
+      '把外部数据（CSV 行等）导入领域对象/store 时，必须**透传**该行已声明且已解析的字段（如 `status`）——'
+        + '若仓储构造方法不接受该字段（如 `add(title, priority)` 固定 status="todo"），须在创建后**显式更新**'
+        + '（`tid = store.add(...); store.update(tid, status=status)`）；缺省值仅在字段缺失/为空时使用，'
+        + '不得解析出 `status` 后又丢弃（会产出语义错误的统计，被冒烟产出断言判红）。',
     );
   }
 

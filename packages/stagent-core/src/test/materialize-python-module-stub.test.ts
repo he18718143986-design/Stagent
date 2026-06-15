@@ -46,6 +46,38 @@ test('materialize-python-module-stub writes stub from wf-state decisionArtifacts
   }
 });
 
+test('materialize-python-module-stub：main 契约仅 `main`（被剔空）→ 默认入口函数 stub，不 exit 1（子任务 1d (d)）', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stagent-stub-main-'));
+  try {
+    const instDir = path.join(dir, '.stagent', 'instances', 'inst-main');
+    fs.mkdirSync(instDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(instDir, '.wf-state.json'),
+      JSON.stringify({
+        stageRuntimes: [
+          {
+            stageId: 'stage_decide_main',
+            outputs: {
+              // 'main' 被 pruneExportNoise 当噪声剔除 → resolveModuleExports 返回空
+              decisionArtifacts: { version: 1, files: [], modules: [{ name: 'main', exports: ['main'] }] },
+            },
+          },
+        ],
+      }),
+    );
+    const out = runScript(dir, ['main']);
+    assert.equal(out.status, 0, out.stderr || out.stdout);
+    const stubPath = path.join(dir, 'main.py');
+    assert.ok(fs.existsSync(stubPath));
+    const body = fs.readFileSync(stubPath, 'utf8');
+    // 入口名为函数（非 class），可被 import
+    assert.match(body, /def main\(/);
+    assert.doesNotMatch(body, /class main/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('materialize-python-module-stub uses slice decisionRecord when sidecar missing', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stagent-stub-mat-'));
   try {

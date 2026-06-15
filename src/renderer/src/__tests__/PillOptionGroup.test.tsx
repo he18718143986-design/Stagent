@@ -1,6 +1,25 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import { PillOptionGroup } from '../stagent/cockpit/components/PillOptionGroup'
+import { PillOptionGroup, inferRecommendedOption } from '../stagent/cockpit/components/PillOptionGroup'
+
+describe('inferRecommendedOption', () => {
+  it('returns undefined for empty/missing options', () => {
+    expect(inferRecommendedOption(undefined)).toBeUndefined()
+    expect(inferRecommendedOption([])).toBeUndefined()
+  })
+
+  it('falls back to the first option when nothing is marked', () => {
+    expect(inferRecommendedOption(['A', 'B'])).toBe('A')
+  })
+
+  it('picks a marked option across varied markers (case-insensitive)', () => {
+    expect(inferRecommendedOption(['A', 'B（推荐）'])).toBe('B（推荐）')
+    expect(inferRecommendedOption(['A', 'B 建议'])).toBe('B 建议')
+    expect(inferRecommendedOption(['A', '★ B'])).toBe('★ B')
+    expect(inferRecommendedOption(['A', 'B (Recommended)'])).toBe('B (Recommended)')
+    expect(inferRecommendedOption(['A', 'B [default]'])).toBe('B [default]')
+  })
+})
 
 describe('PillOptionGroup', () => {
   it('highlights recommended option', () => {

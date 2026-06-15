@@ -36,6 +36,15 @@ test('formatWorkflowWarningForDisplay humanizes violations and soft warnings', (
   assert.match(formatWorkflowWarningForDisplay('stage_count_near_limit'), /阶段数接近上限/);
 });
 
+test('formatWorkflowWarningForDisplay humanizes complexity tokens (no raw key leak)', () => {
+  const out = formatWorkflowWarningForDisplay('complexity:requires-global-architecture-decision:workflow');
+  assert.match(out, /复杂度/);
+  assert.match(out, /全局架构决策/);
+  assert.doesNotMatch(out, /requires-global-architecture-decision/);
+  // unknown complexity subtype still avoids leaking the colon-token whole
+  assert.match(formatWorkflowWarningForDisplay('complexity:high-hitl-likely:workflow'), /人工确认/);
+})
+
 test('formatWorkflowGeneratedWarningsForDisplay preserves order', () => {
   const lines = formatWorkflowGeneratedWarningsForDisplay([
     'stage_count_near_limit',
