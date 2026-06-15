@@ -52,11 +52,11 @@ Proposed — 2026-06-15
 
 | 原则 | 治理落点 | 状态 |
 |---|---|---|
-| 集成式测试、走公共 API | 真实集成冒烟门（ADR-0008 决策 1） | ✅ 已落地 |
+| 集成式测试、走公共 API | 真实集成冒烟门（ADR-0008 决策 1）→ **升级为工作流内阶段 + fix 回路**（ADR-0008 决策 1b，A1） | ✅ 已落地：`stage_test_run_smoke`（跑主入口 + `verify-smoke-output.mjs` 断言产出非平凡）+ 配对 `stage_fix_if_failed_smoke`，「main 空转/空心绿」可被自动修复 |
 | 禁止 mock 内部协作者做行为验证 | `collaborator-mock-only` 检测（ADR-0008 决策 2） | ✅ 已落地（warn；切片间集成点逐步升 hard） |
 | Vertical slice（tracer bullet），禁止 horizontal | `Rule20Verify.verifyRule20` 的 `horizontal-tdd` promotion | ✅ 已落地：`verifyRule20(wf, { horizontalTddFail })` 默认 warn，T4+ strict（`tdd.horizontalTddFail`）升 violation 阻断；接线生产两调用点（`WorkflowGenerationRunner` + `reverifyRule20`） |
 | 测行为不测结构 | `TestQualityLint` 现有坏味 + impl prompt 注入 `tdd` 预防指引（ADR-0007 模式） | ✅ 已落地：`deliverablePreventionSuffixes.ts` 接线 `LlmTextInvokeStep` |
-| 主入口可运行 | main 切片 impl 注入 `if __name__` + 真实产出约束 | ✅ 已落地（针对本次 T6「main 空转」根因） |
+| 主入口可运行 | main 切片 impl 注入 `if __name__` + 真实产出约束（预防）+ 工作流内 smoke 断言产出非平凡（兜底自修复，ADR-0008 决策 1b） | ✅ 已落地（针对本次 T6「main 空转」根因，预防 + 兜底双层） |
 | 禁止占位导出 | 所有 impl 切片注入「禁止自赋值 / 无意义模块级常量」 | ✅ 已落地 |
 | Fixture 与任务契约一致 | fixture 一致性门（ADR-0008 决策 3） | ✅ 已落地 |
 

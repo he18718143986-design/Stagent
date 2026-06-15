@@ -96,7 +96,40 @@
 - Stagent **广引 skills 概念**，但只内化了 red-green 机械，丢了 `tdd` 第一原则与 `improve-codebase-architecture` 周期步 → T6 空心绿是预言性失败。
 - **不必重建流程**；需价值观校正：tdd 完整原则（门 + prompt）+ 架构深化循环 + 三级人在环检查点。
 
+## A1 落地：真实集成冒烟做成工作流内阶段 + fix 回路（2026-06-15，云端续作）
+
+把真实集成冒烟从「strict 验收事后门（诚实判红但无 fix 回路）」升级为**工作流内 test_run 阶段**，复用既有自修复骨架（详见 [ADR-0008](adr/0008-strict-gate-gaps-integration-smoke.md) 决策 1b）：
+
+- `disk-bootstrap/smokeStage.ts`：smoke 阶段改名 `stage_test_run_smoke`；oneShot 入口跑完主入口后追加 `&& node verify-smoke-output.mjs`（断言 config.yaml 声明的 JSON 产出非平凡），并注入配对 `stage_fix_if_failed_smoke`（`skipIf=exitCodeZero`）。失败经 `trySelfHealAfterTestRunFailure → fix → afterFixIfFailedStage` 回绕重跑，「main 空转/空心绿」可被**自动修复**。
+- 新增 `scripts/verify-smoke-output.mjs`；`isSmokeStageId` 兼容历史 serve `stage_smoke_run`。
+
+**A1 确定性核验（零模型变量，artifacts/a1_smoke_detection_demo.log）**：对 T6 类工作区注入引擎 smoke 命令——
+- main 缺 `if __name__` → `python main.py` exit 0（旧 exit-0-only 门假绿放行），A1 判红 `产出缺失/为空：output/summary.json`；
+- 产出全 0（fixture 污染/管道失效）→ A1 判红 `产出无意义（全为零/空值）`；
+- 补 `if __name__: main()` + 真实数据 → exit 0、产出 `{"todo":1,"in_progress":1,...}` 非平凡。
+- 路由集成单测锁定：`findFixStageForTestRun → stage_fix_if_failed_smoke`、`resolveTestRunStageIdFromFix → stage_test_run_smoke`。
+- 回归：核心全量 974 pass / **9 fail（基线一致，零新增）** / 983；headless lib 25/25。
+
+## T6 strict-pass 成功率（HEAD `719a908`，N=4，全失败且**均在 smoke 之前**）
+
+| # | 配置 | 时长 | 失败门 | 失败切片 |
+|---|---|---|---|---|
+| 1 | leaves+decide=flash | 7.4min | `decisionLintRejected`（I-17 缺「AI 无法验证的假设」、I-18 边界场景<2） | `decide_pipeline` |
+| 2 | leaves=flash, decide/test-write/integration=pro | 18.2min | `python-export-contract（test-import-symbol-missing）`：`test_main.py import pipeline from main` 但 main 未导出 | `main` |
+| 3 | 同 #2 | 14.9min | `module-contract（python-impl-export-missing）`：`pipeline/__init__.py` 未导出契约符号 `store` | `pipeline` |
+| 4 | 全 pro | 18.3min | `module-contract（python-impl-export-missing）`：`pipeline/__init__.py` 未导出契约符号 `add` | `pipeline` |
+
+**根因（真实运行核验，决定性，非模型抖动）**：T6 当前**最后阻断已前移到 smoke 之前的 decide 契约质量**，而非「main 空转」。
+
+- decide_pipeline 产出的 **module 契约被污染**：`pipeline.exports = [add, DictReader, import_tasks_from_csv, list_all, pipeline, statemachine, store, summarize, update, validate_task]`——把 store 的方法名（`add/update/list_all`）、其它模块名（`store/statemachine`）、models 的 `validate_task`、占位 `DictReader` 全塞进 pipeline 导出。合法 pipeline 导出仅 `import_tasks_from_csv/summarize`。
+- 污染契约**反过来误导 impl**：模型据此写出 `from . import store`（把 store 当 pipeline 子模块）→ `python3 -c "import pipeline"` 抛 `ImportError: cannot import name 'store' from partially initialized module 'pipeline'（circular import）`。即 module-contract 门**正确**拦下了一个真坏掉的 pipeline——它不是误拦，**上游 decide 契约污染才是根因**。
+- **flash 与 pro 同样命中**（#3 flash、#4 全 pro）→ 这是**确定性的 decide 契约质量回归**，与模型档位无关；相对 `8d09371`（findings 上文记录可达 strict-green）属回归。
+- 现有 `lintImplExportsAgainstModuleContract` 的 `crossSliceExports` 豁免**仅对 `main` 切片生效**；pipeline 同为「集成下游」切片却不豁免，且 `add/update/list_all` 是 store 的**方法名**（不在任何模块 `exports`/模块名集合里），故单靠豁免泛化也无法清除。
+
+**结论**：A1（本次交付）正确实现并已证其能根治「main 空转/空心绿」；但 T6 端到端 strict-pass 被**另一独立回归**（decide 把跨切片符号塞进 pipeline/main 契约）阻断在 smoke 之前。该回归属 decide 契约质量（prompt/schema），需 live 复跑验证，**不宜在本次（A1）改动里顺手改门以免引入更大风险**，列为下一步。
+
 ## 待验证 / 下一步
+- **【新增·高优先】decide 契约污染回归**：让 decide 产出的 module `exports` 只含该切片**自身**导出（禁止塞其它切片符号/方法名/模块名/占位）。候选：① 收紧 decide prompt 对「module exports」的定义；② 在 `resolveModuleExports` 做契约净化（剔除其它模块名/其它切片 exports）；③ 把 `crossSliceExports` 豁免从 `main`-only 泛化到所有集成切片（仅缓解，不根治 `add/update/list_all` 方法名污染）。修后用 T6 复跑验证能否抵达并通过 A1 smoke。
 - **非对称成本配置**：`LLM_MODEL=deepseek-v4-flash` + `LLM_MODEL_TEST_WRITE=deepseek-v4-pro`（已写入 `.env.local`）→ 待第二阻碍缓解后再跑，验证「叶子 flash、decide/集成 pro」既省又能过（否则大概率同样卡在 forward-slice import）。
 - 落地 [ADR-0006](adr/0006-difficulty-aware-model-routing.md) per-role env 解耦（让「只升级 decide」成为最省配置）。
 - 落地 [ADR-0005](adr/0005-node-ts-language-adapter.md)：`nodeTestQualityAdapter` + seam 接入 + Node 栈引导 + Node 确定性 tier（T6n）。
