@@ -173,10 +173,36 @@
 
 **结论**：1c 达成验收——**② 不再阻断，T6 抵达并通过 A1 smoke、workflow 完成、产物真实非平凡**。T6 端到端 strict-pass 仍 0/3，剩余阻断为 test 生成质量方差与 post-strict test 隔离（均在 smoke 域之外、与 1c 无关）。
 
+## sub-task 1d：T6 残留 bug 定向修 + 测试生成 prompt 加固（快赢，2026-06-15）
+
+承接 1c。针对 1c 后残留的 (a)~(d)（均在 smoke 域附近、与门修复无关）对症修复，prevention-at-impl 优先、不放宽门。
+
+**证据与分类**（1c batch `--keep` 工作区）：(a) `test_main.py` `from main import PermissionError, TaskStore`（prompt 缺口）；(b) pipeline 解析出 `status` 却调 `store.add(title, priority)` 丢弃（impl 纪律 + smoke 非平凡判据漏过）；(c) `test_main` patch 落空 + 依赖 cwd `tasks.csv`（test 质量）；(d) `materialize_stub_main` exit 1（main 契约仅 `main` 被 `pruneExportNoise` 剔空 → `resolveModuleExports` 空，引擎 bug）。
+
+**修法**：
+- (a) `buildSliceContractExportsPromptSuffix`（已 wired）加协作者 import 来源纪律：他切片符号从各自模块名 import（`from store import TaskStore`），严禁 `from main import <协作者>`、禁止 import 内置当模块符号。
+- (b) ① impl 提示加字段透传纪律（`add` 后 `store.update(tid, status=...)`）；② `smokeDataBootstrap` 种子按行轮换全部合法 status（priority 保持 1..5）；③ `verify-smoke-output.mjs` 加 **status 保真断言**（CSV 多状态但产出塌缩单一 → 判红；直方图和≠行数则跳过避免误判）→ A1 smoke+fix 回路可捕获。
+- (c) test_write 提示加测试隔离（`tmp_path`+`chdir` 自建 fixture）+ patch 绑定名（patch `main.import_tasks_from_csv` 而非 `pipeline.*`）纪律。
+- (d) `materialize-python-module-stub.mjs`：main 契约剔空时默认入口函数 stub（入口名 main/run/cli 为函数）；并在 `sanitizeModuleExports`/`resolveModuleExports` 对 main 加**入口兜底**——任一来源声明过 main 后解析为空则规范为 `[main]`，使 prompt/门/stub 三处有据（根因：main 契约空 → 无指引 → 模型自造入口名如 `run_cli`）。
+- 全程不放宽门；(b) 反而**加严** smoke 判据（从「非平凡」到「status 保真」）。
+
+**strict-pass 率（`feedback:live:t6:batch`，flash + decision/test-write/integration=pro；`artifacts/t6_1d_strict_pass.log`）**：
+
+| 阶段 | 率 | 说明 |
+|---|---|---|
+| 修前（1c 状态） | **0/3** | 残留 (a)~(d) |
+| 修后（1d，`e12caa0`，N=5） | **2/5（40%）** | run#1/run#4 ✓；排除 run#5（API 402 余额耗尽，基础设施）→ 有效 **2/4（50%）** |
+
+- 两次 strict pass 均经**产物独立真实运行 + status 语义核验**：种子 CSV 含 todo/in_progress/done/cancelled，`python main.py` → `{"todo":1,"in_progress":1,"done":1,"cancelled":1}`（status 正确、非空心绿、非塌缩）。
+- (a)~(d) 修复后**未再复现**：stub_main 全过、status 语义正确、无 `from main import 协作者` 失败。
+- 残留失败（**方差为主，非 (a)~(d)、非门误拦**）：run#2 test_run 经 fix 链仍红（`blockDeliveryOnTestFailure` 正确拦，test/impl 生成方差）；run#3 ① `decisionLintRejected` I-17/I-18（decide 内容完整性，stochastic）；run#5 API 余额耗尽（infra）。
+
+**结论**：快赢达成——单次 strict-pass 可靠性从 **0 → ~40-50%**，(a)~(d) 四类残留 bug 全部消除，产物 status 语义经真实运行核验正确。剩余为**生成方差 + decide 内容完整性**，单纯定向修边际递减。
+
 ## 待验证 / 下一步
-- **test 生成质量方差**：① `from main import TaskStore` 等错误自模块 import（应 `from store import`）；② `materialize_stub_main` 验证偶发 exit 1；③ `test_main` 隔离 bug（依赖 cwd `tasks.csv`，应自建 fixture/tmp）。
-- **status 透传语义 bug**：pipeline 导入未透传 CSV `status` 列（全计 todo）——超出 A1 smoke「非平凡」判据，属行为正确性（behaviorSpec/test 覆盖）。
-- **decide 内容 lint（I-17/I-18）稳定性**：slice decide 的「AI 无法验证的假设 / 边界压力测试」节完整性（历史偶发，本 batch 未现）。
+- **建议升级 best-of-N（子任务 3）**：剩余失败以 run 间生成方差为主（test_run 红 / decide 内容 lint），best-of-N 采样压方差是拉高 strict-pass 率的下一杠杆。
+- **decide 内容 lint（I-17/I-18）稳定性**：slice/global decide 的「AI 无法验证的假设 / 边界压力测试」节完整性（decide-prompt 或阈值）——独立治理项。
+- **环境**：live 跑依赖 DEEPSEEK_API_KEY 余额；本轮 run#5 因 402 余额耗尽中断（非代码）。
 - **非对称成本配置**：`LLM_MODEL=deepseek-v4-flash` + `LLM_MODEL_TEST_WRITE=deepseek-v4-pro`（已写入 `.env.local`）→ 待第二阻碍缓解后再跑，验证「叶子 flash、decide/集成 pro」既省又能过（否则大概率同样卡在 forward-slice import）。
 - 落地 [ADR-0006](adr/0006-difficulty-aware-model-routing.md) per-role env 解耦（让「只升级 decide」成为最省配置）。
 - 落地 [ADR-0005](adr/0005-node-ts-language-adapter.md)：`nodeTestQualityAdapter` + seam 接入 + Node 栈引导 + Node 确定性 tier（T6n）。
