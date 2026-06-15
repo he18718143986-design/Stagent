@@ -1,0 +1,23 @@
+{
+  "stagent.planCompleteness.missingTestInfrastructureExpo": "计划缺少测试基础设施：Expo/RN 项目需配置 jest 与对应 test_run 阶段。",
+  "stagent.planCompleteness.missingTestInfrastructure": "计划缺少测试基础设施：缺少 test_write/test_run 链。",
+  "stagent.planCompleteness.missingSelfHealChain": "计划缺少自愈修复链：{0}",
+  "stagent.planCompleteness.templateStageCapExceeded": "模板阶段数超出上限：{0}",
+  "stagent.planCompleteness.multiFilePromptMismatch": "多文件实现阶段 {0} 的 prompt 与声明文件不匹配：{1}",
+  "stagent.planCompleteness.testStackNestjsMismatch": "测试栈与 NestJS 不匹配：目标 {0}（阶段 {1}）。",
+  "stagent.planCompleteness.upstreamFixNoImpl": "上游 fix 阶段 {0} 缺少对应的 impl 阶段。",
+  "stagent.planCompleteness.upstreamFixStackRouting": "上游 fix 阶段 {0} 的栈路由不一致：{1}/{2}/{3}。",
+  "stagent.planCompleteness.testWriteImportNotInPlan": "test_write 产物 {0} 导入的模块 {1} 不在计划中（阶段 {2}）。",
+  "stagent.planCompleteness.testWriteImportUndeclared": "test_write 产物 {0} 存在未声明的导入（阶段 {1}）。",
+  "stagent.planCompleteness.missingTestRunPair": "阶段 {0} 缺少配对的 test_run 阶段（期望 {1}）。",
+  "stagent.planCompleteness.missingVerificationStage": "计划缺少验证阶段（test_run / 冒烟）。",
+  "stagent.planCompleteness.missingMainAssembly": "计划缺少主入口装配阶段（main 组装）。",
+  "stagent.planCompleteness.missingPythonVenvChain": "计划缺少 Python venv 引导链：{0}",
+  "stagent.planCompleteness.missingPythonTestLayout": "Python 测试布局缺少 {0}：pytest 将无法 import 顶层模块。",
+  "stagent.planCompleteness.missingPythonVerifyImports": "test_write 产物 {0} 与 test_run {1} 之间缺少 verify_imports 阶段。",
+  "stagent.planCompleteness.sliceDecideMissingDecisionArtifacts": "切片 decide 阶段 {0} 未声明 decisionArtifacts 产物。",
+  "stagent.planCompleteness.globalDecideMissingDecisionArtifacts": "全局架构 decide 阶段 {0} 未声明 decisionArtifacts 产物。",
+  "stagent.planCompleteness.testWriteMissingModuleContractSource": "test_write 阶段 {0} 未接线配对 decide 的契约来源 {1}。",
+  "stagent.planCompleteness.implMissingModuleContractSource": "impl 阶段 {0} 未接线配对 decide 的契约来源 {1}。",
+  "stagent.planCompleteness.thinLlmSystemPrompt": "LLM 阶段 systemPrompt 过薄：{0}"
+}

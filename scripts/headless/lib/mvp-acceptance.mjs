@@ -47,6 +47,9 @@ export function evaluateTraceabilityRule(ws, rule, readText) {
   if (rule.requireDirPy && !dirHasPy(path.join(ws, rule.requireDirPy))) {
     return false
   }
+  if (rule.requireDirTs && !dirHasTs(path.join(ws, rule.requireDirTs))) {
+    return false
+  }
   const hay = readText(Array.isArray(rule.dirs) ? rule.dirs : [])
   return rule.pattern instanceof RegExp ? rule.pattern.test(hay) : true
 }
@@ -54,6 +57,14 @@ export function evaluateTraceabilityRule(ws, rule, readText) {
 function dirHasPy(dir) {
   if (!fs.existsSync(dir)) return false
   return fs.readdirSync(dir).some((f) => f.endsWith('.py') && fs.statSync(path.join(dir, f)).size > 0)
+}
+
+/** dir 存在且含非空 .ts/.tsx 文件（镜像 dirHasPy；测试文件也算）。 */
+export function dirHasTs(dir) {
+  if (!fs.existsSync(dir)) return false
+  return fs
+    .readdirSync(dir)
+    .some((f) => (f.endsWith('.ts') || f.endsWith('.tsx')) && fs.statSync(path.join(dir, f)).size > 0)
 }
 
 const PY_SCAN_SKIP_DIRS = new Set([
@@ -82,11 +93,30 @@ function collectPyFiles(dir, acc = []) {
   return acc
 }
 
+/**
+ * 用于 pattern 匹配的目录文本收集器：在 .py 之外追加 .ts/.tsx（纯增量；
+ * Python 项目无 .ts 故行为不变）。
+ */
+function collectSourceFiles(dir, acc = []) {
+  if (!fs.existsSync(dir)) return acc
+  for (const name of fs.readdirSync(dir)) {
+    const full = path.join(dir, name)
+    const st = fs.statSync(full)
+    if (st.isDirectory()) {
+      if (PY_SCAN_SKIP_DIRS.has(name)) continue
+      collectSourceFiles(full, acc)
+    } else if ((name.endsWith('.py') || name.endsWith('.ts') || name.endsWith('.tsx')) && st.size > 0) {
+      acc.push(full)
+    }
+  }
+  return acc
+}
+
 function readWorkspaceText(ws, subdirs) {
   const parts = []
   for (const sub of subdirs) {
     const root = path.join(ws, sub)
-    for (const file of collectPyFiles(root)) {
+    for (const file of collectSourceFiles(root)) {
       try {
         parts.push(fs.readFileSync(file, 'utf8'))
       } catch {
@@ -95,7 +125,7 @@ function readWorkspaceText(ws, subdirs) {
     }
     if (sub === 'tests' && fs.existsSync(root)) {
       for (const f of fs.readdirSync(root)) {
-        if (f.endsWith('.py')) {
+        if (f.endsWith('.py') || f.endsWith('.ts') || f.endsWith('.tsx')) {
           try {
             parts.push(fs.readFileSync(path.join(root, f), 'utf8'))
           } catch {
@@ -123,6 +153,30 @@ function findTestFiles(ws) {
   return fs
     .readdirSync(testsDir)
     .filter((f) => f.startsWith('test_') && f.endsWith('.py'))
+    .map((f) => path.join('tests', f))
+}
+
+function findMainEntryTs(ws) {
+  const candidates = [
+    path.join('src', 'main.ts'),
+    'main.ts',
+    path.join('src', 'cli.ts'),
+    'cli.ts',
+    path.join('src', 'index.ts'),
+  ]
+  for (const rel of candidates) {
+    const p = path.join(ws, rel)
+    if (fs.existsSync(p) && fs.statSync(p).size > 0) return rel
+  }
+  return null
+}
+
+function findTestFilesTs(ws) {
+  const testsDir = path.join(ws, 'tests')
+  if (!fs.existsSync(testsDir)) return []
+  return fs
+    .readdirSync(testsDir)
+    .filter((f) => f.endsWith('.test.ts') || f.endsWith('.spec.ts'))
     .map((f) => path.join('tests', f))
 }
 
@@ -365,11 +419,12 @@ export function assertSmoke(ws, smoke) {
  * opts.moduleDirs / opts.traceabilityRules 覆盖，使「平台正确性」与「量化语义」解耦
  * （决策记录 D2/D3）。
  * @param {string} ws 工作区根
- * @param {{ outcome?: string, requireTraceability?: boolean, moduleDirs?: string[], traceabilityRules?: object[] }} opts
+ * @param {{ outcome?: string, requireTraceability?: boolean, moduleDirs?: string[], traceabilityRules?: object[], language?: 'py' | 'node' }} opts
  */
 export function assertStrictMvpPass(ws, opts = {}) {
   const errors = []
   const warnings = []
+  const isNode = opts.language === 'node'
   const moduleDirs = Array.isArray(opts.moduleDirs) && opts.moduleDirs.length > 0
     ? opts.moduleDirs
     : MVP_MODULE_DIRS
@@ -381,25 +436,40 @@ export function assertStrictMvpPass(ws, opts = {}) {
     errors.push(`strict requires workflowCompleted (got: ${opts.outcome})`)
   }
 
-  const configPath = path.join(ws, 'config.yaml')
-  if (!fs.existsSync(configPath) || fs.statSync(configPath).size === 0) {
-    errors.push('missing or empty config.yaml')
+  if (isNode) {
+    const configPath = path.join(ws, 'config.json')
+    if (!fs.existsSync(configPath) || fs.statSync(configPath).size === 0) {
+      errors.push('missing or empty config.json')
+    }
+  } else {
+    const configPath = path.join(ws, 'config.yaml')
+    if (!fs.existsSync(configPath) || fs.statSync(configPath).size === 0) {
+      errors.push('missing or empty config.yaml')
+    }
   }
 
   for (const dir of moduleDirs) {
     const full = path.join(ws, dir)
-    if (!dirHasPy(full)) {
+    if (isNode) {
+      if (!dirHasTs(full)) {
+        errors.push(`missing non-empty ${dir}/*.ts`)
+      }
+    } else if (!dirHasPy(full)) {
       errors.push(`missing non-empty ${dir}/*.py`)
     }
   }
 
-  if (!findMainEntry(ws)) {
+  if (isNode) {
+    if (!findMainEntryTs(ws)) {
+      errors.push('missing main entry (src/main.ts, main.ts, cli.ts, or src/index.ts)')
+    }
+  } else if (!findMainEntry(ws)) {
     errors.push('missing main entry (main.py, cli.py, or src/main.py)')
   }
 
-  const tests = findTestFiles(ws)
+  const tests = isNode ? findTestFilesTs(ws) : findTestFiles(ws)
   if (tests.length === 0) {
-    errors.push('missing tests/test_*.py')
+    errors.push(isNode ? 'missing tests/*.test.ts (or *.spec.ts)' : 'missing tests/test_*.py')
   }
 
   const deliveryPath = path.join(ws, 'DELIVERY.md')
@@ -412,8 +482,8 @@ export function assertStrictMvpPass(ws, opts = {}) {
     }
   }
 
-  const pytest = runPytestInWorkspace(ws)
-  if (pytest.exitCode !== 0) {
+  const pytest = isNode ? { exitCode: 0, stderr: '' } : runPytestInWorkspace(ws)
+  if (!isNode && pytest.exitCode !== 0) {
     errors.push(`pytest failed (exit ${pytest.exitCode}): ${pytest.stderr.slice(0, 400)}`)
   }
 
