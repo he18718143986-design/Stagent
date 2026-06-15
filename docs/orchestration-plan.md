@@ -31,7 +31,8 @@
 | # | 子任务 | 优先级 | 跑法 | 分支 | 状态 | PR |
 |---|--------|--------|------|------|------|----|
 | 1 | T6 真实可交付收口（smoke 做成工作流内阶段 + 接 fix/replan 回路 = A1） | P0 | 方案 A（重 live） | `cursor/t6-real-deliverable-governance-dac2` | ✅ **A1 已交付+验证**（PR #11）；但 T6 端到端仍 0/4，被独立的 decide 契约污染挡在 smoke 之前 → 拆出 #1b | #11 |
-| 1b | decide 契约污染修复（`decide_pipeline` 把跨切片符号塞进 `pipeline.exports` → 误导 impl 写跨切片 import → module-contract 门判红） | P0 | 方案 A（重 live） | 待启动 | 待启动（A1 后续，**非 A1 范围**） | — |
+| 1b | decide 契约污染修复（`decide_pipeline` 把跨切片符号塞进 `pipeline.exports` → 误导 impl 写跨切片 import → module-contract 门判红） | P0 | 方案 A（重 live） | `cursor/t6-decide-contract-pollution-dac2` | ✅ **已根治+真实运行证明**（PR #14）：store/pipeline 切片真过、`import pipeline` 不再 ImportError。核心 984/9 零新增、headless 25/25、vitest 204。T6 仍 0/3，但阻断**前移到独立问题** ①②③（见下） | #14 |
+| 1c | **test-slice-import 门 order-aware 调和**（②）：现 `ModuleContractLint` L96-113 强制"切片测试只能 from 自身切片 import"，与 ADR-0008/0009「测真实协作者」冲突，挡在 smoke 前 | P0 | 方案 A（重 live） | 待启动（建议 resume 1b 会话） | 待启动 | — |
 | 2 | per-role 模型路由 env 解耦（ADR-0006） | — | — | — | ✅ **已完成（无需做）** | 已在主干 |
 | 3 | best-of-N + 门控择优（难切片便宜模型并行采样，按 Strict QA 择优） | P1 | 方案 A | `cursor/best-of-n-gate-select-3713` | 阻塞中（依赖 #1 的可靠门） | — |
 | 4 | 对抗式审查（异族/更强模型独立挑错回喂；**加分项，不替代确定性门**） | P2 | 方案 A | `cursor/adversarial-review-3713` | 排后（依赖 #1/#3） | — |
@@ -41,6 +42,11 @@
 **协作备注**：
 - 本看板目前只在 PR #12 分支（未并入 main），故 off-main 的实现会话**看不到也无法回填**——状态由实现会话**报告给指挥会话代填**，或先把本文件并入 main。
 - 分支后缀按各会话自身策略（如 `-dac2` / `-3713`），不必统一；以 PR 链接为准对账。
+
+**T6 strict-pass 当前阻断链（1b 后，2026-06-15）**：契约污染已消除；剩余三道**独立**问题（均不在 1b 范围）：
+- **① decide 内容 lint I-17/I-18**（即便 decision=pro 仍未过）→ decide 质量轨，需强化 decide prompt / 内容门，独立处理。
+- **② `python-test-slice-import-module-mismatch` 门**（`ModuleContractLint` L96-113）禁止切片测试 import 真实协作者，与 ADR-0008/0009 冲突 → **子任务 1c**，关键路径（抵达 smoke 的下一道门）。**调和而非放宽**：见下方决策。
+- **③ pipeline priority 类型集成 bug** → 属 A1 smoke 捕获域；②修好抵达 smoke 后，A1 的 smoke+fix 回路应能捕获/修复，先验证再定。
 
 ---
 
