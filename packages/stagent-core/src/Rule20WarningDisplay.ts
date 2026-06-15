@@ -36,6 +36,14 @@ const RULE20_TYPE_LABELS: Record<string, string> = {
   restored_from_persistence: '已从持久化恢复（非本次 generateWorkflow 校验）',
 };
 
+/** 复杂度评估（WorkflowComplexityEstimator）token 标签 */
+const COMPLEXITY_TYPE_LABELS: Record<string, string> = {
+  'exceeds-hard-cap': '复杂度超过硬上限，建议拆分任务',
+  'near-stage-limit': '复杂度接近阶段上限，建议精简',
+  'requires-global-architecture-decision': '需要先做一个全局架构决策',
+  'high-hitl-likely': '预计执行中需要较多人工确认',
+};
+
 /** M21：契约检查（PrototypeContractLint / CrossFileKeyContractLint）token 标签 */
 const CONTRACT_TYPE_LABELS: Record<string, string> = {
   'sample-mock-source-unshared': '样例数据与 mock 数据未共享同一 ASIN 源（应一方引用另一方输出）',
@@ -80,6 +88,11 @@ function stageSuffix(stageId: string): string {
 
 /** 单条 warning token → 确认页展示文案 */
 export function formatWorkflowWarningForDisplay(line: string): string {
+  const complexity = /^complexity:([^:]+):(.+)$/.exec(line.trim());
+  if (complexity) {
+    const label = COMPLEXITY_TYPE_LABELS[complexity[1]] ?? complexity[1];
+    return `[复杂度] ${label}${stageSuffix(complexity[2])}`;
+  }
   const parsed = parseWorkflowWarningLine(line);
   if (!parsed) {
     return line;
