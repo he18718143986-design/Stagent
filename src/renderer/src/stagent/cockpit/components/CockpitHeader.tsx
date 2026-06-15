@@ -19,7 +19,6 @@ export function CockpitHeader({
   return (
     <header className="flex items-center justify-between px-4 py-2 border-b border-stone-200/60 bg-white/60 backdrop-blur-sm shrink-0">
       <div className="flex items-center gap-2">
-        <span className="font-semibold text-stone-800">Stagent</span>
         {!showTechnical && (
           <>
             <button
