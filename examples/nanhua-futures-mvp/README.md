@@ -6,14 +6,15 @@
 
 - 任务档位：`live-t4-nanhua-futures`（T4 真实任务）
 - 输入真源：[`需求分析-南华期货自动下单.md`](需求分析-南华期货自动下单.md)
-- 模型：`deepseek-v4-flash`（主）+ `deepseek-v4-pro`（test-write / 集成切片）——异族出题人 + Run #65 integration 路由
+- 模型：`deepseek-v4-flash`（主）+ `deepseek-v4-pro`（decision / test-write / integration）——ADR-0006 per-role 路由
 - 引擎判定：`workflowCompleted` · **strict delivery 1/1**（pytest 全绿 + MVP 目录 + 可追溯 + 完成态）
 - 规模：49 stages · 29 次 LLM 调用 · ~22 分钟
 - 复跑实测：**83 passed**
 
 > 复现命令（需配置 `DEEPSEEK_API_KEY`，并在干净工作区放入需求文档）：
 > ```bash
-> LLM_MODEL=deepseek-v4-flash LLM_MODEL_TEST_WRITE=deepseek-v4-pro \
+> LLM_MODEL=deepseek-v4-flash LLM_MODEL_DECISION=deepseek-v4-pro \
+>   LLM_MODEL_TEST_WRITE=deepseek-v4-pro LLM_MODEL_INTEGRATION=deepseek-v4-pro \
 >   node scripts/headless/run.mjs --live --scenario execute --live-tier 4 --keep --workspace <空目录>
 > ```
 

@@ -14,7 +14,7 @@ export function reverifyRule20AfterChange(
   if (!ctx.runtimeRule20On) {
     return undefined;
   }
-  return verifyRule20(wf);
+  return verifyRule20(wf, { horizontalTddFail: ctx.gates?.horizontalTddFail });
 }
 
 /** 若 Rule20 violations 应阻断生成，返回对应 outcome；否则 null。 */

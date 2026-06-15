@@ -144,3 +144,83 @@ test('非 test_write 阶段 → disabled', () => {
   (ctx.stage as Stage).id = 'stage_impl_indicators';
   assert.equal(gate.enabled?.(ctx), false);
 });
+
+const NODE_WEAK_TEST = `import { it, expect } from 'vitest'
+import * as store from '../store'
+it('imports store', () => { expect(store).toBeDefined() })
+`;
+
+function makeNodeGateCtx(opts: {
+  mode: 'off' | 'warn' | 'hard';
+  semantic: string;
+  testBody: string;
+}): QualityGateContext {
+  const testPath = `src/__tests__/${opts.semantic}.test.ts`;
+  const testWriteStage: Stage = {
+    id: testWriteStageIdFromSemanticName(opts.semantic)!,
+    title: 'tw',
+    tool: 'llm-text',
+    toolConfig: {
+      type: 'llm-text',
+      systemPrompt: 'write test',
+      writeOutputToFile: testPath,
+      writePathBase: 'workspace',
+    },
+    input: { sources: [], mergeStrategy: 'concat' },
+    outputs: [{ key: 'code', format: 'text' }],
+    pauseAfter: false,
+  };
+  const testRunStage: Stage = {
+    id: `stage_test_run_${opts.semantic}`,
+    title: 'tr',
+    tool: 'code-runner',
+    toolConfig: {
+      type: 'code-runner',
+      command: 'npx vitest run',
+      captureOutput: true,
+    },
+    input: { sources: [], mergeStrategy: 'concat' },
+    outputs: [{ key: 'text', format: 'text' }],
+    pauseAfter: false,
+  };
+  const instance = {
+    status: 'running' as const,
+    definition: {
+      id: 'wf-node',
+      version: '2.0',
+      meta: { title: 't', taskType: 'software', userInput: 'u', createdAt: new Date().toISOString() },
+      stages: [testWriteStage, testRunStage],
+    },
+    stageRuntimes: [{ stageId: testWriteStage.id, status: 'running', outputs: {}, retryCount: 0 }],
+    currentStageIndex: 0,
+  } satisfies WorkflowInstance;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'test-quality-gate-node-'));
+  fs.mkdirSync(path.join(dir, 'src', '__tests__'), { recursive: true });
+  fs.writeFileSync(path.join(dir, testPath), opts.testBody);
+  return {
+    phase: 'post-stage',
+    stage: testWriteStage,
+    instance,
+    taskWorkspaceAbs: dir,
+    executionHost: {
+      readTestQualityLintMode: () => opts.mode,
+      getWorkspaceRootAbsolute: () => dir,
+    } as never,
+  };
+}
+
+test('PR-3 node 工作流 → postStageGates 选 node adapter，existence-only hard 阻断', () => {
+  const ctx = makeNodeGateCtx({ mode: 'hard', semantic: 'store', testBody: NODE_WEAK_TEST });
+  const result = evalSync(ctx);
+  assert.ok(result);
+  assert.equal(result.severity, 'block');
+  assert.match(result.messages.join(' '), /toBeDefined|存在性|existence/i);
+});
+
+test('PR-3 python 工作流 → postStageGates 仍走 python adapter（弱断言 is not None）', () => {
+  const ctx = makeGateCtx({ mode: 'hard', semantic: 'indicators', testBody: WEAK_TEST });
+  const result = evalSync(ctx);
+  assert.ok(result);
+  assert.equal(result.severity, 'block');
+  assert.match(result.messages.join(' '), /is not None/);
+});

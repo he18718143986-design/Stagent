@@ -34,6 +34,9 @@ export default defineConfig({
     resolve: {
       alias: {
         '@': resolve('src/renderer/src'),
+        // 渲染层仅引用无 Node 依赖的纯函数源文件，勿 import CJS barrel @stagent/core
+        '@stagent/friendly': resolve('packages/stagent-core/src/friendly'),
+        '@stagent/plan-summary': resolve('packages/stagent-core/src/WorkflowPlanSummary.ts'),
       },
     },
     build: {

@@ -22,7 +22,10 @@ import {
   semanticFromRuntimeReplanImplFixStageId,
 } from '../runtime-replan/FixExhaustedRouter';
 import { isImplStageId, isTestWriteStageId, semanticNameFromImplStageId, semanticNameFromTestWriteStageId } from '../workflow/StageIdPatterns';
-import { collectWorkflowSliceOrder } from '../python-contract/ForwardSliceImportLint';
+import {
+  buildForwardSliceImportPreventionSuffix,
+  collectWorkflowSliceOrder,
+} from '../python-contract/ForwardSliceImportLint';
 import { buildFixRoutingPromptSuffix } from './llm-persist/fixRoutingPromptSuffix';
 import { resolveEffectiveRetryComment } from '../retry/FailureSnapshot';
 import { StageAlreadyHandledError } from './StageControlSignals';
@@ -181,6 +184,14 @@ export async function invokeLlmTextForStage(
       );
       if (apiBridge) {
         sys += `\n\n${apiBridge}`;
+      }
+      // 预防前向切片 import（撞 module-contract 门前先告知模型用 lazy import / 可注入 callable）。
+      const fwdPrevention = buildForwardSliceImportPreventionSuffix({
+        currentSemantic: implSemantic,
+        sliceOrder: collectWorkflowSliceOrder(ctx.instance.definition),
+      });
+      if (fwdPrevention) {
+        sys += `\n\n${fwdPrevention}`;
       }
     }
   }

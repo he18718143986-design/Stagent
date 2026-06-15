@@ -48,6 +48,7 @@ export {
   readPlanStructuralRepairMode,
   readRuntimeRule20VerifyEnabled,
   readToIssuesHorizontalLayeringFail,
+  readHorizontalTddFail,
   readStaticAnalysisEnabled,
   readGrillAdaptiveModeEnabled,
   readGlossaryEnabled,

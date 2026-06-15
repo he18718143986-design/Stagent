@@ -323,7 +323,7 @@ export const BUILTIN_PRE_STAGE_GATES: QualityGate[] = [
     phase: 'pre-stage',
     priority: 22,
     when: 'before-test-run',
-    dependsOn: [GATE_ID_TEST_RUN_PREFLIGHT],
+    // 顺序：merge(22) → pip-resync(24) → deps-install(25) → preflight(30)；勿 dependsOn preflight（priority 更大）。
     enabled: (ctx) =>
       isTestRunStage(ctx.stage) &&
       isSoftwareTaskType(ctx.instance?.definition.meta.taskType ?? ''),

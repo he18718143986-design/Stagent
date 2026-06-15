@@ -12,6 +12,8 @@ import {
 } from './EffectiveSettings';
 export interface GenerationGateSettings {
   toIssuesHorizontalLayeringFail: boolean;
+  /** ADR-0009：horizontal TDD 反模式升 hard（默认 false=warning）。 */
+  horizontalTddFail?: boolean;
   debugFeedbackLoopMode: 'off' | 'warn' | 'hard';
   planCompletenessEnabled: boolean;
   planStructuralRepairMode: 'off' | 'auto';
@@ -28,6 +30,7 @@ import {
   readGlobalDecisionInjectMode,
   readDagMaxParallelism,
   readToIssuesHorizontalLayeringFail,
+  readHorizontalTddFail,
   readDebugFeedbackLoopMode,
   readPlanCompletenessGateEnabled,
   readPlanStructuralRepairMode,
@@ -121,6 +124,7 @@ export function readEngineGenerationGates(cfg?: WorkspaceConfiguration): Generat
   const c = getStagentConfiguration(cfg);
   return {
     toIssuesHorizontalLayeringFail: readToIssuesHorizontalLayeringFail(c),
+    horizontalTddFail: readHorizontalTddFail(c),
     debugFeedbackLoopMode: readDebugFeedbackLoopMode(c),
     planCompletenessEnabled: readPlanCompletenessGateEnabled(c),
     planStructuralRepairMode: readPlanStructuralRepairMode(c),

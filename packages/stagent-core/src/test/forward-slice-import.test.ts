@@ -5,6 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import {
   buildForwardSliceImportFixHints,
+  buildForwardSliceImportPreventionSuffix,
   collectWorkflowSliceOrder,
   laterSlicesInWorkflow,
   lintForwardSliceImportsInImpl,
@@ -70,6 +71,24 @@ test('lintForwardSliceImportsInImpl passes when broker package exists', () => {
       currentSemantic: 'risk',
       sliceOrder: SLICE_ORDER,
     }),
+    null,
+  );
+});
+
+test('buildForwardSliceImportPreventionSuffix lists later slices + rule', () => {
+  const suffix = buildForwardSliceImportPreventionSuffix({
+    currentSemantic: 'risk',
+    sliceOrder: SLICE_ORDER,
+  });
+  assert.ok(suffix);
+  assert.match(suffix, /broker/);
+  assert.match(suffix, /main/);
+  assert.match(suffix, /lazy|可注入/);
+});
+
+test('buildForwardSliceImportPreventionSuffix returns null for last slice', () => {
+  assert.equal(
+    buildForwardSliceImportPreventionSuffix({ currentSemantic: 'main', sliceOrder: SLICE_ORDER }),
     null,
   );
 });

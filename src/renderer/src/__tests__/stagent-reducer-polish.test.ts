@@ -205,7 +205,7 @@ describe('shouldDropStaleMessage seq/uiEpoch gating', () => {
     const cursor = { lastSeq: 2, uiEpoch: 1 }
     expect(
       shouldDropStaleMessage(
-        { type: 'stageError', stageId: 's1', error: 'x', errorType: 'generic', seq: 4, uiEpoch: 1 },
+        { type: 'stageError', stageId: 's1', error: 'x', errorType: 'tool-execution-failed', seq: 4, uiEpoch: 1 },
         cursor,
       ),
     ).toBe(false)

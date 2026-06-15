@@ -5,7 +5,7 @@ import { estimateTokensFromChars } from './llm-usage.mjs'
 /**
  * Minimal OpenAI-compatible HTTP LlmModel (mirrors src/main/stagent/openai-llm.ts).
  * @param {{ apiKey: string, baseUrl: string, model: string, maxOutputTokens: number,
- *           usageMeter?: { record(call: object): void } }} cfg
+ *           usageMeter?: { record(call: object): void }, usageRole?: string }} cfg
  */
 export function createOpenAiHttpLlmModel(cfg) {
   const baseUrl = normalizeLlmBaseUrl(cfg.baseUrl)
@@ -71,6 +71,7 @@ export function createOpenAiHttpLlmModel(cfg) {
           reportedUsage?.completion_tokens ?? estimateTokensFromChars(outputChars)
         cfg.usageMeter.record({
           model: cfg.model,
+          role: cfg.usageRole,
           promptTokens,
           completionTokens,
           estimated: reportedUsage == null,

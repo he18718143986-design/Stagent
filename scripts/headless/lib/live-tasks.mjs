@@ -147,6 +147,12 @@ export const LIVE_TASK_TIERS = {
     // 确定性靶子：覆盖 T4 量化 module dirs / traceability，使 strict 验收只考平台正确性。
     mvp: {
       moduleDirs: ['models', 'store', 'statemachine', 'pipeline'],
+      // ADR-0008 决策3：fixture 一致性——CSV 表头须覆盖任务字段（拦截种子污染，如误用 T4 期货 CSV）。
+      fixtures: [{ file: 'tasks.csv', requireColumns: ['title', 'priority', 'status'] }],
+      // ADR-0008：真实集成冒烟——跑 main 入口，断言 summary 产出非「全 0/空」（捕获空心绿）。
+      smoke: { run: 'main', outputFile: 'summary.json', jsonNotAllZero: true },
+      // ADR-0009：交付前架构扫——检测占位导出（自赋值 / JS 风格别名）等烂泥球。
+      architectureScan: true,
       traceability: [
         {
           id: 'crud-store',

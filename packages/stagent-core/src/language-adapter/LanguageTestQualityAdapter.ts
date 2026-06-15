@@ -26,7 +26,10 @@ export type TestQualityFindingKind =
   | 'inline-impl-double'
   | 'internal-module-mock'
   | 'module-system-hijack'
-  | 'brittle-assertion';
+  | 'brittle-assertion'
+  // 协作者 mock 假绿（ADR-0008 决策2）：把被测协作者整体换成 mock 后只断言调用形状，
+  // 不验证真实行为——典型「空心绿」根因（T6 test_pipeline.py 用 MagicMock store）。
+  | 'collaborator-mock-only';
 
 /** adapter 探测到的单条坏味：种类（交给 policy 定级）+ 该语言术语的人读说明。 */
 export interface TestQualityFinding {

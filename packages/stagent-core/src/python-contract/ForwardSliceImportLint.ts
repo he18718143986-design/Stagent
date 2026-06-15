@@ -92,6 +92,28 @@ export function lintForwardSliceImportsInImpl(params: {
   return null;
 }
 
+/**
+ * impl 阶段预防：在初始实现前告知模型——本切片之后的切片尚未落盘，禁止顶层 import。
+ * 与静态门 `lintForwardSliceImportsInImpl` 同源（避免一撞门就 hard block），无后续切片时返回 null。
+ */
+export function buildForwardSliceImportPreventionSuffix(params: {
+  currentSemantic: string;
+  sliceOrder: string[];
+}): string | null {
+  const { currentSemantic, sliceOrder } = params;
+  const later = laterSlicesInWorkflow(currentSemantic, sliceOrder);
+  if (later.length === 0) {
+    return null;
+  }
+  const list = later.map((s) => `\`${s}\``).join('、');
+  return [
+    '## 前向切片 import 约束（必须遵守）',
+    `本切片 \`${currentSemantic}\` 按工作流顺序先于以下切片实现，落盘时它们尚不存在：${list}。`,
+    '禁止在模块顶层 `import` / `from … import` 这些后续切片——会在测试收集期（pytest）触发 ModuleNotFoundError，并被 module-contract 门硬拦。',
+    '如必须依赖后续切片：① 在函数内部 lazy import；② 或声明可注入 callable / 参数（如 settlement_price_resolver），由 main 装配时再接；③ 测试若 patch 后续切片符号，impl 在调用点 lazy import 即可。',
+  ].join('\n');
+}
+
 /** fix 链：pytest ModuleNotFoundError 命中尚未落盘的后续切片时注入可操作提示。 */
 export function buildForwardSliceImportFixHints(params: {
   diagnostic: string;

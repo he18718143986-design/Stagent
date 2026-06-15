@@ -20,6 +20,7 @@ import {
   type SdkPathContractIssue,
 } from './SdkPathContractLint';
 import { lintTestQuality, testQualityIssuesToWarnings } from './TestQualityLint';
+import { resolveTestQualityLanguage } from './python-bootstrap/pythonStackDetect';
 import {
   lintPythonExportContractOnDisk,
   type PythonExportContractIssue,
@@ -45,12 +46,28 @@ export interface WorkspaceLintContext {
   pythonPypiSymbolLintMode: 'off' | 'warn' | 'hard';
 }
 
-/** 从工作区文件集解析生产模块名：顶层非 tests 目录（含 .py）+ 顶层 *.py（如 main.py）+ 约定 src/main。 */
-function collectWorkspaceProductionModules(files: ProjectFile[]): string[] {
-  const names = new Set<string>(['src', 'main']);
+const PY_TEST_PATH_RE = /(^|\/)(test_|tests?\/).*\.py$|_test\.py$/i;
+const NODE_TEST_PATH_RE =
+  /(^|\/)(__tests__|tests?)(\/|$)|\.(test|spec)\.(ts|tsx|js|jsx|mjs|cjs)$/i;
+
+function isWorkspaceTestFile(filePath: string, language: 'python' | 'node'): boolean {
+  const norm = filePath.replace(/\\/g, '/');
+  if (language === 'node') {
+    return NODE_TEST_PATH_RE.test(norm) && /\.(ts|tsx|js|jsx|mjs|cjs)$/i.test(norm);
+  }
+  return PY_TEST_PATH_RE.test(norm);
+}
+
+/** 从工作区文件集解析生产模块名：顶层非 tests 目录 + 约定 src/main（按语言扫 .py 或 TS/JS）。 */
+function collectWorkspaceProductionModules(
+  files: ProjectFile[],
+  language: 'python' | 'node',
+): string[] {
+  const names = new Set<string>(language === 'node' ? ['src', 'app', 'lib', 'main'] : ['src', 'main']);
+  const prodExtRe = language === 'node' ? /\.(ts|tsx|js|jsx|mjs|cjs)$/i : /\.py$/i;
   for (const f of files) {
     const norm = f.path.replace(/\\/g, '/').replace(/^\.\//, '');
-    if (!/\.py$/i.test(norm) || /(^|\/)(test_|tests?\/)/i.test(norm)) {
+    if (!prodExtRe.test(norm) || /(^|\/)(test_|tests?\/|__tests__\/)/i.test(norm)) {
       continue;
     }
     const segs = norm.split('/').filter(Boolean);
@@ -60,7 +77,7 @@ function collectWorkspaceProductionModules(files: ProjectFile[]): string[] {
         names.add(top);
       }
     } else if (segs.length === 1) {
-      names.add(segs[0].replace(/\.py$/i, ''));
+      names.add(segs[0].replace(/\.(py|ts|tsx|js|jsx|mjs|cjs)$/i, ''));
     }
   }
   return [...names];
@@ -182,13 +199,18 @@ export async function runWorkspaceContractLint(ctx: WorkspaceLintContext): Promi
     warnings.push(...lintCrossFileKeyContract(files, canonicalKeys).warnings);
     // 生产模块名按工作区实际包目录解析（顶层非 tests 目录的 .py / main.py），供 test-quality
     // lint 用——避免确定性平台任务（非 T4 切片名）被误判为「未 import 生产模块」假绿。
-    const productionModules = collectWorkspaceProductionModules(files);
+    const language = resolveTestQualityLanguage(ctx.instance?.definition);
+    const productionModules = collectWorkspaceProductionModules(files, language);
     for (const f of files) {
-      if (/(^|\/)(test_|tests?\/).*\.py$|_test\.py$/i.test(f.path)) {
-        warnings.push(
-          ...testQualityIssuesToWarnings(f.path, lintTestQuality(f.content, { productionModules })),
-        );
+      if (!isWorkspaceTestFile(f.path, language)) {
+        continue;
       }
+      warnings.push(
+        ...testQualityIssuesToWarnings(
+          f.path,
+          lintTestQuality(f.content, { productionModules, language }),
+        ),
+      );
     }
     warnings.push(...lintSampleReaderHeaderContract(files));
     for (const f of files) {

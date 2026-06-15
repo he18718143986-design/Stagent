@@ -76,6 +76,7 @@ import {
   hardBehaviorSpecIssues,
   lintTestAgainstBehaviorSpec,
 } from '../commitment/BehaviorSpecLint';
+import { resolveTestQualityLanguage } from '../python-bootstrap/pythonStackDetect';
 
 /**
  * 解析当前任务的真实生产模块名供 test-quality lint 使用：
@@ -203,7 +204,8 @@ export const BUILTIN_POST_STAGE_GATES: QualityGate[] = [
       // 生产模块名按当前任务真实切片解析（decide modules[] SSOT ∪ 计划 TDD stage 语义 ∪ 约定
       // src/main），避免确定性平台任务（T6 models/store/...）被误判为「未 import 生产模块」假绿。
       const productionModules = resolveProductionModulesForTestQuality(ctx.instance);
-      const issues = lintTestQuality(code, { productionModules });
+      const language = resolveTestQualityLanguage(ctx.instance?.definition);
+      const issues = lintTestQuality(code, { productionModules, language });
       if (issues.length === 0) {
         return null;
       }

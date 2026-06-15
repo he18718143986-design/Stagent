@@ -21,6 +21,8 @@ export default defineConfig({
         resolve: {
           alias: {
             '@renderer': path.resolve(__dirname, 'src/renderer/src'),
+            '@stagent/friendly': path.resolve(__dirname, 'packages/stagent-core/src/friendly'),
+            '@stagent/plan-summary': path.resolve(__dirname, 'packages/stagent-core/src/WorkflowPlanSummary.ts'),
           },
         },
         test: {

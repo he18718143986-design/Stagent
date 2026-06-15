@@ -10,6 +10,7 @@ import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import type {
   BackendMessage,
   DeleteScope,
+  DecisionBoardPayload,
   FrontendMessage,
   PlanSummary,
   Question,
@@ -50,7 +51,7 @@ export interface StagentState {
   /** Path Router + taskType 判别摘要（确认页决策板） */
   taskTypeClassification?: TaskTypeClassificationInfo
   /** B-R2：确认页决策板（Charter 代答分类） */
-  decisionBoard?: { items: Array<Record<string, unknown>>; summary: { total: number; auto: number; needsReview: number } }
+  decisionBoard?: DecisionBoardPayload
   stageStatus: Record<string, StageStatus>
   streams: Record<string, string>
   outputs: Record<string, Record<string, unknown>>

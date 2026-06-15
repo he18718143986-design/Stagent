@@ -132,6 +132,32 @@ test('verifyRule20：horizontal TDD 计划产出 horizontal-tdd warning', () => 
   ]);
   const res = verifyRule20(w);
   assert.ok(res.warnings.some((x) => x.type === 'horizontal-tdd'));
+  assert.equal(res.passed, true);
+});
+
+test('verifyRule20：horizontalTddFail=true → horizontal-tdd 升 violation 并阻断（ADR-0009）', () => {
+  const w = wf([
+    s({ id: 'stage_test_write_a' }),
+    s({ id: 'stage_test_write_b' }),
+    s({ id: 'stage_impl_a' }),
+    s({ id: 'stage_impl_b' }),
+  ]);
+  const res = verifyRule20(w, { horizontalTddFail: true });
+  assert.ok(res.violations.some((x) => x.type === 'horizontal-tdd'));
+  assert.ok(!res.warnings.some((x) => x.type === 'horizontal-tdd'));
+  assert.equal(res.passed, false);
+});
+
+test('verifyRule20：horizontalTddFail=true 但计划非 horizontal → 不阻断', () => {
+  const w = wf([
+    s({ id: 'stage_test_write_a' }),
+    s({ id: 'stage_impl_a' }),
+    s({ id: 'stage_test_write_b' }),
+    s({ id: 'stage_impl_b' }),
+  ]);
+  const res = verifyRule20(w, { horizontalTddFail: true });
+  assert.ok(!res.violations.some((x) => x.type === 'horizontal-tdd'));
+  assert.equal(res.passed, true);
 });
 
 test('verifyRule20(debug)：假设/修复排在复现之前 → debug-feedback-loop-not-first warning', () => {

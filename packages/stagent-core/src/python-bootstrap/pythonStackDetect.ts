@@ -65,6 +65,14 @@ export function isPythonOnlyWorkflow(wf: WorkflowDefinition): boolean {
   return allPyImpls;
 }
 
+/** post test_write / workspace lint 选 test-quality adapter 的语言（ADR-0005 PR-3）。 */
+export function resolveTestQualityLanguage(wf: WorkflowDefinition | undefined): 'python' | 'node' {
+  if (wf && workflowSignalsNodeJsStack(wf)) {
+    return 'node';
+  }
+  return 'python';
+}
+
 export function planDeclaresConftest(wf: WorkflowDefinition): boolean {
   for (const stage of wf.stages ?? []) {
     const out = writeOutputToFileOf(stage)?.replace(/\\/g, '/').toLowerCase() ?? '';

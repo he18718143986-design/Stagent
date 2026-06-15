@@ -18,12 +18,12 @@ export function estimateTokensFromChars(charCount) {
 }
 
 export function createLlmUsageMeter() {
-  /** @type {Array<{model: string, promptTokens: number, completionTokens: number, estimated: boolean}>} */
+  /** @type {Array<{model: string, role?: string, promptTokens: number, completionTokens: number, estimated: boolean}>} */
   const calls = []
 
   return {
     /**
-     * @param {{ model: string, promptTokens: number, completionTokens: number, estimated: boolean }} call
+     * @param {{ model: string, role?: string, promptTokens: number, completionTokens: number, estimated: boolean }} call
      */
     record(call) {
       calls.push(call)
@@ -37,11 +37,17 @@ export function createLlmUsageMeter() {
       const completionTokens = calls.reduce((s, c) => s + c.completionTokens, 0)
       const estimatedCalls = calls.filter((c) => c.estimated).length
       const byModel = {}
+      const byRole = {}
       for (const c of calls) {
         const m = (byModel[c.model] ??= { calls: 0, promptTokens: 0, completionTokens: 0 })
         m.calls += 1
         m.promptTokens += c.promptTokens
         m.completionTokens += c.completionTokens
+        const role = c.role ?? 'global'
+        const r = (byRole[role] ??= { calls: 0, promptTokens: 0, completionTokens: 0 })
+        r.calls += 1
+        r.promptTokens += c.promptTokens
+        r.completionTokens += c.completionTokens
       }
       const summary = {
         calls: calls.length,
@@ -50,6 +56,7 @@ export function createLlmUsageMeter() {
         totalTokens: promptTokens + completionTokens,
         estimatedCalls,
         byModel,
+        byRole,
       }
       const inPrice = Number(process.env.LLM_PRICE_INPUT_PER_MTOK)
       const outPrice = Number(process.env.LLM_PRICE_OUTPUT_PER_MTOK)
@@ -67,5 +74,11 @@ export function formatUsageLine(summary) {
   if (!summary) return ''
   const est = summary.estimatedCalls > 0 ? ` (${summary.estimatedCalls} est.)` : ''
   const cost = summary.estimatedCost !== undefined ? `; cost≈${summary.estimatedCost}` : ''
-  return `llm: ${summary.calls} calls, in ${summary.promptTokens} / out ${summary.completionTokens} tok${est}${cost}`
+  const roleBits =
+    summary.byRole && Object.keys(summary.byRole).length > 1
+      ? `; byRole ${Object.entries(summary.byRole)
+          .map(([role, r]) => `${role}:${r.totalTokens ?? r.promptTokens + r.completionTokens}`)
+          .join(', ')}`
+      : ''
+  return `llm: ${summary.calls} calls, in ${summary.promptTokens} / out ${summary.completionTokens} tok${est}${cost}${roleBits}`
 }

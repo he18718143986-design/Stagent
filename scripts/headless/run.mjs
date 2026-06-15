@@ -23,9 +23,12 @@
  * Env:
  *   HEADLESS_VERBOSE=1          逐步 phase/backend 日志打到 stderr
  *   LLM_BASE_URL                支持官网 https://api.deepseek.com（自动补 /v1）
- *   LLM_MODEL_TEST_WRITE        可选：test_write 阶段专属模型（异族出题人；不设=单模型）
- *   LLM_BASE_URL_TEST_WRITE     可选：test_write 模型 baseUrl（缺省回退 LLM_BASE_URL）
- *   LLM_API_KEY_TEST_WRITE      可选：test_write 模型 API key（缺省回退主 key）
+ *   LLM_MODEL                     全局默认模型（叶子 impl/fix 等）
+ *   LLM_MODEL_DECISION            可选：decide/架构决策阶段专属模型（ADR-0006）
+ *   LLM_MODEL_TEST_WRITE          可选：test_write 阶段专属模型（异族出题人；仅路由 test-write）
+ *   LLM_MODEL_INTEGRATION         可选：main 集成切片专属模型
+ *   LLM_MODEL_<ROLE>_BASE_URL     各角色可选 baseUrl（test-write 亦接受 LLM_BASE_URL_TEST_WRITE）
+ *   LLM_MODEL_<ROLE>_API_KEY      各角色可选 API key（test-write 亦接受 LLM_API_KEY_TEST_WRITE）
  */
 import { spawnSync } from 'node:child_process'
 import * as fs from 'node:fs'
@@ -52,7 +55,6 @@ import {
   resolveLiveTiers,
 } from './lib/live-tasks.mjs'
 import { MOCK_MODEL_ID, startMockLlmServer } from './lib/mock-llm-server.mjs'
-import { normalizeLlmBaseUrl } from './lib/normalize-base-url.mjs'
 import { runCharterSuggestSmoke } from './lib/charter-suggest-smoke.mjs'
 import { runCharterAutoEscalationSmoke } from './lib/charter-auto-escalation-smoke.mjs'
 import { RunTrace } from './lib/trace.mjs'
@@ -60,6 +62,7 @@ import { assertStrictMvpPass } from './lib/mvp-acceptance.mjs'
 import { checkDemoDelivery } from './lib/demo-delivery-acceptance.mjs'
 import { promoteIterToT4Root } from './lib/promote-workspace.mjs'
 import { createLlmUsageMeter, formatUsageLine } from './lib/llm-usage.mjs'
+import { buildLlmConfig, buildRoleModelRouting } from './lib/llm-config.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(__dirname, '../..')
@@ -462,43 +465,8 @@ function tempBaseFromWorkspace(ws) {
 /**
  * @param {{ live: boolean, keep: boolean, workspace?: string, mockUrl?: string, mockModel?: string }} ctx
  */
-function buildLlmConfig(ctx) {
-  if (ctx.live) {
-    const apiKey = (process.env.DEEPSEEK_API_KEY ?? process.env.LLM_API_KEY ?? '').trim()
-    if (!apiKey) {
-      throw new Error('live mode requires DEEPSEEK_API_KEY or LLM_API_KEY')
-    }
-    const baseUrl = normalizeLlmBaseUrl(process.env.LLM_BASE_URL ?? 'https://api.deepseek.com')
-    const model = (process.env.LLM_MODEL ?? 'deepseek-chat').trim()
-    // 异族出题人：LLM_MODEL_TEST_WRITE 设了即为 test_write 阶段启用专属模型；
-    // baseUrl / apiKey 缺省回退主配置。不设 = 单模型，行为与历史一致。
-    const testWriteModel = (process.env.LLM_MODEL_TEST_WRITE ?? '').trim()
-    const testWrite = testWriteModel
-      ? {
-          model: testWriteModel,
-          baseUrl: process.env.LLM_BASE_URL_TEST_WRITE?.trim()
-            ? normalizeLlmBaseUrl(process.env.LLM_BASE_URL_TEST_WRITE)
-            : baseUrl,
-          apiKey: (process.env.LLM_API_KEY_TEST_WRITE ?? '').trim() || apiKey,
-        }
-      : undefined
-    return {
-      apiKey,
-      baseUrl,
-      model,
-      maxOutputTokens: LIVE_T4_MAX_OUTPUT_TOKENS,
-      ...(testWrite ? { testWrite } : {}),
-    }
-  }
-  if (!ctx.mockUrl) {
-    throw new Error('mockUrl required for mock mode')
-  }
-  return {
-    apiKey: 'mock-key',
-    baseUrl: `${ctx.mockUrl}/v1`,
-    model: ctx.mockModel ?? MOCK_MODEL_ID,
-    maxOutputTokens: 4096,
-  }
+function resolveLlmConfig(ctx) {
+  return buildLlmConfig(ctx, process.env, { liveMaxOutputTokens: LIVE_T4_MAX_OUTPUT_TOKENS })
 }
 
 async function runConstruct(ctx) {
@@ -541,7 +509,7 @@ async function runPolish(ctx) {
   const ws = makeWorkspace(ctx)
   const globalDir = path.join(path.dirname(ws), 'global')
   const sent = []
-  const llm = buildLlmConfig(ctx)
+  const llm = resolveLlmConfig(ctx)
   const usageMeter = createLlmUsageMeter()
   const platform = createHeadlessPlatform({
     workspace: ws,
@@ -577,7 +545,7 @@ async function runGenerate(ctx) {
   const ws = makeWorkspace(ctx)
   const globalDir = path.join(path.dirname(ws), 'global')
   const sent = []
-  const llm = buildLlmConfig(ctx)
+  const llm = resolveLlmConfig(ctx)
   const usageMeter = createLlmUsageMeter()
   const platform = createHeadlessPlatform({
     workspace: ws,
@@ -640,32 +608,17 @@ async function runFullJourney(ctx, spec) {
       copyCharterToWorkspace(ws, REPO_ROOT)
     }
     const globalDir = path.join(path.dirname(ws), 'global')
-    const llm = buildLlmConfig(ctx)
+    const llm = resolveLlmConfig(ctx)
 
     trace.setPhase('platform')
     const liveOverrides = ctx.live ? buildLiveConfigOverrides(spec) : undefined
-    // 异族出题人：第二模型注册 + llmModelByRole 配置注入（无 testWrite 时两者均为空，与历史等价）
-    // 异族出题人 + 集成切片增强（T4 Run #65）：test_write 用出题人(pro)；
-    // main 集成切片 impl/fix/replan-fix 同样路由到 pro（#62/#64 收敛墙，flash 在多模块编排不收敛）。
-    // 叶子切片 impl/fix 仍用全局 flash，保持异族非对称。
-    // decision 角色也路由到出题人(pro)：decide 阶段产出结构化决策契约（I-17 四节 +
-    // behaviorSpec + configContent + modules[]），flash 偶发漏节/漏 spec/漏 config（#66A/#70/
-    // run8 同源），是 decide 类失败的共因；pro 在结构化决策上稳定得多。decide 阶段少（全局
-    // 架构 + 各切片），成本可控。叶子 impl/fix 仍用全局 flash，保持异族非对称。
-    const roleOverrides = llm.testWrite
-      ? {
-          llmModelByRole: {
-            decision: `direct:${llm.testWrite.model}`,
-            'test-write': `direct:${llm.testWrite.model}`,
-            integration: `direct:${llm.testWrite.model}`,
-          },
-        }
-      : undefined
+    // ADR-0006：per-role 模型各自独立 env；未设的角色回退全局 LLM_MODEL。
+    const { roleOverrides, llmExtraModels, roleUsageLabels } = buildRoleModelRouting(llm)
     const platform = createHeadlessPlatform({
       workspace: ws,
       globalDir,
       llm,
-      llmExtraModels: llm.testWrite ? [llm.testWrite] : undefined,
+      llmExtraModels,
       usageMeter,
       configOverrides:
         liveOverrides || roleOverrides ? { ...(liveOverrides ?? {}), ...(roleOverrides ?? {}) } : undefined,
@@ -678,7 +631,8 @@ async function runFullJourney(ctx, spec) {
       mode: ctx.live ? 'live' : 'mock',
       model: llm.model,
       baseUrl: llm.baseUrl,
-      testWriteModel: llm.testWrite?.model,
+      roleModels: llm.roleModels,
+      roleUsageLabels,
       llmMaxOutputTokens: platform.config.get('llmMaxOutputTokens'),
       planRequireCompleteness: platform.config.get('plan.requireCompleteness'),
       liveOverrides,
@@ -837,6 +791,9 @@ async function runFullJourney(ctx, spec) {
         requireTraceability: true,
         moduleDirs: spec.mvp?.moduleDirs,
         traceabilityRules: spec.mvp?.traceability,
+        fixtures: spec.mvp?.fixtures,
+        smoke: spec.mvp?.smoke,
+        architectureScan: spec.mvp?.architectureScan,
       })
       trace.log('strict_mvp_pass', {
         testFiles: strictMvp.testFiles,
@@ -919,7 +876,7 @@ async function runLiveTier(ctx, tierNum) {
 
 async function runCharterSuggest(ctx) {
   if (ctx.live) {
-    return runCharterSuggestSmoke({ ...ctx, liveLlm: buildLlmConfig(ctx) })
+    return runCharterSuggestSmoke({ ...ctx, liveLlm: resolveLlmConfig(ctx) })
   }
   if (!ctx.mockUrl) {
     throw new Error('charter-suggest smoke requires mock LLM or --live')
@@ -930,7 +887,7 @@ async function runCharterSuggest(ctx) {
 async function runCharterAuto(ctx) {
   if (ctx.live) {
     const { runCharterAutoEscalationSmoke: runAuto } = await import('./lib/charter-auto-escalation-smoke.mjs')
-    return runAuto({ ...ctx, liveLlm: buildLlmConfig(ctx) })
+    return runAuto({ ...ctx, liveLlm: resolveLlmConfig(ctx) })
   }
   if (!ctx.mockUrl) {
     throw new Error('charter-auto smoke requires mock LLM or --live')

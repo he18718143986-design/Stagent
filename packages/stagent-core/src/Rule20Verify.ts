@@ -24,7 +24,14 @@ export type ViolationType =
   | 'missing-decisionRecord-source'
   | 'missing-constraint-prompt'
   | 'test-run-must-use-code-runner'
-  | 'test-run-imports-missing-artifact';
+  | 'test-run-imports-missing-artifact'
+  | 'horizontal-tdd';
+
+/** ADR-0009：verifyRule20 可选门禁开关。 */
+export interface VerifyRule20GateOptions {
+  /** 为 true 时把 horizontal-tdd 反模式从 warning 升为 violation（阻断生成）。默认 false（保持 warning）。 */
+  horizontalTddFail?: boolean;
+}
 export type WarningType =
   | 'exposeAssumptions-exemption'
   | 'model-tier-downgrade'
@@ -182,7 +189,10 @@ function verifyPrototypeImplFileReadFollowup(workflow: WorkflowDefinition, warni
   }
 }
 
-export function verifyRule20(workflow: WorkflowDefinition): VerifyResult {
+export function verifyRule20(
+  workflow: WorkflowDefinition,
+  options?: VerifyRule20GateOptions,
+): VerifyResult {
   const violations: VerifyIssue[] = [];
   const warnings: VerifyIssue[] = [];
   // S3：skill-native（纯规划/对齐）工作流不受 impl 形状规则约束——Rule20 仅作后置 verifier，
@@ -543,14 +553,24 @@ export function verifyRule20(workflow: WorkflowDefinition): VerifyResult {
     }
   }
 
-  // M22.2：horizontal TDD 反模式（全部测试在前、全部实现在后），与「一切片一循环」相悖（warning-only）
+  // M22.2 / ADR-0009：horizontal TDD 反模式（全部测试在前、全部实现在后），与「一切片一循环」相悖。
+  // 默认 warning；options.horizontalTddFail=true（T4+ 多切片场景）时升为 violation 阻断生成。
   if (isHorizontalTddPlan(workflow.stages ?? [])) {
-    warnings.push({
-      type: 'horizontal-tdd',
-      stageId: 'workflow',
-      message:
-        '检测到 horizontal TDD：所有测试阶段排在所有实现阶段之前。建议改为「一切片一循环」（每个切片先红再绿）以缩短反馈回路（warning）。',
-    });
+    if (options?.horizontalTddFail) {
+      violations.push({
+        type: 'horizontal-tdd',
+        stageId: 'workflow',
+        message:
+          '检测到 horizontal TDD：所有测试阶段排在所有实现阶段之前。多切片任务必须改为「一切片一循环」（每个切片先红再绿）以缩短反馈回路并避免「想象的测试」（ADR-0009 / tdd）。',
+      });
+    } else {
+      warnings.push({
+        type: 'horizontal-tdd',
+        stageId: 'workflow',
+        message:
+          '检测到 horizontal TDD：所有测试阶段排在所有实现阶段之前。建议改为「一切片一循环」（每个切片先红再绿）以缩短反馈回路（warning）。',
+      });
+    }
   }
 
   return { passed: violations.length === 0, violations, warnings };

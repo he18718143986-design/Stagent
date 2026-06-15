@@ -59,6 +59,11 @@ export function readToIssuesHorizontalLayeringFail(cfg?: WorkspaceConfiguration)
   return readConfigBooleanStrictTrue(cfg, 'toIssues.horizontalLayeringFail');
 }
 
+/** ADR-0009：horizontal TDD 反模式升 hard（多切片必须一切片一循环）；默认 false（保持 warning） */
+export function readHorizontalTddFail(cfg?: WorkspaceConfiguration): boolean {
+  return readConfigBooleanStrictTrue(cfg, 'tdd.horizontalTddFail');
+}
+
 /** M18.2：静态分析管道接入热路径；默认 false（灰度） */
 export function readStaticAnalysisEnabled(cfg?: WorkspaceConfiguration): boolean {
   return readConfigBooleanStrictTrue(cfg, 'staticAnalysis.enabled');

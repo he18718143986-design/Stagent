@@ -8,6 +8,8 @@ import type { WorkflowDefinition } from '../WorkflowDefinition';
 /** 生成后门禁设置（由引擎从 StagentSettings 读取后注入，便于 orchestrator 单测）。 */
 export interface GenerationGateSettings {
   toIssuesHorizontalLayeringFail: boolean;
+  /** ADR-0009：horizontal TDD 反模式升 hard（默认 false=warning）。 */
+  horizontalTddFail?: boolean;
   debugFeedbackLoopMode: 'off' | 'warn' | 'hard';
   planCompletenessEnabled: boolean;
   planStructuralRepairMode: 'off' | 'auto';

@@ -9,6 +9,12 @@
  * （`contract:test-*` 前缀，与既有契约告警同通道显示）。
  */
 
+import type { TestQualityFindingKind } from './language-adapter/LanguageTestQualityAdapter';
+import {
+  createNodeTestQualityAdapter,
+  DEFAULT_NODE_PRODUCTION_MODULES,
+} from './language-adapter/node/nodeTestQualityAdapter';
+
 export type TestQualityWarningType =
   | 'test-no-assertion'
   | 'test-tautological-assertion'
@@ -18,7 +24,8 @@ export type TestQualityWarningType =
   | 'test-mocks-internal-module'
   | 'test-sys-modules-hijack'
   | 'test-brittle-assertion'
-  | 'test-self-shadowed-call';
+  | 'test-self-shadowed-call'
+  | 'test-collaborator-mock-only';
 
 export interface TestQualityIssue {
   type: TestQualityWarningType;
@@ -250,6 +257,30 @@ export function lintInternalModuleMocks(
   return issues;
 }
 
+// 协作者 mock 假绿（ADR-0008 决策2）：创建 MagicMock/Mock 协作者 + 仅断言调用形状
+// （assert_called* / call_count / call_args），未验证真实行为。warn-only（不 hard）。
+const MOCK_CREATE_RE = /\b(?:MagicMock|AsyncMock|NonCallableMock|Mock)\s*\(/;
+const CALL_SHAPE_ASSERT_RE =
+  /\.assert_(?:called(?:_once)?(?:_with)?|any_call|not_called|has_calls)\b|\.call_count\b|\.call_args(?:_list)?\b/;
+
+/** 协作者 mock 假绿：mock 掉协作者只断言 call shape → warn（建议补真实集成测试）。 */
+export function lintCollaboratorMockOnly(testCode: string): TestQualityIssue[] {
+  const code = testCode ?? '';
+  if (!code.trim() || !looksLikeTest(code)) {
+    return [];
+  }
+  if (MOCK_CREATE_RE.test(code) && CALL_SHAPE_ASSERT_RE.test(code)) {
+    return [
+      {
+        type: 'test-collaborator-mock-only',
+        detail:
+          '把协作者替换为 Mock/MagicMock 且仅断言调用形状（assert_called*/call_count），未验证真实行为；mock 会掩盖与真实协作者的集成 bug，建议补真实集成/冒烟测试',
+      },
+    ];
+  }
+  return [];
+}
+
 function hasAnyAssertion(code: string): boolean {
   return code.split(/\r?\n/).some((l) => ASSERT_LINE.test(l));
 }
@@ -261,6 +292,50 @@ function looksLikeTest(code: string): boolean {
 export interface LintTestQualityOptions {
   /** 当前任务的真实生产模块名（切片语义）；缺省回退 T4 默认表。 */
   productionModules?: readonly string[];
+  /**
+   * 测试语言（ADR-0005）。缺省 `python`：走本文件既有硬编码逻辑（行为零变化）。
+   * `node`：委托 `nodeTestQualityAdapter` 探测 TS/JS 坏味，再经下方 policy 映射为同一套 issue 分级。
+   */
+  language?: 'python' | 'node';
+}
+
+/**
+ * 语言无关的坏味分级 policy（kind → 对外 type + 是否 hard）。
+ * 与本文件 python 路径逐条一致，作为多语言 adapter 的单一真源（ADR-0005 决策 2）。
+ */
+const FINDING_POLICY: Partial<
+  Record<TestQualityFindingKind, { type: TestQualityWarningType; hard: boolean }>
+> = {
+  'no-assertion': { type: 'test-no-assertion', hard: true },
+  'tautological-assertion': { type: 'test-tautological-assertion', hard: true },
+  'existence-only': { type: 'test-tests-implementation', hard: true },
+  'implementation-detail': { type: 'test-tests-implementation', hard: false },
+  'missing-production-import': { type: 'test-no-production-import', hard: false },
+  'inline-impl-double': { type: 'test-inline-impl-double', hard: false },
+  'internal-module-mock': { type: 'test-mocks-internal-module', hard: false },
+  'module-system-hijack': { type: 'test-sys-modules-hijack', hard: true },
+  'brittle-assertion': { type: 'test-brittle-assertion', hard: true },
+  'collaborator-mock-only': { type: 'test-collaborator-mock-only', hard: false },
+};
+
+function lintTestQualityNode(
+  testCode: string,
+  productionModules?: readonly string[],
+): TestQualityIssue[] {
+  const adapter = createNodeTestQualityAdapter(productionModules ?? DEFAULT_NODE_PRODUCTION_MODULES);
+  const issues: TestQualityIssue[] = [];
+  for (const f of adapter.detectFindings(testCode)) {
+    const policy = FINDING_POLICY[f.kind];
+    if (!policy) {
+      continue; // 未来新增、尚未纳入 policy 的 kind：跳过而非崩溃（前向兼容）
+    }
+    issues.push(
+      policy.hard
+        ? { type: policy.type, detail: f.detail, hard: true }
+        : { type: policy.type, detail: f.detail },
+    );
+  }
+  return issues;
 }
 
 /** 对单段测试代码做质量 lint。 */
@@ -273,7 +348,10 @@ export function lintTestQuality(
   if (!code.trim()) {
     return issues;
   }
-  const { productionModules } = options;
+  const { productionModules, language } = options;
+  if (language === 'node') {
+    return lintTestQualityNode(code, productionModules);
+  }
 
   if (looksLikeTest(code) && !hasAnyAssertion(code)) {
     issues.push({
@@ -313,6 +391,7 @@ export function lintTestQuality(
   issues.push(...lintSysModulesHijack(code, productionModules));
   issues.push(...lintBrittleAssertions(code));
   issues.push(...lintSelfShadowedCall(code));
+  issues.push(...lintCollaboratorMockOnly(code));
 
   return issues;
 }

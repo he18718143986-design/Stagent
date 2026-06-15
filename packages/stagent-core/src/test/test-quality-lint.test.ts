@@ -6,6 +6,40 @@ import {
   testQualityIssuesToWarnings,
 } from '../TestQualityLint';
 
+test('PR-2 language=node：无断言 TS 测试 → test-no-assertion (hard)', () => {
+  const code = `import { it, expect } from 'vitest'
+it('does x', () => { const r = add(1, 2) })`;
+  const issues = lintTestQuality(code, { language: 'node' });
+  const noAssert = issues.find((i) => i.type === 'test-no-assertion');
+  assert.ok(noAssert);
+  assert.equal(noAssert.hard, true);
+});
+
+test('PR-2 language=node：内联 impl + 无生产 import → no-production-import + inline-double (warn)', () => {
+  const code = `import { it, expect } from 'vitest'
+class TaskStore { add() { return 1 } }
+it('adds', () => { expect(new TaskStore().add()).toBe(1) })`;
+  const issues = lintTestQuality(code, { language: 'node', productionModules: ['store'] });
+  assert.ok(issues.some((i) => i.type === 'test-no-production-import'));
+  assert.ok(issues.some((i) => i.type === 'test-inline-impl-double'));
+  // 这两类为 warn（非 hard）
+  assert.ok(!hardTestQualityIssues(issues).some((i) => i.type === 'test-no-production-import'));
+});
+
+test('PR-2 language=node：vi.mock 整体替身被测模块 → test-sys-modules-hijack (hard)', () => {
+  const code = `import { vi } from 'vitest'
+vi.doMock('../store', () => ({ TaskStore: class {} }))
+it('t', () => { expect(1).toBe(2) })`;
+  const issues = lintTestQuality(code, { language: 'node', productionModules: ['store'] });
+  assert.ok(hardTestQualityIssues(issues).some((i) => i.type === 'test-sys-modules-hijack'));
+});
+
+test('PR-2 默认（python）路径行为不变：TS 语法不会被 python 误报', () => {
+  // 不传 language → python 路径；纯 TS impl（非 python test）应无 issue（回归保护）。
+  const code = `export function add(a: number, b: number): number { return a + b }`;
+  assert.deepEqual(lintTestQuality(code), []);
+});
+
 test('无断言的测试函数 → test-no-assertion', () => {
   const code = `def test_runs():
     result = process(data)

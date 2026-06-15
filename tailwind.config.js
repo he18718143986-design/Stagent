@@ -6,6 +6,13 @@ export default {
   ],
   theme: {
     extend: {
+      colors: {
+        stagent: {
+          cream: '#FFF8F0',
+          orange: '#F97316',
+          success: '#16A34A',
+        },
+      },
       animation: {
         'pulse-dot': 'pulseDot 1.4s infinite ease-in-out',
         'fade-in': 'fadeIn 0.15s ease-in-out',

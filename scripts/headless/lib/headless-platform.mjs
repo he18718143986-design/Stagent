@@ -18,7 +18,7 @@ const FAST_CONFIG_DEFAULTS = {
  *   workspace: string,
  *   globalDir: string,
  *   llm?: { apiKey: string, baseUrl: string, model: string, maxOutputTokens?: number },
- *   llmExtraModels?: Array<{ apiKey?: string, baseUrl?: string, model: string, maxOutputTokens?: number }>,
+ *   llmExtraModels?: Array<{ apiKey?: string, baseUrl?: string, model: string, maxOutputTokens?: number, usageRoles?: string[] }>,
  *   usageMeter?: { record(call: object): void },
  *   configOverrides?: Record<string, unknown>,
  *   onMessage?: (msg: unknown) => void,
@@ -47,6 +47,7 @@ export function createHeadlessPlatform(opts) {
         model: opts.llm.model,
         maxOutputTokens: opts.llm.maxOutputTokens ?? 4096,
         usageMeter: opts.usageMeter,
+        usageRole: 'global',
       }),
     )
   }
@@ -58,6 +59,7 @@ export function createHeadlessPlatform(opts) {
         model: extra.model,
         maxOutputTokens: extra.maxOutputTokens ?? opts.llm?.maxOutputTokens ?? 4096,
         usageMeter: opts.usageMeter,
+        usageRole: extra.usageRoles?.join('+') ?? 'extra',
       }),
     )
   }

@@ -96,3 +96,15 @@ export {
   decisionRejectionKindFromError,
 } from './hitl/DecisionRejection';
 export type { DecisionRejectionKind } from './hitl/DecisionRejection';
+
+/* 渲染层友好文案（Electron / VS Code webview 共用） */
+export { humanizeJargon } from './friendly/TranslationGlossary';
+export {
+  plainTaskTypeLabel,
+  plainProvenanceLabel,
+  plainDecisionKindLabel,
+  plainToolLabel,
+  plainDecisionBoardSummary,
+} from './friendly/toPlainLanguage';
+export type { DecisionBoardPayload, DecisionBoardItem } from './decision-frontload/DecisionFrontloadTypes';
+export { formatPlanSummaryLines } from './WorkflowPlanSummary';

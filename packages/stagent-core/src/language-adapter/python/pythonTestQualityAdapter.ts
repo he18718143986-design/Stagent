@@ -134,6 +134,26 @@ function detectModuleSystemHijack(code: string): TestQualityFinding[] {
   return [];
 }
 
+const MOCK_CREATE_RE = /\b(?:MagicMock|AsyncMock|NonCallableMock|Mock)\s*\(/;
+const CALL_SHAPE_ASSERT_RE =
+  /\.assert_(?:called(?:_once)?(?:_with)?|any_call|not_called|has_calls)\b|\.call_count\b|\.call_args(?:_list)?\b/;
+
+function detectCollaboratorMockOnly(code: string): TestQualityFinding[] {
+  if (!code.trim() || !looksLikeTest(code)) {
+    return [];
+  }
+  if (MOCK_CREATE_RE.test(code) && CALL_SHAPE_ASSERT_RE.test(code)) {
+    return [
+      {
+        kind: 'collaborator-mock-only',
+        detail:
+          '把协作者替换为 Mock/MagicMock 且仅断言调用形状（assert_called*/call_count），未验证真实行为；建议补真实集成测试',
+      },
+    ];
+  }
+  return [];
+}
+
 function detectBrittleAssertions(code: string): TestQualityFinding[] {
   if (!code.trim() || !looksLikeTest(code)) {
     return [];
@@ -196,6 +216,7 @@ function detectFindings(testCode: string): TestQualityFinding[] {
   findings.push(...detectInternalModuleMocks(code));
   findings.push(...detectModuleSystemHijack(code));
   findings.push(...detectBrittleAssertions(code));
+  findings.push(...detectCollaboratorMockOnly(code));
 
   return findings;
 }

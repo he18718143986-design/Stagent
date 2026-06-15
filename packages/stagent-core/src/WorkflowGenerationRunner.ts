@@ -151,7 +151,9 @@ export async function runWorkflowGeneration(
       ? await generateWorkflowFromSkeleton(host, ctx, params)
       : await runLlmParseRetryLoop(host, ctx, params);
     if (!useSkeletonCompiler && host.isRuntimeRule20VerifyEnabled()) {
-      const verifyResult = verifyRule20(parsed);
+      const verifyResult = verifyRule20(parsed, {
+        horizontalTddFail: host.readGenerationGates().horizontalTddFail,
+      });
       if (shouldBlockGenerateOnRule20Violations(verifyResult, true)) {
         routeBlockedValidationOutcome(host, panel, {
           kind: 'rule20-blocked',
