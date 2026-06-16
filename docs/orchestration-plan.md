@@ -36,7 +36,8 @@
 | 1d | **残留 bug 定向修 + 测试生成 prompt 加固**（快赢） | P0 | 方案 A（重 live） | `cursor/t6-residual-fixes-dac2` | ✅ **达成**（PR #22）：(a) 协作者 import 来源纪律 (b) status 透传 + smoke status 保真断言 (c) test_main tmp 隔离 (d) materialize_stub_main 引擎修。**T6 strict-pass 0/3 → 有效 2/4（~50%），两次均产物真实运行 + status 语义核验**。核心 1059/9 零新增、headless 30/30、vitest 240。剩余=生成方差 + ① | #22 |
 | 2 | per-role 模型路由 env 解耦（ADR-0006） | — | — | — | ✅ **已完成（无需做）** | 已在主干 |
 | 3a | best-of-N **选择策略纯函数核**（无 token） | P1 | 方案 B | `cursor/best-of-n-selection-core-3713` | ✅ **完成（待合并）** PR #23：`selectBestCandidate`（按 Strict QA 择优，纯函数永不抛）；新测 14/14、核心 9 零新增、vitest 243 | #23 |
-| 3b | best-of-N **执行器接线 + T6 验证**（难切片跑 N 次采样 → `selectBestCandidate` 择优；压方差到稳定 strict-pass） | P1 | 方案 A（重 live，**N× token**，余额已恢复） | 待启动（基于 #23 合并后 / 其分支） | 待启动 | — |
+| 3b | best-of-N **执行器接线 + T6 验证** | P1 | 方案 A（重 live） | `cursor/best-of-n-executor-wiring-dac2` | ⚠️ **接线完成但负面结果**（PR #24，ADR-0010）：接线正确/安全/默认关/单测过/live 生效；但**未提升 T6**（1/5 vs 1d 的 2/5，在方差内）且 **~3× 成本**。根因：静态 post-stage 评分**看不到 test_run 结果**（残留=test_run 红）+ best-of-N 未覆盖 decide。**默认保持关**。升级路径见下 A/B | #24 |
+| 1e | **decide 契约欠声明修复**（3b 新发现，确定性 bug）：statemachine 漏声明导出 → impl 正确导出反被 **export-extra 门**拦。1b/1c 式定向契约修，**便宜高杠杆** | P0 | 方案 A（重 live） | 待启动（建议 resume dac2） | 待启动 | — |
 | 4 | 对抗式审查（异族/更强模型独立挑错回喂；**加分项，不替代确定性门**） | P2 | 方案 A | `cursor/adversarial-review-3713` | 排后（依赖 #1/#3） | — |
 
 > 优先级依据见 `docs/live-findings-2026-06-15.md` 与 ADR-0006/0007/0008/0009：**门的强度比模型档位更决定产物质量**；无外部验证器的自我批判会"假性收敛"（业界自我纠正研究一致结论），故评审循环必须绑定可执行验证器。
@@ -56,7 +57,14 @@
 - **生成方差**（run#2 test_run 经 fix 链仍红、blockDeliveryOnTestFailure 正确拦；run 间生成不稳）→ **子任务 3 best-of-N**（系统解，对症方差）。
 - **① decide 内容 lint I-17/I-18**（run#3）→ 独立 decide 内容完整性轨。
 
-> ✅ **API 余额已恢复**（2026-06-15 晚）：live/方案 A 工作可继续。best-of-N 选择核（3a）已无 token 完成（PR #23）；下一步 3b 执行器接线 + T6 验证（方案 A，N× token）。
+> ✅ **API 余额已恢复**。best-of-N 选择核（3a，PR #23）+ 执行器接线（3b，PR #24）均完成。
+
+**3b 后（2026-06-16）— best-of-N 负面结果 + T6 残留拆解**：best-of-N 当前形态无收益（默认关）。T6 strict-pass（~40-50% 单次）残留分三类：
+- **(i) test_run 红方差**（run#3/#4）：静态评分不含 test 执行 → best-of-N 选「静态最优」≠「test 真过」。系统解 = **best-of-N 升级 A：逐候选 test_run/smoke 评分**（重，逐候选 venv 隔离，更贵）。
+- **(ii) decide 内容 lint I-17/I-18**（变异）：best-of-N 升级 B（decide 角色按内容/契约评分）或 ① 定向 prompt 加固。
+- **(iii) decide 契约欠声明**（statemachine 漏声明 → impl 被 export-extra 误拦）：**确定性 bug → 子任务 1e**（1b/1c 式定向修，便宜高杠杆，最该先做）。
+
+> **成本/收益诚实判断**：核心目标"拆解→真实可交付"对确定性 T6 **已基本达成**（~50% 单次、真实+status 核验）。从 ~50% 推到"**稳定** strict-pass"需 best-of-N 升级 A（**昂贵**，逐候选 test_run）。建议**先做便宜的 1e（确定性 bug）→ 复测**，再决定是否值得为剩余方差投 A。
 
 ---
 
