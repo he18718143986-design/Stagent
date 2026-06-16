@@ -11,6 +11,7 @@ import {
 } from '../commitment/behaviorSpec';
 import {
   buildCrossModulePatchExportsPromptSuffix,
+  buildDeclaredPythonModulesImportSuffix,
   buildSliceContractExportsPromptSuffix,
   resolveSliceContractExports,
 } from '../commitment/sliceContractExports';
@@ -120,6 +121,13 @@ export async function invokeLlmTextForStage(
       }
     }
     if (isTestWriteStageId(stage.id)) {
+      const declaredModsSuffix = buildDeclaredPythonModulesImportSuffix(
+        ctx.instance.definition,
+        stage,
+      );
+      if (declaredModsSuffix) {
+        sys += `\n\n${declaredModsSuffix}`;
+      }
       const crossPatchSuffix = buildCrossModulePatchExportsPromptSuffix(
         ctx.instance.definition,
         ctx.instance.stageRuntimes,

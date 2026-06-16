@@ -209,6 +209,18 @@
 
 **结论**：1e **确定性修复目标 bug**——statemachine 欠声明 + `DictReader` 占位 **5 次运行均未复现**（单测锁定 + 非复现）。但率未显著变化，残留转为**多样 run 间 decide/test-gen 方差**：run#2 `sdk-path test-import-path-not-in-plan`、run#3 post-strict（pytest 红 + fixture `tasks.csv` 漏 `status` 列）、run#4 `main` 契约含内建 `exit`（本批次后已补 noise 修复）、run#5 test_run 红。**残留是混合**（decide 契约质量长尾 + test-gen + test_run 红），**非纯 test_run 方差**。
 
+## sub-task 1f：decide/test-gen 长尾确定性净化（2026-06-16）
+
+针对 1e 残留 run#2（sdk-path test-import）与 run#3（fixture 漏 `status` 列）对症修复，prevention 优先、不放宽门。
+
+**修法**：
+- **sdk-path 预防**：`buildDeclaredPythonModulesImportSuffix`（计划内 Python 模块 SSOT）接入 `LlmTextInvokeStep` test_write；`buildSliceContractExportsPromptSuffix` 增「自建 CSV 须含断言用到的全部列」。
+- **fixture 漏列**：`inferCsvColumns` 扩模式（`task["status"]` / `fieldnames` / header 断言）；`reconcileCsvFixtureColumns` + `seedSmokeCsvFixtures` 对已存在 CSV 补齐推断缺列。
+
+**判据（方法论）**：以**特定失败模式复现率**为准（sdk-path / fixture 漏列是否不再出现），非聚合 strict-pass 率（N=5 方差内不可区分）。
+
+**live 结果**：见下方 batch 日志（`artifacts/t6_1f.log`，跑完后回填）。
+
 ## 待验证 / 下一步
 - **decide/test-gen 长尾方差**（接续 1e）：内建/占位符号污染逐项收敛中（DictReader/exit 已补）；`sdk-path test-import-path-not-in-plan`、fixture CSV 漏列 为下一批确定性净化/prompt 完整性目标。
 - **best-of-N（子任务 3）**：升级 A（逐候选 test_run 评分）仅覆盖 test_run 红那部分残留；当前静态-QA impl/test_write best-of-N 默认保持关（ADR-0010：无收益、~3× 成本）。decide/test-gen 长尾更适合「确定性净化 + prompt」逐项收敛。

@@ -10,6 +10,7 @@ import {
   inferEnumValues,
   inferFirstEnumValue,
   buildSeedCsv,
+  reconcileCsvFixtureColumns,
 } from '../disk-bootstrap/smokeDataBootstrap';
 
 const T6_MODELS_PY = `
@@ -75,6 +76,43 @@ status = row.get("status", "")
 again = row["title"]
 `;
   assert.deepEqual(inferCsvColumns(py), ['title', 'priority', 'status']);
+});
+
+test('inferCsvColumns 从 task/fieldnames 等推断列（子任务 1f fixture 漏列）', () => {
+  const py = `
+def load(task):
+    return task["title"], task.get("status", "")
+assert "status" in reader.fieldnames
+fieldnames = ["title", "priority", "status"]
+`;
+  assert.deepEqual(inferCsvColumns(py), ['title', 'status', 'priority']);
+});
+
+test('reconcileCsvFixtureColumns 为已存在 CSV 补齐缺列（status）', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'smoke-reconcile-'));
+  const csvPath = path.join(dir, 'tasks.csv');
+  fs.writeFileSync(csvPath, 'title,priority\nBuy milk,2\n', 'utf8');
+  const py = 'VALID_STATUSES = {"todo", "in_progress", "done"}\nstatus = row.get("status")\n';
+  const changed = reconcileCsvFixtureColumns(csvPath, inferCsvColumns(py), py);
+  assert.equal(changed, true);
+  const lines = fs.readFileSync(csvPath, 'utf8').trim().split('\n');
+  assert.equal(lines[0], 'title,priority,status');
+  assert.equal(lines[1].split(',')[2], 'todo');
+});
+
+test('seedSmokeCsvFixtures 对齐已存在但缺列的 CSV（子任务 1f）', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'smoke-seed-reconcile-'));
+  fs.writeFileSync(path.join(dir, 'config.yaml'), 'csv_path: "tasks.csv"\n', 'utf8');
+  fs.writeFileSync(path.join(dir, 'tasks.csv'), 'title,priority\nA,2\n', 'utf8');
+  fs.writeFileSync(
+    path.join(dir, 'pipeline.py'),
+    'def run(row):\n    return row["title"], int(row["priority"]), row.get("status", "")\n',
+    'utf8',
+  );
+  const touched = seedSmokeCsvFixtures(dir);
+  assert.ok(touched.includes('tasks.csv'));
+  const header = fs.readFileSync(path.join(dir, 'tasks.csv'), 'utf8').trim().split('\n')[0];
+  assert.equal(header, 'title,priority,status');
 });
 
 test('inferFirstEnumValue 取首个字符串集合首值', () => {
