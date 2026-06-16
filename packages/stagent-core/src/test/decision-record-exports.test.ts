@@ -134,6 +134,10 @@ test('pruneExportNoise 剔除 csv 读写器成员 DictReader/DictWriter（占位
   ]);
 });
 
+test('pruneExportNoise 剔除进程内建 exit/quit（decide 误列为 main 导出，3b run#4）', () => {
+  assert.deepEqual(pruneExportNoise(['exit', 'quit', 'run', 'help']), ['run']);
+});
+
 test('sanitizeCrossSliceContamination：替换式 refine（互不为子集）保留 slice，不被欠声明规则误伤', () => {
   // global coarse=[compute]；slice 用具体函数替换（compute ∉ slice，slice ⊄ global 且 global ⊄ slice）→ 保留 slice。
   const sliceRefined = ['compute_ma', 'compute_boll'];

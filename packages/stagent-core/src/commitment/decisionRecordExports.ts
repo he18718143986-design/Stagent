@@ -154,6 +154,13 @@ const BUILTIN_EXPORT_NOISE = new Set([
   'property',
   'staticmethod',
   'classmethod',
+  // 进程/解释器内建——decide 偶把 `exit`/`quit` 等列为 main 导出（T6 run#4），impl 不会导出 → export-missing 误拦。
+  'exit',
+  'quit',
+  'help',
+  'globals',
+  'locals',
+  'callable',
 ]);
 
 /**
