@@ -2,18 +2,18 @@ import React from 'react'
 import type { StageStatus } from '@stagent/core'
 
 export const STATUS_STYLE: Record<StageStatus, { label: string; cls: string }> = {
-  pending: { label: '待执行', cls: 'bg-gray-100 text-gray-500' },
-  running: { label: '执行中', cls: 'bg-blue-100 text-blue-700' },
-  'waiting-questions': { label: '待回答', cls: 'bg-amber-100 text-amber-700' },
-  paused: { label: '已暂停', cls: 'bg-purple-100 text-purple-700' },
-  done: { label: '已完成', cls: 'bg-green-100 text-green-700' },
-  skipped: { label: '已跳过', cls: 'bg-gray-100 text-gray-400' },
-  error: { label: '出错', cls: 'bg-red-100 text-red-700' },
-  retrying: { label: '重试中', cls: 'bg-orange-100 text-orange-700' },
+  pending: { label: '待执行', cls: 'bg-white/10 text-slate-400' },
+  running: { label: '执行中', cls: 'bg-blue-500/20 text-blue-300' },
+  'waiting-questions': { label: '待回答', cls: 'bg-amber-500/20 text-amber-300' },
+  paused: { label: '已暂停', cls: 'bg-purple-500/20 text-purple-300' },
+  done: { label: '已完成', cls: 'bg-green-500/20 text-green-300' },
+  skipped: { label: '已跳过', cls: 'bg-white/10 text-slate-500' },
+  error: { label: '出错', cls: 'bg-red-500/20 text-red-300' },
+  retrying: { label: '重试中', cls: 'bg-orange-500/20 text-orange-300' },
 }
 
 export function StatusBadge({ status }: { status: StageStatus }): React.JSX.Element {
-  const s = STATUS_STYLE[status] ?? { label: status, cls: 'bg-gray-100 text-gray-500' }
+  const s = STATUS_STYLE[status] ?? { label: status, cls: 'bg-white/10 text-slate-400' }
   return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${s.cls}`}>{s.label}</span>
 }
 
@@ -43,7 +43,7 @@ export function stageRoleColor(stageId: string, isDecision?: boolean): string {
   if (/integration|assemble|main/.test(stageId)) {
     return 'border-l-4 border-orange-400'
   }
-  return 'border-l-4 border-gray-300'
+  return 'border-l-4 border-white/15'
 }
 
 export function isEngineInsertedStage(stageId: string): boolean {

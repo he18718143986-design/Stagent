@@ -13,15 +13,15 @@ export function Stepper({ step }: { step: Step }): React.JSX.Element {
         return (
           <React.Fragment key={label}>
             {i > 0 && (
-              <div className={`hidden sm:block w-8 h-0.5 ${done ? 'bg-stagent-success' : 'bg-stone-200'}`} />
+              <div className={`hidden sm:block w-8 h-0.5 ${done ? 'bg-green-500/60' : 'bg-white/10'}`} />
             )}
             <div
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
                 active
-                  ? 'bg-orange-100 text-stagent-orange ring-2 ring-stagent-orange/30'
+                  ? 'bg-orange-500/15 text-stagent-orange ring-2 ring-stagent-orange/30'
                   : done
-                    ? 'text-stagent-success'
-                    : 'text-stone-400'
+                    ? 'text-green-400'
+                    : 'text-slate-500'
               }`}
             >
               <span
@@ -29,8 +29,8 @@ export function Stepper({ step }: { step: Step }): React.JSX.Element {
                   active
                     ? 'bg-stagent-orange text-white'
                     : done
-                      ? 'bg-stagent-success text-white'
-                      : 'bg-stone-200 text-stone-500'
+                      ? 'bg-green-500 text-white'
+                      : 'bg-white/10 text-slate-400'
                 }`}
               >
                 {done ? '✓' : n}

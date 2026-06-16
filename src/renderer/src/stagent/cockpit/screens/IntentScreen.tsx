@@ -60,7 +60,7 @@ export function IntentScreen({
       <h1 className={`${simpleTheme.hero} text-center mb-1`}>你想做个什么？</h1>
       <p className={`${simpleTheme.subheading} text-center mb-6`}>用大白话说就行,剩下的交给我们</p>
       <textarea
-        className="w-full text-base border border-stone-200 rounded-2xl px-4 py-3 resize-y min-h-[120px] shadow-inner focus:outline-none focus:ring-2 focus:ring-stagent-orange/40"
+        className="w-full text-base border border-white/15 rounded-2xl px-4 py-3 resize-y min-h-[120px] focus:outline-none focus:ring-2 focus:ring-stagent-orange/40"
         placeholder="比如:帮我做一个能记账的小工具"
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
@@ -78,7 +78,7 @@ export function IntentScreen({
         ))}
       </div>
       <div className={`mb-4 p-3 ${simpleTheme.mutedPanel} space-y-2`}>
-        <div className="text-sm text-stone-600">成果保存在哪里?</div>
+        <div className="text-sm text-slate-300">成果保存在哪里?</div>
         {hasWorkspace ? (
           <div className="flex items-center justify-between gap-2">
             <span className="text-sm font-medium text-stagent-success truncate" title={workspacePath}>
@@ -90,7 +90,7 @@ export function IntentScreen({
           </div>
         ) : (
           <>
-            <p className="text-xs text-amber-700">首次使用请先选一个文件夹,用来存放生成的文件</p>
+            <p className="text-xs text-amber-300">首次使用请先选一个文件夹,用来存放生成的文件</p>
             <button
               type="button"
               className={`${simpleTheme.secondaryBtn} w-full text-center text-sm py-2`}
@@ -105,14 +105,14 @@ export function IntentScreen({
         {clarifyPending ? '⏳ 正在理解…' : '✨ 开始做'}
       </button>
       {!hasWorkspace && draft.trim() && (
-        <p className="text-xs text-stone-400 mt-2 text-center">还没选文件夹时,点「开始做」也会弹出选择窗口</p>
+        <p className="text-xs text-slate-400 mt-2 text-center">还没选文件夹时,点「开始做」也会弹出选择窗口</p>
       )}
 
       <div className="mt-4">
         <button
           type="button"
           aria-expanded={advOpen}
-          className="w-full text-left text-xs text-stone-400 hover:text-stagent-orange flex items-center gap-1"
+          className="w-full text-left text-xs text-slate-400 hover:text-stagent-orange flex items-center gap-1"
           onClick={() => {
             advTouched.current = true
             setAdvOpen((v) => !v)
@@ -124,9 +124,9 @@ export function IntentScreen({
         {advOpen && (
           <div className={`mt-2 p-3 ${simpleTheme.mutedPanel} space-y-3`}>
             <label className="block space-y-1">
-              <span className="text-xs text-stone-600">任务类型</span>
+              <span className="text-xs text-slate-300">任务类型</span>
               <select
-                className="w-full text-sm border border-stone-200 rounded-lg px-2 py-1.5 bg-white"
+                className="w-full text-sm border border-white/15 rounded-lg px-2 py-1.5 bg-stagent-surface"
                 value={taskType}
                 onChange={(e) => setTaskType(e.target.value)}
               >
@@ -138,12 +138,12 @@ export function IntentScreen({
               </select>
             </label>
             <label className="block space-y-1">
-              <span className="text-xs text-stone-600">模型</span>
+              <span className="text-xs text-slate-300">模型</span>
               {models.length === 0 ? (
-                <span className="block text-xs text-stone-400">无可用模型</span>
+                <span className="block text-xs text-slate-400">无可用模型</span>
               ) : (
                 <select
-                  className="w-full text-sm border border-stone-200 rounded-lg px-2 py-1.5 bg-white"
+                  className="w-full text-sm border border-white/15 rounded-lg px-2 py-1.5 bg-stagent-surface"
                   value={preferredModel}
                   onChange={(e) => void setModel(e.target.value)}
                 >
@@ -161,9 +161,9 @@ export function IntentScreen({
               )}
             </label>
             {state.polished && (
-              <div className="border border-green-200 bg-green-50 rounded-lg p-2 text-xs">
-                <div className="font-medium text-green-800 mb-1">润色结果可用</div>
-                <button type="button" className="text-green-700 underline" onClick={() => setDraft(state.polished!.text)}>
+              <div className="border border-green-500/30 bg-green-500/10 rounded-lg p-2 text-xs">
+                <div className="font-medium text-green-300 mb-1">润色结果可用</div>
+                <button type="button" className="text-green-300 underline" onClick={() => setDraft(state.polished!.text)}>
                   采用润色文本
                 </button>
               </div>
@@ -171,7 +171,7 @@ export function IntentScreen({
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                className="text-xs border border-stone-300 rounded-lg px-3 py-1.5 bg-white hover:bg-stone-50 disabled:opacity-50"
+                className="text-xs border border-white/15 rounded-lg px-3 py-1.5 bg-white/5 hover:bg-white/10 text-slate-200 disabled:opacity-50"
                 disabled={!draft.trim() || busy}
                 onClick={() =>
                   void send({
@@ -186,7 +186,7 @@ export function IntentScreen({
               </button>
               <button
                 type="button"
-                className="text-xs border border-stone-300 rounded-lg px-3 py-1.5 bg-white hover:bg-stone-50 disabled:opacity-50"
+                className="text-xs border border-white/15 rounded-lg px-3 py-1.5 bg-white/5 hover:bg-white/10 text-slate-200 disabled:opacity-50"
                 disabled={!canGenerate || busy}
                 onClick={() =>
                   void send({
@@ -204,7 +204,7 @@ export function IntentScreen({
               </button>
               <button
                 type="button"
-                className="text-xs text-stone-500 hover:underline"
+                className="text-xs text-slate-400 hover:underline"
                 onClick={() => setShowSettings(!showSettings)}
               >
                 {showSettings ? '收起 API 设置' : 'API 设置'}

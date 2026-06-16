@@ -32,15 +32,15 @@ function Field({
 }): React.JSX.Element {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-xs text-gray-500">{label}</label>
+      <label className="text-xs text-slate-400">{label}</label>
       <input
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         spellCheck={false}
-        className="px-3 py-2 rounded-lg border border-gray-200 text-sm font-mono
-                   text-gray-900 placeholder-gray-300
+        className="px-3 py-2 rounded-lg border border-white/15 text-sm font-mono
+                   text-slate-100 placeholder-gray-300
                    focus:outline-none focus:border-gray-400 transition-colors"
       />
     </div>
@@ -90,22 +90,22 @@ export default function SelectorDebugger({ site, onClose, onRecalibrate }: Props
     >
       {/* Sheet */}
       <div
-        className="bg-white rounded-t-2xl shadow-2xl w-full max-w-lg p-6 pb-8 flex flex-col gap-5"
+        className="bg-stagent-surface rounded-t-2xl shadow-2xl w-full max-w-lg p-6 pb-8 flex flex-col gap-5"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-start justify-between">
           <div>
-            <h2 className="text-base font-semibold text-gray-900">调试选择器</h2>
-            <p className="text-xs text-gray-400 mt-0.5">
+            <h2 className="text-base font-semibold text-slate-100">调试选择器</h2>
+            <p className="text-xs text-slate-500 mt-0.5">
               {site.label} · {site.hostname}
-              {site.calibrated && <span className="ml-2 text-green-600">已手动校准</span>}
+              {site.calibrated && <span className="ml-2 text-green-400">已手动校准</span>}
             </p>
           </div>
           <button
             onClick={onClose}
             className="no-drag w-7 h-7 flex items-center justify-center rounded-full
-                       hover:bg-gray-100 text-gray-400 text-xl leading-none mt-0.5"
+                       hover:bg-white/10 text-slate-500 text-xl leading-none mt-0.5"
             aria-label="关闭"
           >
             ×
@@ -150,8 +150,8 @@ export default function SelectorDebugger({ site, onClose, onRecalibrate }: Props
         <div className="flex gap-3">
           <button
             onClick={onRecalibrate}
-            className="no-drag flex-1 py-2 rounded-xl border border-gray-200 text-sm
-                       text-gray-700 hover:border-gray-400 transition-colors"
+            className="no-drag flex-1 py-2 rounded-xl border border-white/15 text-sm
+                       text-slate-200 hover:border-gray-400 transition-colors"
           >
             重新校准
           </button>

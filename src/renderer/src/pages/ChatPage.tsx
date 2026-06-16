@@ -57,7 +57,7 @@ function MessageList({
   if (messages.length === 0) {
     return (
       <div className="flex flex-1 items-center justify-center">
-        <p className="text-sm text-gray-400">发送一条消息开始对话</p>
+        <p className="text-sm text-slate-500">发送一条消息开始对话</p>
       </div>
     )
   }
@@ -71,7 +71,7 @@ function MessageList({
           if (m.role === 'system') {
             return (
               <div key={m.id} className="flex justify-center">
-                <span className="text-[11px] text-gray-400 bg-gray-50 rounded-full px-3 py-1">
+                <span className="text-[11px] text-slate-500 bg-white/5 rounded-full px-3 py-1">
                   {m.text}
                 </span>
               </div>
@@ -86,7 +86,7 @@ function MessageList({
                 className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
                   m.role === 'user'
                     ? 'bg-gray-900 text-white'
-                    : 'bg-gray-100 text-gray-900'
+                    : 'bg-white/10 text-slate-100'
                 }`}
               >
                 {m.role === 'ai' ? normalizeAiDisplayText(m.text) : m.text}
@@ -98,8 +98,8 @@ function MessageList({
       {/* Generation indicator */}
       {isGenerating && (
         <div className="flex justify-start">
-          <div className="bg-gray-100 rounded-2xl px-4 py-2.5">
-            <span className="text-sm text-gray-400 animate-pulse">正在生成…</span>
+          <div className="bg-white/10 rounded-2xl px-4 py-2.5">
+            <span className="text-sm text-slate-500 animate-pulse">正在生成…</span>
           </div>
         </div>
       )}
@@ -147,7 +147,7 @@ function MessageInput({
 
   return (
     <div className="px-4 pb-4 pt-2">
-      <div className="flex items-end gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-2.5 shadow-sm focus-within:border-gray-400 transition-colors">
+      <div className="flex items-end gap-2 rounded-2xl border border-white/15 bg-stagent-surface px-4 py-2.5 shadow-sm focus-within:border-gray-400 transition-colors">
         <textarea
           ref={textareaRef}
           value={text}
@@ -156,7 +156,7 @@ function MessageInput({
           disabled={disabled}
           placeholder={placeholder}
           rows={1}
-          className="flex-1 resize-none bg-transparent text-sm text-gray-900 placeholder-gray-400
+          className="flex-1 resize-none bg-transparent text-sm text-slate-100 placeholder-gray-400
                      focus:outline-none disabled:cursor-not-allowed leading-relaxed"
           style={{ maxHeight: 180 }}
         />
@@ -199,22 +199,22 @@ function MoreMenu({ onManage, onNewChat }: { onManage: () => void; onNewChat: ()
     <div className="relative" ref={ref}>
       <button
         className="no-drag w-8 h-8 flex items-center justify-center rounded-lg
-                   hover:bg-gray-100 transition-colors text-gray-500 text-base leading-none"
+                   hover:bg-white/10 transition-colors text-slate-400 text-base leading-none"
         onClick={() => setOpen((v) => !v)}
         aria-label="更多"
       >
         ···
       </button>
       {open && (
-        <div className="absolute top-full right-0 mt-1 w-40 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50 text-sm">
+        <div className="absolute top-full right-0 mt-1 w-40 bg-stagent-surface rounded-xl shadow-lg border border-white/10 py-1 z-50 text-sm">
           <button
-            className="w-full text-left px-4 py-2 hover:bg-gray-50"
+            className="w-full text-left px-4 py-2 hover:bg-white/5"
             onClick={() => { setOpen(false); onManage() }}
           >
             管理 AI 资源
           </button>
           <button
-            className="w-full text-left px-4 py-2 hover:bg-gray-50"
+            className="w-full text-left px-4 py-2 hover:bg-white/5"
             onClick={() => { setOpen(false); onNewChat() }}
           >
             新建对话
@@ -410,7 +410,7 @@ export default function ChatPage({ activeSiteId, onActiveSiteIdChange: _onActive
   const hasConnected = sites.some((s) => s.status === 'connected')
 
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-full bg-stagent-surface">
       {/* Calibration overlay */}
       {calibratingSiteId && (
         <CalibrationOverlay
@@ -423,7 +423,7 @@ export default function ChatPage({ activeSiteId, onActiveSiteIdChange: _onActive
       )}
 
       {/* Toolbar: ··· menu */}
-      <div className="flex items-center justify-end px-3 py-2 border-b border-gray-100 shrink-0">
+      <div className="flex items-center justify-end px-3 py-2 border-b border-white/10 shrink-0">
         <MoreMenu
           onManage={() => go('/resources')}
           onNewChat={() => setMessages([])}
@@ -433,9 +433,9 @@ export default function ChatPage({ activeSiteId, onActiveSiteIdChange: _onActive
       {/* No connected sites guard — show only when there are no past messages */}
       {!hasConnected && messages.length === 0 && (
         <div className="flex flex-1 flex-col items-center justify-center gap-3">
-          <p className="text-sm text-gray-400">还没有可用的 AI</p>
+          <p className="text-sm text-slate-500">还没有可用的 AI</p>
           <button
-            className="no-drag text-xs text-gray-500 underline hover:text-gray-800"
+            className="no-drag text-xs text-slate-400 underline hover:text-slate-100"
             onClick={() => go('/resources')}
           >
             连接一个 AI →
@@ -453,11 +453,11 @@ export default function ChatPage({ activeSiteId, onActiveSiteIdChange: _onActive
           />
 
           {errorMsg && (
-            <p className="px-6 pb-1 text-xs text-red-500 text-center">{errorMsg}</p>
+            <p className="px-6 pb-1 text-xs text-red-400 text-center">{errorMsg}</p>
           )}
 
           {isGenerating && (
-            <p className="px-6 pb-1 text-xs text-gray-400 text-center animate-pulse">
+            <p className="px-6 pb-1 text-xs text-slate-500 text-center animate-pulse">
               {activeSite ? `${activeSite.label} 正在生成…` : '正在生成…'}
             </p>
           )}

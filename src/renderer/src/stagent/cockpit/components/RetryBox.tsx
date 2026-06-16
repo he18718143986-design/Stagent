@@ -5,7 +5,7 @@ export function RetryBox({ onRetry }: { onRetry: (comment: string) => void }): R
   return (
     <div className="space-y-2 mt-2">
       <textarea
-        className="w-full text-sm border border-gray-300 rounded px-2 py-1 resize-y min-h-[2.5rem]"
+        className="w-full text-sm border border-white/15 rounded px-2 py-1 resize-y min-h-[2.5rem]"
         placeholder="给重试一些纠偏意见（可留空）…"
         value={comment}
         onChange={(e) => setComment(e.target.value)}

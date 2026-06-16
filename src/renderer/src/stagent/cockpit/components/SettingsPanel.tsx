@@ -18,15 +18,15 @@ export function SettingsPanel({
   }, [load])
 
   if (!cfg) {
-    return <div className="border-b border-gray-100 px-4 py-3 text-xs text-gray-400">加载配置…</div>
+    return <div className="border-b border-white/10 px-4 py-3 text-xs text-slate-500">加载配置…</div>
   }
 
   const field = (label: string, key: keyof StagentLlmConfig, type = 'text'): React.JSX.Element => (
-    <label className="flex flex-col gap-1 text-xs text-gray-600">
+    <label className="flex flex-col gap-1 text-xs text-slate-300">
       {label}
       <input
         type={type}
-        className="border border-gray-300 rounded px-2 py-1 text-sm"
+        className="border border-white/15 rounded px-2 py-1 text-sm"
         value={String(cfg[key] ?? '')}
         onChange={(e) =>
           setCfg({
@@ -39,7 +39,7 @@ export function SettingsPanel({
   )
 
   const bool = (label: string, key: keyof StagentLlmConfig): React.JSX.Element => (
-    <label className="flex items-center gap-2 text-xs text-gray-600">
+    <label className="flex items-center gap-2 text-xs text-slate-300">
       <input
         type="checkbox"
         checked={Boolean(cfg[key])}
@@ -50,18 +50,18 @@ export function SettingsPanel({
   )
 
   return (
-    <div className="border-b border-gray-100 px-4 py-3 bg-gray-50 space-y-2">
-      <div className="text-sm font-medium text-gray-700">真实 API 设置（OpenAI 兼容）</div>
+    <div className="border-b border-white/10 px-4 py-3 bg-white/5 space-y-2">
+      <div className="text-sm font-medium text-slate-200">真实 API 设置（OpenAI 兼容）</div>
       {field('API Key（留空则仅用本地浏览器 AI）', 'llmApiKey', 'password')}
       {field('Base URL', 'llmBaseUrl')}
       {field('模型名', 'llmModel')}
       {field('最大输出 tokens', 'llmMaxOutputTokens', 'number')}
-      <div className="pt-2 text-sm font-medium text-gray-700">质量门 / 契约校验（M21）</div>
+      <div className="pt-2 text-sm font-medium text-slate-200">质量门 / 契约校验（M21）</div>
       {bool('计划完整性硬门', 'plan.requireCompleteness')}
-      <label className="flex flex-col gap-1 text-xs text-gray-600">
+      <label className="flex flex-col gap-1 text-xs text-slate-300">
         红绿门（impl 前测试需 RED）
         <select
-          className="border border-gray-300 rounded px-2 py-1 text-sm"
+          className="border border-white/15 rounded px-2 py-1 text-sm"
           value={cfg['tdd.redGreenGate']}
           onChange={(e) =>
             setCfg({ ...cfg, 'tdd.redGreenGate': e.target.value as 'off' | 'warn' | 'hard' })
@@ -78,7 +78,7 @@ export function SettingsPanel({
       {bool('决策阶段自适应 grill（M23）', 'grill.adaptiveMode')}
       {bool('活 CONTEXT.md 词汇表 + ADR 留存（M24）', 'glossary.enabled')}
       {bool('深模块评分接入质量分（M25）', 'architecture.depthScoring')}
-      <div className="pt-2 text-sm font-medium text-gray-700">Skill-native 编排（实验，S3）</div>
+      <div className="pt-2 text-sm font-medium text-slate-200">Skill-native 编排（实验，S3）</div>
       {bool('启用 Skill-native 编排', 'skillNative.enabled')}
       {field('Skills 根目录', 'skillNative.skillsRoot')}
       <div className="flex items-center gap-2 pt-1">
@@ -109,10 +109,10 @@ export function SettingsPanel({
         >
           保存
         </button>
-        <button type="button" className="text-xs text-gray-500 hover:underline" onClick={onClose}>
+        <button type="button" className="text-xs text-slate-400 hover:underline" onClick={onClose}>
           收起
         </button>
-        {saved && <span className="text-xs text-green-600">已保存 ✓</span>}
+        {saved && <span className="text-xs text-green-400">已保存 ✓</span>}
       </div>
     </div>
   )

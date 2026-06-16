@@ -35,25 +35,25 @@ export default function CalibrationOverlay({ hostname, onCancel }: Props): React
 
   return (
     /* Fixed bar covering exactly the top 120px — above the BrowserView bounds. */
-    <div className="fixed inset-x-0 top-0 h-[120px] bg-white border-b border-gray-200 z-50 flex flex-col">
+    <div className="fixed inset-x-0 top-0 h-[120px] bg-stagent-surface border-b border-white/15 z-50 flex flex-col">
       {/* Traffic-light drag region (must stay visible) */}
       <div className="drag-region h-10 shrink-0" />
 
       {/* Instruction content */}
       <div className="flex flex-1 items-center justify-between px-6">
         <div className="flex flex-col gap-0.5">
-          <span className="text-xs text-gray-400">
+          <span className="text-xs text-slate-500">
             步骤 {stepData.step}/2 · 正在校准 {hostname}
           </span>
-          <span className="text-sm font-semibold text-gray-900">{stepData.instruction}</span>
-          <span className="text-xs text-gray-400 mt-0.5">
+          <span className="text-sm font-semibold text-slate-100">{stepData.instruction}</span>
+          <span className="text-xs text-slate-500 mt-0.5">
             将光标移到页面上的元素后点击即可选定
           </span>
         </div>
 
         <button
           onClick={onCancel}
-          className="no-drag shrink-0 ml-4 text-xs text-gray-400 hover:text-gray-700
+          className="no-drag shrink-0 ml-4 text-xs text-slate-500 hover:text-slate-200
                      underline underline-offset-2 transition-colors"
         >
           取消校准

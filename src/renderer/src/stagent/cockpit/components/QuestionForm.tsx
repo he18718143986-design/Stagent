@@ -30,8 +30,8 @@ export function QuestionForm({
 
   if (simple) {
     return (
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-4">
-        <div className="font-medium text-amber-900">{title || '需要你帮忙看一下'}</div>
+      <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 space-y-4">
+        <div className="font-medium text-amber-200">{title || '需要你帮忙看一下'}</div>
         {questions.map((q) => (
           <div key={q.id} className="space-y-2">
             <PillOptionGroup
@@ -47,7 +47,7 @@ export function QuestionForm({
             />
             {!q.suggestedAnswer?.trim() && (
               <textarea
-                className="w-full text-sm border border-stone-200 rounded-xl px-3 py-2 min-h-[2.5rem]"
+                className="w-full text-sm border border-white/15 rounded-xl px-3 py-2 min-h-[2.5rem]"
                 value={answers[q.id] ?? ''}
                 onChange={(e) => setAnswers((a) => ({ ...a, [q.id]: e.target.value }))}
                 placeholder={q.hint ?? '请输入…'}
@@ -68,32 +68,32 @@ export function QuestionForm({
   }
 
   return (
-    <div className="space-y-2 border border-amber-200 bg-amber-50 rounded-lg p-3 mt-2">
-      <div className="text-sm font-medium text-amber-800">{title}</div>
+    <div className="space-y-2 border border-amber-500/30 bg-amber-500/10 rounded-lg p-3 mt-2">
+      <div className="text-sm font-medium text-amber-200">{title}</div>
       {questions.map((q) => (
         <div
           key={q.id}
           className={`space-y-1 rounded px-2 py-1 ${
             q.provenance === 'charter_inferred'
-              ? 'border-l-4 border-amber-400 bg-amber-50/80'
+              ? 'border-l-4 border-amber-400 bg-amber-500/10'
               : q.provenance === 'charter_direct'
-                ? 'border-l-4 border-green-300 bg-green-50/40'
+                ? 'border-l-4 border-green-400/60 bg-green-500/10'
                 : ''
           }`}
         >
-          <label className="text-sm text-gray-700">
+          <label className="text-sm text-slate-300">
             {q.text}
-            {q.required !== false && <span className="text-red-500"> *</span>}
+            {q.required !== false && <span className="text-red-400"> *</span>}
           </label>
           {q.provenance && (
-            <span className="inline-block text-[11px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
+            <span className="inline-block text-[11px] px-1.5 py-0.5 rounded bg-white/10 text-slate-300">
               {plainProvenanceLabel(q.provenance)}
               {q.ruleRefs && q.ruleRefs.length > 0 ? ` · R#${q.ruleRefs.join(',R#')}` : ''}
             </span>
           )}
-          {q.hint && <div className="text-xs text-gray-400">{q.hint}</div>}
+          {q.hint && <div className="text-xs text-slate-500">{q.hint}</div>}
           <textarea
-            className="w-full text-sm border border-gray-300 rounded px-2 py-1 resize-y min-h-[2rem]"
+            className="w-full text-sm border border-white/15 rounded px-2 py-1 resize-y min-h-[2rem]"
             value={answers[q.id] ?? ''}
             onChange={(e) => setAnswers((a) => ({ ...a, [q.id]: e.target.value }))}
           />

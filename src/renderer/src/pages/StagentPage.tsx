@@ -202,7 +202,7 @@ function StagentPageInner(): React.JSX.Element {
   }
 
   return (
-    <div className="flex h-full min-h-0 bg-stagent-cream">
+    <div className="stagent-dark flex h-full min-h-0 bg-stagent-ink">
       {showTechnical && (
         <SidebarShell taskCount={state.tasks.length} onNewTask={newTask}>
           <TaskTree
@@ -236,7 +236,7 @@ function StagentPageInner(): React.JSX.Element {
         />
 
         {(state.busy || clarifyPending) && (
-          <div className="sticky top-0 z-10 px-4 py-2 text-sm bg-orange-50 text-stagent-orange border-b border-orange-100">
+          <div className="sticky top-0 z-10 px-4 py-2 text-sm bg-orange-500/10 text-orange-300 border-b border-orange-500/20">
             ⏳{' '}
             {state.busy
               ? `${state.busy.message}${state.busy.detail ? ` — ${state.busy.detail}` : ''}`
@@ -244,13 +244,13 @@ function StagentPageInner(): React.JSX.Element {
           </div>
         )}
         {state.switchBlocked && (
-          <div className="sticky top-0 z-10 bg-amber-50 border-b border-amber-200 px-4 py-2 text-sm text-amber-800">
+          <div className="sticky top-0 z-10 bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 text-sm text-amber-300">
             ⚠ {state.switchBlocked.reason}
           </div>
         )}
 
         {state.failed && state.phase !== 'execution' && (
-          <div className="mx-4 mt-3 border border-red-200 bg-red-50 rounded-lg px-4 py-2 text-sm text-red-700">
+          <div className="mx-4 mt-3 border border-red-500/30 bg-red-500/10 rounded-lg px-4 py-2 text-sm text-red-300">
             ✗ 失败({state.failed.errorType}):{state.failed.reason}
           </div>
         )}

@@ -28,10 +28,10 @@ export function ProgressRing({
     >
       <div
         className="absolute inset-0 rounded-full"
-        style={{ background: `conic-gradient(#F97316 ${clamped * 3.6}deg, #F1ECE6 0deg)` }}
+        style={{ background: `conic-gradient(#F97316 ${clamped * 3.6}deg, #2A323D 0deg)` }}
       />
-      <div className="absolute rounded-full bg-white" style={{ inset: ringInset }} />
-      <span className="relative text-sm font-semibold text-stone-800 tabular-nums">{clamped}%</span>
+      <div className="absolute rounded-full bg-stagent-surface" style={{ inset: ringInset }} />
+      <span className="relative text-sm font-semibold text-slate-100 tabular-nums">{clamped}%</span>
     </div>
   )
 }

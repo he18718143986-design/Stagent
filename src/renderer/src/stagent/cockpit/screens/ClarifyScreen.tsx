@@ -58,7 +58,7 @@ export function ClarifyScreen({ engine, form, send }: CockpitScreenProps): React
 
   if (questions.length === 0) {
     return (
-      <div className={`${simpleTheme.card} max-w-lg w-full mx-auto text-center text-stone-500`}>正在准备问题…</div>
+      <div className={`${simpleTheme.card} max-w-lg w-full mx-auto text-center text-slate-400`}>正在准备问题…</div>
     )
   }
 
@@ -68,7 +68,7 @@ export function ClarifyScreen({ engine, form, send }: CockpitScreenProps): React
       <p className={`${simpleTheme.subheading} text-center mb-6`}>选一下就好,拿不准就用我们推荐的 😊</p>
       <div className="space-y-6 mb-8">
         {visibleQuestions.map((q) => (
-          <div key={q.id} className="p-4 rounded-xl bg-orange-50/50 border border-orange-100">
+          <div key={q.id} className="p-4 rounded-xl bg-orange-500/10/50 border border-orange-500/20">
             <PillOptionGroup
               question={{
                 id: q.id,
@@ -94,7 +94,7 @@ export function ClarifyScreen({ engine, form, send }: CockpitScreenProps): React
       {expanded && questions.length > 2 && (
         <button
           type="button"
-          className="w-full mb-3 text-xs text-stone-500 hover:text-stagent-orange"
+          className="w-full mb-3 text-xs text-slate-400 hover:text-stagent-orange"
           onClick={() => setExpanded(false)}
         >
           改回只看关键问题

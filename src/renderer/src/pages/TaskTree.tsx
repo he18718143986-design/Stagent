@@ -102,16 +102,16 @@ export default function TaskTree({
   return (
     <div className="flex flex-col h-full min-h-0 w-full">
       <div className="p-3 pr-8 flex items-center justify-between shrink-0">
-        <span className="text-sm font-semibold text-gray-700">任务</span>
+        <span className="text-sm font-semibold text-slate-200">任务</span>
         <button
-          className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700"
+          className="text-xs bg-stagent-accent text-white px-2 py-1 rounded hover:brightness-110"
           onClick={onNewTask}
         >
           + 新建
         </button>
       </div>
       <div className="flex-1 overflow-y-auto px-1 pb-2">
-        {tasks.length === 0 && <div className="text-xs text-gray-400 px-3 py-3">暂无任务</div>}
+        {tasks.length === 0 && <div className="text-xs text-slate-500 px-3 py-3">暂无任务</div>}
         {tasks.map((t) => {
           const expanded = t.instanceKey === selectedTaskKey
           const wsDup = t.taskWorkspacePath ? (workspaceDuplicateCounts.get(t.taskWorkspacePath) ?? 0) > 1 : false
@@ -119,16 +119,16 @@ export default function TaskTree({
             <div key={t.instanceKey} className="mb-0.5">
               <div
                 className={`group flex items-center gap-1 px-2 py-1 rounded cursor-pointer ${
-                  expanded ? 'bg-blue-50' : 'hover:bg-gray-100'
+                  expanded ? 'bg-stagent-accent/15' : 'hover:bg-white/5'
                 }`}
                 style={{ paddingLeft: '6px' }}
                 title={t.taskWorkspacePath ?? t.title}
                 onClick={() => onSelectTask(t.instanceKey)}
               >
-                <span className="inline-block w-4 text-gray-400">{expanded ? '▾' : '▸'}</span>
+                <span className="inline-block w-4 text-slate-500">{expanded ? '▾' : '▸'}</span>
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm text-gray-800 truncate">{t.title}</div>
-                  <div className="text-[11px] text-gray-400">
+                  <div className="text-sm text-slate-200 truncate">{t.title}</div>
+                  <div className="text-[11px] text-slate-500">
                     {t.completedStages}/{t.stageCount} · {statusLabel(t.status)}
                     {wsDup && t.createdAt ? ` · ${formatTaskTime(t.createdAt)}` : ''}
                   </div>
@@ -136,7 +136,7 @@ export default function TaskTree({
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                   {t.recoverable && (
                     <button
-                      className="text-[11px] text-blue-600 hover:underline"
+                      className="text-[11px] text-blue-400 hover:underline"
                       onClick={(e) => {
                         e.stopPropagation()
                         onResume(t.instanceKey)
@@ -146,7 +146,7 @@ export default function TaskTree({
                     </button>
                   )}
                   <button
-                    className="text-[11px] text-red-500 hover:underline"
+                    className="text-[11px] text-red-400 hover:underline"
                     onClick={(e) => {
                       e.stopPropagation()
                       setScope('record')
@@ -169,7 +169,7 @@ export default function TaskTree({
                     onSelectFile={onSelectFile}
                   />
                 ) : (
-                  <div className="px-2 py-1 text-xs text-gray-400" style={{ paddingLeft: '24px' }}>
+                  <div className="px-2 py-1 text-xs text-slate-500" style={{ paddingLeft: '24px' }}>
                     无工作目录
                   </div>
                 ))}
@@ -184,16 +184,16 @@ export default function TaskTree({
           onClick={closeDelete}
         >
           <div
-            className="w-[420px] max-w-[90vw] rounded-lg bg-white p-5 shadow-xl"
+            className="w-[420px] max-w-[90vw] rounded-lg bg-stagent-surface border border-white/10 p-5 shadow-xl text-slate-200"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="text-base font-semibold text-gray-800">删除任务</div>
-            <div className="mt-1 text-sm text-gray-500 truncate" title={pendingDelete.title}>
+            <div className="text-base font-semibold text-slate-100">删除任务</div>
+            <div className="mt-1 text-sm text-slate-400 truncate" title={pendingDelete.title}>
               {pendingDelete.title}
             </div>
 
             <div className="mt-4 space-y-2">
-              <label className="flex items-start gap-2 text-sm text-gray-700">
+              <label className="flex items-start gap-2 text-sm text-slate-200">
                 <input
                   type="radio"
                   name="del-scope"
@@ -203,12 +203,12 @@ export default function TaskTree({
                 />
                 <span>
                   <span className="font-medium">仅任务记录</span>
-                  <span className="block text-xs text-gray-400">
+                  <span className="block text-xs text-slate-500">
                     清除侧栏记录与 .stagent 状态目录，保留所有产物文件。
                   </span>
                 </span>
               </label>
-              <label className="flex items-start gap-2 text-sm text-gray-700">
+              <label className="flex items-start gap-2 text-sm text-slate-200">
                 <input
                   type="radio"
                   name="del-scope"
@@ -218,12 +218,12 @@ export default function TaskTree({
                 />
                 <span>
                   <span className="font-medium">连同任务新建的产物</span>
-                  <span className="block text-xs text-gray-400">
+                  <span className="block text-xs text-slate-500">
                     额外删除本任务生成的文件与需求分析文档/工作流规划，不动你原有或手改的文件。
                   </span>
                 </span>
               </label>
-              <label className="flex items-start gap-2 text-sm text-gray-700">
+              <label className="flex items-start gap-2 text-sm text-slate-200">
                 <input
                   type="radio"
                   name="del-scope"
@@ -232,11 +232,11 @@ export default function TaskTree({
                   onChange={() => setScope('folder')}
                 />
                 <span>
-                  <span className="font-medium text-red-600">整个工作文件夹</span>
-                  <span className="block text-xs text-gray-400">
+                  <span className="font-medium text-red-300">整个工作文件夹</span>
+                  <span className="block text-xs text-slate-500">
                     递归删除下面整个目录（含无关文件，不可恢复）：
                   </span>
-                  <span className="block text-xs text-red-500 break-all">
+                  <span className="block text-xs text-red-400 break-all">
                     {pendingDelete.taskWorkspacePath ?? '（无工作目录，无法整删）'}
                   </span>
                 </span>
@@ -244,14 +244,14 @@ export default function TaskTree({
             </div>
 
             {scope === 'folder' && (
-              <div className="mt-3 rounded bg-red-50 px-3 py-2 text-xs text-red-600">
+              <div className="mt-3 rounded bg-red-500/10 px-3 py-2 text-xs text-red-300">
                 警告：此操作将永久删除整个工作文件夹及其全部内容，无法撤销。
               </div>
             )}
 
             <div className="mt-5 flex justify-end gap-2">
               <button
-                className="rounded px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100"
+                className="rounded px-3 py-1.5 text-sm text-slate-300 hover:bg-white/10"
                 onClick={closeDelete}
               >
                 取消

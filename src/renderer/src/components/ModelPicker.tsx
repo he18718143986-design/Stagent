@@ -126,7 +126,7 @@ export default function ModelPicker({ site, isGenerating, onModelSwitch }: Model
       </div>
 
       {/* Fixed hint below picker */}
-      <p className="text-[10px] leading-tight text-gray-600 select-none">
+      <p className="text-[10px] leading-tight text-slate-300 select-none">
         切换模型将开始新对话，仅显示本会话消息。
       </p>
     </div>

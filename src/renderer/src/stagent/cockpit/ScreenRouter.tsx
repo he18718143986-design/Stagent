@@ -1,21 +1,14 @@
 import React from 'react'
 import type { CockpitEngineSlice, CockpitFormState } from './types'
 import type { FrontendMessage } from '@stagent/core'
-import { IntentScreen } from './screens/IntentScreen'
-import { ClarifyScreen } from './screens/ClarifyScreen'
+import { IntakeChatScreen } from './screens/IntakeChatScreen'
 import { PlanningScreen } from './screens/PlanningScreen'
 import { ExecutionScreen } from './screens/ExecutionScreen'
 import { DeliveryScreen } from './screens/DeliveryScreen'
 
-function Loading({ text }: { text: string }): React.JSX.Element {
-  return (
-    <div className="max-w-lg mx-auto text-center py-12 text-stagent-orange animate-pulse">{text}</div>
-  )
-}
-
 /**
- * 统一屏路由(渐进式披露)。意图 / 澄清 / 规划 / 执行 / 交付五屏均已合并为
- * 单版,由屏内的 showTechnical 控制展开密度;不再按 uiMode 分叉。
+ * 统一屏路由(渐进式披露)。input 阶段为对话式需求接入(开场/理解/澄清合一),
+ * 之后 规划 / 执行 / 交付;由屏内的 showTechnical 控制展开密度。
  */
 export function ScreenRouter({
   engine,
@@ -51,12 +44,6 @@ export function ScreenRouter({
     return <PlanningScreen {...props} />
   }
 
-  // phase === 'input'
-  if (state.clarify?.length) {
-    return <ClarifyScreen {...props} />
-  }
-  if (clarifyPending || state.busy) {
-    return <Loading text={state.busy?.message ?? '正在理解你的需求…'} />
-  }
-  return <IntentScreen {...props} showSettings={showSettings} setShowSettings={setShowSettings} />
+  // phase === 'input' — 对话式接入(开场 / 理解 / 澄清合一)
+  return <IntakeChatScreen {...props} showSettings={showSettings} setShowSettings={setShowSettings} />
 }

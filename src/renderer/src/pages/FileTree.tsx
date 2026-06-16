@@ -16,7 +16,7 @@ export interface FsNode {
 
 function FileIcon({ type, open }: { type: 'dir' | 'file'; open?: boolean }): React.JSX.Element {
   if (type === 'dir') {
-    return <span className="inline-block w-4 text-gray-400">{open ? '▾' : '▸'}</span>
+    return <span className="inline-block w-4 text-slate-500">{open ? '▾' : '▸'}</span>
   }
   return <span className="inline-block w-4" />
 }
@@ -40,8 +40,12 @@ function TreeNode({
   return (
     <div>
       <div
-        className={`flex items-center gap-1 px-2 py-0.5 text-sm cursor-pointer rounded ${
-          isSelected ? 'bg-blue-100 text-blue-800' : 'hover:bg-gray-100 text-gray-700'
+        className={`flex items-center gap-1 px-2 py-0.5 text-sm cursor-pointer rounded transition-colors ${
+          isSelected
+            ? 'bg-stagent-accent/20 text-slate-100'
+            : isNew
+              ? 'bg-stagent-accent/10 text-slate-100 ring-1 ring-stagent-accent/30'
+              : 'hover:bg-white/5 text-slate-300'
         }`}
         style={{ paddingLeft: `${depth * 12 + 6}px` }}
         title={node.path}
@@ -49,7 +53,7 @@ function TreeNode({
       >
         <FileIcon type={node.type} open={open} />
         <span className="truncate">{node.name}</span>
-        {isNew && <span className="ml-1 text-[10px] text-green-600 shrink-0">● 新</span>}
+        {isNew && <span className="ml-auto text-[10px] font-medium text-stagent-accent shrink-0">● 新</span>}
       </div>
       {node.type === 'dir' && open && node.children && (
         <div>
@@ -76,6 +80,7 @@ export default function FileTree({
   refreshNonce,
   baseDepth = 0,
   onSelectFile,
+  onTreeLoaded,
 }: {
   rootPath: string
   selectedPath: string | null
@@ -85,20 +90,29 @@ export default function FileTree({
   /** 内嵌进任务节点时的起始缩进层级。 */
   baseDepth?: number
   onSelectFile: (node: FsNode) => void
+  /** 每次成功加载后回传整棵树（供父级统计文件数等）。 */
+  onTreeLoaded?: (tree: FsNode) => void
 }): React.JSX.Element {
   const [tree, setTree] = useState<FsNode | null>(null)
   const [treeError, setTreeError] = useState<string | null>(null)
 
   const loadTree = useCallback(async () => {
     setTreeError(null)
-    const res = await window.autoAI.stagent.fsTree(rootPath)
+    const api = window.autoAI?.stagent
+    if (!api?.fsTree) {
+      setTree(null)
+      setTreeError('文件树不可用')
+      return
+    }
+    const res = await api.fsTree(rootPath)
     if (res.ok && res.tree) {
       setTree(res.tree as FsNode)
+      onTreeLoaded?.(res.tree as FsNode)
     } else {
       setTree(null)
       setTreeError(res.error ?? '读取目录失败')
     }
-  }, [rootPath])
+  }, [rootPath, onTreeLoaded])
 
   useEffect(() => {
     void loadTree()
@@ -106,13 +120,13 @@ export default function FileTree({
 
   const pad = `${baseDepth * 12 + 6}px`
   if (treeError) {
-    return <div className="px-2 py-1 text-xs text-red-500" style={{ paddingLeft: pad }}>{treeError}</div>
+    return <div className="px-2 py-1 text-xs text-red-400" style={{ paddingLeft: pad }}>{treeError}</div>
   }
   if (!tree) {
-    return <div className="px-2 py-1 text-xs text-gray-400" style={{ paddingLeft: pad }}>加载中…</div>
+    return <div className="px-2 py-1 text-xs text-slate-500" style={{ paddingLeft: pad }}>加载中…</div>
   }
   if (!tree.children || tree.children.length === 0) {
-    return <div className="px-2 py-1 text-xs text-gray-400" style={{ paddingLeft: pad }}>空目录</div>
+    return <div className="px-2 py-1 text-xs text-slate-500" style={{ paddingLeft: pad }}>空目录</div>
   }
   return (
     <div>

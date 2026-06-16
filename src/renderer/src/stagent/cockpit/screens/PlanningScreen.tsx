@@ -9,6 +9,7 @@ import { CredibilityStrip } from '../components/CredibilityStrip'
 import { MiniDag } from '../components/MiniDag'
 import { DecisionBoardPreview } from '../components/DecisionGatePanel'
 import { filterPlanSteps } from '../components/stageHelpers'
+import { buildPlanProposal } from '../derive/planProposal'
 
 /**
  * 统一规划/签字屏(合并 SimplePlanning + ProPlanning + ProSignOff)。
@@ -23,6 +24,7 @@ export function PlanningScreen({ engine, form, send, onNewTask }: CockpitScreenP
   const [modalOpen, setModalOpen] = useState(false)
 
   const planSteps = useMemo(() => filterPlanSteps(stages), [stages])
+  const proposal = useMemo(() => buildPlanProposal(stages), [stages])
 
   const workflow = state.workflow
 
@@ -41,14 +43,14 @@ export function PlanningScreen({ engine, form, send, onNewTask }: CockpitScreenP
     return (
       <div className={`${simpleTheme.card} max-w-lg w-full mx-auto text-center py-12`}>
         <div className="animate-pulse text-stagent-orange font-medium">{state.busy.message}</div>
-        {state.busy.detail && <div className="text-sm text-stone-500 mt-2">{state.busy.detail}</div>}
+        {state.busy.detail && <div className="text-sm text-slate-400 mt-2">{state.busy.detail}</div>}
       </div>
     )
   }
 
   if (!workflow) {
     return (
-      <div className={`${simpleTheme.card} max-w-lg w-full mx-auto text-center text-stone-500`}>正在准备计划…</div>
+      <div className={`${simpleTheme.card} max-w-lg w-full mx-auto text-center text-slate-400`}>正在准备计划…</div>
     )
   }
 
@@ -69,27 +71,49 @@ export function PlanningScreen({ engine, form, send, onNewTask }: CockpitScreenP
 
         <CredibilityStrip confidence={state.confidence} className="mb-5" />
 
-        <ol className="space-y-3 mb-6">
-          {planSteps.map((s, i) => (
-            <li key={s.id} className="flex gap-3 p-3 rounded-xl bg-stone-50 border border-stone-100">
-              <span className="w-7 h-7 rounded-full bg-white border border-stone-200 flex items-center justify-center text-sm font-semibold text-stagent-orange shrink-0">
-                {i + 1}
+        <div className="mb-2 rounded-xl border border-white/10 overflow-hidden">
+          <div className="grid grid-cols-[1.2fr_1.4fr_auto] gap-x-3 px-3 py-2 text-[11px] text-slate-400 border-b border-white/10 bg-white/5">
+            <span>步骤</span>
+            <span>目的</span>
+            <span>怎么验证</span>
+          </div>
+          {proposal.rows.map((r, i) => (
+            <div
+              key={r.id}
+              className="grid grid-cols-[1.2fr_1.4fr_auto] gap-x-3 px-3 py-2 text-sm border-b border-white/5 last:border-0"
+            >
+              <span className="text-slate-200">
+                {i + 1}. {humanizeJargon(r.step)}
               </span>
-              <span className="text-sm text-stone-800 pt-0.5">{humanizeJargon(s.title)}</span>
-            </li>
+              <span className="text-slate-400">{humanizeJargon(r.purpose)}</span>
+              <span className="text-xs self-center">
+                {r.verification ? (
+                  <span className="text-green-300">✓ {humanizeJargon(r.verification)}</span>
+                ) : (
+                  <span className="text-slate-500">—</span>
+                )}
+              </span>
+            </div>
           ))}
-        </ol>
+        </div>
+        <div
+          className={`text-xs mb-6 ${
+            proposal.total > 0 && proposal.verifiedCount === proposal.total ? 'text-green-400' : 'text-amber-300'
+          }`}
+        >
+          {proposal.verifiedCount}/{proposal.total} 个功能步骤配了自动化验证
+        </div>
 
         {state.warnings.length > 0 && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 mb-4">
-            <div className="font-medium text-amber-900 mb-1">❓ 需要你确认的地方</div>
-            <p className="text-sm text-amber-800">{humanizeJargon(state.warnings[0])}</p>
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 mb-4">
+            <div className="font-medium text-amber-200 mb-1">❓ 需要你确认的地方</div>
+            <p className="text-sm text-amber-300">{humanizeJargon(state.warnings[0])}</p>
           </div>
         )}
 
         {/* 闸门:红灯禁止执行(常驻,无视密度开关) */}
         {state.blocked && state.blockReasons.length > 0 && (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-4 mb-4 text-sm text-red-700">
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 mb-4 text-sm text-red-300">
             🔴 还有地方没对上,暂时不能开始。{humanizeJargon(state.blockReasons[0])}
           </div>
         )}
@@ -97,50 +121,50 @@ export function PlanningScreen({ engine, form, send, onNewTask }: CockpitScreenP
         <TechnicalDetailsCollapsible title="结构与计划细节(给开发者看)">
           <div className="space-y-4 py-1">
             <div>
-              <div className="font-medium text-stone-600 mb-1">结构概览</div>
+              <div className="font-medium text-slate-300 mb-1">结构概览</div>
               <MiniDag stages={stages} stageStatus={state.stageStatus} />
             </div>
             {state.planSummary && (
               <div>
-                <div className="font-medium text-stone-600 mb-1">语义叙事</div>
+                <div className="font-medium text-slate-300 mb-1">语义叙事</div>
                 {formatPlanSummaryLines(state.planSummary).map((line) => (
-                  <div key={line} className="text-stone-600">
+                  <div key={line} className="text-slate-400">
                     {line}
                   </div>
                 ))}
               </div>
             )}
             <div>
-              <div className="font-medium text-stone-600 mb-1">逐阶段</div>
+              <div className="font-medium text-slate-300 mb-1">逐阶段</div>
               <div className="space-y-1">
                 {stages.map((s, i) => (
                   <div key={s.id} className="flex items-center gap-2 flex-wrap">
-                    <span className="text-stone-400">{i + 1}</span>
-                    <span className="text-stone-700">{s.title}</span>
+                    <span className="text-slate-500">{i + 1}</span>
+                    <span className="text-slate-300">{s.title}</span>
                     {s.isDecisionStage && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">decision</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300">decision</span>
                     )}
                     {/^stage_impl_/.test(s.id) && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">impl</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300">impl</span>
                     )}
                     {/^stage_test_run_/.test(s.id) && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">test</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-300">test</span>
                     )}
-                    <span className="text-[10px] text-stone-400 ml-auto">模型:{preferredModel || '默认'}</span>
+                    <span className="text-[10px] text-slate-500 ml-auto">模型:{preferredModel || '默认'}</span>
                   </div>
                 ))}
               </div>
             </div>
             {(state.warnings.length > 0 || state.blockReasons.length > 0) && (
               <div>
-                <div className="font-medium text-stone-600 mb-1">风险 lint</div>
+                <div className="font-medium text-slate-300 mb-1">风险 lint</div>
                 {state.blockReasons.map((r, i) => (
-                  <div key={`b${i}`} className="text-red-700">
+                  <div key={`b${i}`} className="text-red-300">
                     🔴 {r}
                   </div>
                 ))}
                 {state.warnings.map((w, i) => (
-                  <div key={`w${i}`} className="text-amber-700">
+                  <div key={`w${i}`} className="text-amber-300">
                     🟡 {w}
                   </div>
                 ))}
@@ -148,7 +172,7 @@ export function PlanningScreen({ engine, form, send, onNewTask }: CockpitScreenP
             )}
             {state.decisionBoard && state.decisionBoard.summary.total > 0 && (
               <div>
-                <div className="font-medium text-purple-800 mb-1">决策板摘要</div>
+                <div className="font-medium text-purple-300 mb-1">决策板摘要</div>
                 <DecisionBoardPreview items={state.decisionBoard.items} />
               </div>
             )}

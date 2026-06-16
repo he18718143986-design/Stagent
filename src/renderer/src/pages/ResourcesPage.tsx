@@ -126,22 +126,22 @@ function AddCustomDialog({
     <div className="fixed inset-0 flex items-center justify-center bg-black/30 z-50">
       <form
         onSubmit={handleSubmit}
-        className="bg-white rounded-2xl shadow-xl p-6 w-80 flex flex-col gap-4"
+        className="bg-stagent-surface rounded-2xl shadow-xl p-6 w-80 flex flex-col gap-4"
       >
-        <h2 className="text-base font-semibold text-gray-900">添加自定义网站</h2>
+        <h2 className="text-base font-semibold text-slate-100">添加自定义网站</h2>
         <input
           ref={inputRef}
           type="text"
           value={val}
           onChange={(e) => setVal(e.target.value)}
           placeholder="https://example.com"
-          className="px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
+          className="px-3 py-2 rounded-lg border border-white/15 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
         />
         <div className="flex justify-end gap-2">
           <button
             type="button"
             onClick={onCancel}
-            className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900"
+            className="px-3 py-1.5 text-sm text-slate-300 hover:text-slate-100"
           >
             取消
           </button>
@@ -173,8 +173,8 @@ function OnboardingView({
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-8 px-8 py-10">
       <div className="text-center">
-        <h1 className="text-2xl font-semibold text-gray-900">选择你的 AI 助手</h1>
-        <p className="mt-1.5 text-sm text-gray-500">登录后即可在 autoAI 中统一调用</p>
+        <h1 className="text-2xl font-semibold text-slate-100">选择你的 AI 助手</h1>
+        <p className="mt-1.5 text-sm text-slate-400">登录后即可在 autoAI 中统一调用</p>
       </div>
 
       {/* Card grid */}
@@ -183,12 +183,12 @@ function OnboardingView({
           <button
             key={p.hostname}
             onClick={() => onSelect(p.url)}
-            className="flex flex-col items-center gap-2 rounded-2xl border border-gray-200
-                       bg-white px-4 py-5 hover:border-gray-400 hover:shadow-sm
+            className="flex flex-col items-center gap-2 rounded-2xl border border-white/15
+                       bg-stagent-surface px-4 py-5 hover:border-gray-400 hover:shadow-sm
                        transition-all text-center"
           >
             <span className="text-2xl leading-none">{p.icon}</span>
-            <span className="text-sm font-medium text-gray-800">{p.label}</span>
+            <span className="text-sm font-medium text-slate-100">{p.label}</span>
           </button>
         ))}
 
@@ -196,17 +196,17 @@ function OnboardingView({
         <button
           onClick={() => setShowCustom(true)}
           className="flex flex-col items-center gap-2 rounded-2xl border border-dashed
-                     border-gray-300 bg-gray-50 px-4 py-5 hover:border-gray-400
-                     hover:bg-white transition-all text-center"
+                     border-white/15 bg-white/5 px-4 py-5 hover:border-gray-400
+                     hover:bg-stagent-surface transition-all text-center"
         >
-          <span className="text-2xl leading-none text-gray-400">+</span>
-          <span className="text-sm font-medium text-gray-500">其他</span>
+          <span className="text-2xl leading-none text-slate-500">+</span>
+          <span className="text-sm font-medium text-slate-400">其他</span>
         </button>
       </div>
 
       <button
         onClick={onSkip}
-        className="text-xs text-gray-400 hover:text-gray-600 underline underline-offset-2"
+        className="text-xs text-slate-500 hover:text-slate-300 underline underline-offset-2"
       >
         跳过
       </button>
@@ -251,23 +251,23 @@ function RenameDialog({
     <div className="fixed inset-0 flex items-center justify-center bg-black/30 z-50">
       <form
         onSubmit={handleSubmit}
-        className="bg-white rounded-2xl shadow-xl p-6 w-72 flex flex-col gap-4"
+        className="bg-stagent-surface rounded-2xl shadow-xl p-6 w-72 flex flex-col gap-4"
       >
-        <h2 className="text-base font-semibold text-gray-900">重命名</h2>
+        <h2 className="text-base font-semibold text-slate-100">重命名</h2>
         <input
           ref={inputRef}
           type="text"
           value={val}
           onChange={(e) => setVal(e.target.value)}
           placeholder="显示名称"
-          className="px-3 py-2 rounded-lg border border-gray-300 text-sm
+          className="px-3 py-2 rounded-lg border border-white/15 text-sm
                      focus:outline-none focus:ring-2 focus:ring-gray-400"
         />
         <div className="flex justify-end gap-2">
           <button
             type="button"
             onClick={onCancel}
-            className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900"
+            className="px-3 py-1.5 text-sm text-slate-300 hover:text-slate-100"
           >
             取消
           </button>
@@ -367,13 +367,13 @@ function ManagementView({
       <div className="drag-region h-10 shrink-0" />
 
       {/* Header row */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-        <h1 className="text-base font-semibold text-gray-900">AI 资源管理</h1>
+      <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+        <h1 className="text-base font-semibold text-slate-100">AI 资源管理</h1>
         <div className="flex gap-2">
           <button
             onClick={() => setShowCustom(true)}
-            className="no-drag px-3 py-1.5 rounded-lg border border-gray-200 text-sm
-                       text-gray-700 hover:border-gray-400 transition-colors"
+            className="no-drag px-3 py-1.5 rounded-lg border border-white/15 text-sm
+                       text-slate-200 hover:border-gray-400 transition-colors"
           >
             + 添加
           </button>
@@ -389,36 +389,36 @@ function ManagementView({
 
       {/* Site list */}
       <div className="flex-1 overflow-y-auto px-6 py-3 flex flex-col gap-1">
-        <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 mb-2">
+        <div className="rounded-xl border border-white/15 bg-white/5 px-4 py-3 mb-2">
           <div className="flex items-center justify-between mb-2">
-            <h2 className="text-sm font-semibold text-gray-800">稳定性面板</h2>
+            <h2 className="text-sm font-semibold text-slate-100">稳定性面板</h2>
             <div className="flex items-center gap-2">
               <button
-                className="no-drag px-2 py-1 text-xs rounded-md border border-gray-300 text-gray-700 hover:bg-white"
+                className="no-drag px-2 py-1 text-xs rounded-md border border-white/15 text-slate-200 hover:bg-stagent-surface"
                 onClick={onRefreshRuntimeStats}
               >
                 刷新
               </button>
               <button
-                className="no-drag px-2 py-1 text-xs rounded-md border border-red-200 text-red-500 hover:bg-red-50"
+                className="no-drag px-2 py-1 text-xs rounded-md border border-red-500/30 text-red-400 hover:bg-red-500/10"
                 onClick={() => onClearRuntimeStats()}
               >
                 清零全部
               </button>
               <button
-                className="no-drag px-2 py-1 text-xs rounded-md border border-gray-300 text-gray-700 hover:bg-white"
+                className="no-drag px-2 py-1 text-xs rounded-md border border-white/15 text-slate-200 hover:bg-stagent-surface"
                 onClick={onExportRuntimeSnapshot}
               >
                 导出快照 JSON
               </button>
               <button
-                className="no-drag px-2 py-1 text-xs rounded-md border border-gray-300 text-gray-700 hover:bg-white"
+                className="no-drag px-2 py-1 text-xs rounded-md border border-white/15 text-slate-200 hover:bg-stagent-surface"
                 onClick={onImportBaseSnapshot}
               >
                 导入基线
               </button>
               <button
-                className="no-drag px-2 py-1 text-xs rounded-md border border-gray-300 text-gray-700 hover:bg-white"
+                className="no-drag px-2 py-1 text-xs rounded-md border border-white/15 text-slate-200 hover:bg-stagent-surface"
                 onClick={onImportNewSnapshot}
               >
                 导入对比
@@ -426,12 +426,12 @@ function ManagementView({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 mb-2 text-xs text-gray-600">
+          <div className="flex flex-wrap items-center gap-2 mb-2 text-xs text-slate-300">
             <span>时间窗(秒)</span>
             <input
               type="number"
               min={10}
-              className="no-drag w-20 rounded border border-gray-300 px-2 py-1 bg-white"
+              className="no-drag w-20 rounded border border-white/15 px-2 py-1 bg-stagent-surface"
               value={Math.floor(runtimePolicyDraft.windowMs / 1000)}
               onChange={(e) => onRuntimePolicyDraftChange({ windowMs: Math.max(10, Number(e.target.value || 10)) * 1000 })}
             />
@@ -439,7 +439,7 @@ function ManagementView({
             <input
               type="number"
               min={0}
-              className="no-drag w-16 rounded border border-gray-300 px-2 py-1 bg-white"
+              className="no-drag w-16 rounded border border-white/15 px-2 py-1 bg-stagent-surface"
               value={runtimePolicyDraft.autoRecoverThreshold}
               onChange={(e) => onRuntimePolicyDraftChange({ autoRecoverThreshold: Math.max(0, Number(e.target.value || 0)) })}
             />
@@ -451,7 +451,7 @@ function ManagementView({
             </button>
           </div>
 
-          <p className="text-[11px] text-gray-500 mb-2">
+          <p className="text-[11px] text-slate-400 mb-2">
             当前策略：
             {runtimePolicy
               ? ` ${Math.round(runtimePolicy.windowMs / 1000)}s 窗口 / ${runtimePolicy.autoRecoverThreshold} 次内自动恢复`
@@ -462,7 +462,7 @@ function ManagementView({
           </p>
 
           {compareView && (
-            <div className="mb-2 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] text-blue-900">
+            <div className="mb-2 rounded border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-[11px] text-blue-900">
               <p className="mb-1">
                 快照对比：{compareView.baseLabel} {'->'} {compareView.newLabel}
               </p>
@@ -478,18 +478,18 @@ function ManagementView({
           )}
 
           {networkDiagnostics && (
-            <div className="mb-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
+            <div className="mb-2 rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200">
               <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
                 <p>
                   代理一致性自检：
                   {networkDiagnostics.proxyConfigured ? '已检测到代理配置' : '未检测到代理配置'}
-                  <span className="text-gray-500 ml-1">
+                  <span className="text-slate-400 ml-1">
                     （{new Date(networkDiagnostics.checkedAt).toLocaleString()}）
                   </span>
                 </p>
                 <button
                   type="button"
-                  className="no-drag px-2 py-0.5 rounded border border-amber-400 text-amber-950 hover:bg-amber-100 text-[11px]"
+                  className="no-drag px-2 py-0.5 rounded border border-amber-400 text-amber-950 hover:bg-amber-500/20 text-[11px]"
                   onClick={() => void onRefreshNetworkDiagnostics()}
                 >
                   重新自检
@@ -523,22 +523,22 @@ function ManagementView({
             </div>
           )}
 
-          <div className="max-h-44 overflow-y-auto rounded border border-gray-200 bg-white">
+          <div className="max-h-44 overflow-y-auto rounded border border-white/15 bg-stagent-surface">
             {sortedStats.length === 0 && (
-              <p className="text-xs text-gray-400 px-3 py-2">暂无故障统计</p>
+              <p className="text-xs text-slate-500 px-3 py-2">暂无故障统计</p>
             )}
             {sortedStats.map((s) => {
               const site = sites.find((x) => x.siteId === s.siteId)
               return (
-                <div key={s.siteId} className="flex items-center justify-between px-3 py-2 border-b border-gray-100 last:border-b-0">
+                <div key={s.siteId} className="flex items-center justify-between px-3 py-2 border-b border-white/10 last:border-b-0">
                   <div className="min-w-0">
-                    <p className="text-xs text-gray-800 truncate">{site?.label ?? s.siteId}</p>
-                    <p className="text-[11px] text-gray-500">
+                    <p className="text-xs text-slate-100 truncate">{site?.label ?? s.siteId}</p>
+                    <p className="text-[11px] text-slate-400">
                       总计 {s.total} · 窗口内 {s.recentInWindow} · 崩溃 {s.byCategory['render-crash'].count} / 销毁 {s.byCategory['webcontents-destroyed'].count} / 网络 {s.byCategory['network-fail'].count} / 中断 {s.byCategory['chat-interrupted'].count}
                     </p>
                   </div>
                   <button
-                    className="no-drag px-2 py-1 text-[11px] rounded border border-gray-300 text-gray-600 hover:bg-gray-50"
+                    className="no-drag px-2 py-1 text-[11px] rounded border border-white/15 text-slate-300 hover:bg-white/5"
                     onClick={() => onClearRuntimeStats(s.siteId)}
                   >
                     清零
@@ -549,10 +549,10 @@ function ManagementView({
           </div>
         </div>
 
-        <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 mb-2">
+        <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-3 mb-2">
           <div className="flex items-center justify-between mb-1">
             <h2 className="text-sm font-semibold text-blue-900">本地 API 工作流（Adapter）</h2>
-            <span className="text-[11px] text-blue-700">
+            <span className="text-[11px] text-blue-300">
               {adapterInfo?.enabled ? '已启用' : '未启用'}
             </span>
           </div>
@@ -568,16 +568,16 @@ function ManagementView({
           <div
             key={site.siteId}
             className="flex items-center justify-between rounded-xl px-4 py-3
-                       hover:bg-gray-50 transition-colors group"
+                       hover:bg-white/5 transition-colors group"
           >
             <div className="flex flex-col">
-              <span className="text-sm font-medium text-gray-900">{site.label}</span>
-              <span className="text-xs text-gray-400">{site.hostname}</span>
+              <span className="text-sm font-medium text-slate-100">{site.label}</span>
+              <span className="text-xs text-slate-500">{site.hostname}</span>
             </div>
 
             <div className="flex items-center gap-3">
               <div className="flex flex-col items-end gap-0.5">
-                <span className="text-xs text-gray-500">{statusLabel(site.status)}</span>
+                <span className="text-xs text-slate-400">{statusLabel(site.status)}</span>
                 {checkMsgs[site.siteId] && (
                   <span className="text-xs text-amber-600">{checkMsgs[site.siteId]}</span>
                 )}
@@ -596,7 +596,7 @@ function ManagementView({
               {site.status === 'quota-exhausted' && (
                 <button
                   className="no-drag px-2.5 py-1 rounded-lg text-xs font-medium
-                             border border-gray-300 text-gray-700 hover:bg-gray-100 transition-colors"
+                             border border-white/15 text-slate-200 hover:bg-white/10 transition-colors"
                   onClick={async () => {
                     // Clear any previous message while checking
                     setCheckMsgs((m) => ({ ...m, [site.siteId]: '检查中…' }))
@@ -621,7 +621,7 @@ function ManagementView({
               <button
                 className="no-drag opacity-0 group-hover:opacity-100 transition-opacity
                            w-6 h-6 flex items-center justify-center rounded-md
-                           hover:bg-gray-200 text-gray-500 text-base leading-none"
+                           hover:bg-white/10 text-slate-400 text-base leading-none"
                 onClick={(e) => {
                   e.stopPropagation()
                   const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
@@ -636,20 +636,20 @@ function ManagementView({
         ))}
 
         {sites.length === 0 && (
-          <p className="text-sm text-gray-400 text-center mt-12">还没有添加任何 AI 网站</p>
+          <p className="text-sm text-slate-500 text-center mt-12">还没有添加任何 AI 网站</p>
         )}
       </div>
 
       {/* Context menu */}
       {menu && (
         <div
-          className="fixed z-50 bg-white rounded-xl shadow-lg border border-gray-100
+          className="fixed z-50 bg-stagent-surface rounded-xl shadow-lg border border-white/10
                      py-1 w-36 text-sm"
           style={{ top: menu.y, left: menu.x }}
           onClick={(e) => e.stopPropagation()}
         >
           <button
-            className="w-full text-left px-4 py-2 hover:bg-gray-50"
+            className="w-full text-left px-4 py-2 hover:bg-white/5"
             onClick={() => {
               onReLogin(menu.siteId)
               setMenu(null)
@@ -658,7 +658,7 @@ function ManagementView({
             重新登录
           </button>
           <button
-            className="w-full text-left px-4 py-2 hover:bg-gray-50"
+            className="w-full text-left px-4 py-2 hover:bg-white/5"
             onClick={() => {
               setRenamingSiteId(menu.siteId)
               setMenu(null)
@@ -667,7 +667,7 @@ function ManagementView({
             重命名
           </button>
           <button
-            className="w-full text-left px-4 py-2 hover:bg-gray-50"
+            className="w-full text-left px-4 py-2 hover:bg-white/5"
             onClick={() => {
               onDebug(menu.siteId)
               setMenu(null)
@@ -676,7 +676,7 @@ function ManagementView({
             调试选择器
           </button>
           <button
-            className="w-full text-left px-4 py-2 hover:bg-gray-50 text-red-500"
+            className="w-full text-left px-4 py-2 hover:bg-white/5 text-red-400"
             onClick={() => {
               onRemove(menu.siteId)
               setMenu(null)
@@ -1020,11 +1020,11 @@ export default function ResourcesPage(): React.JSX.Element {
       <div className="flex flex-col h-screen">
         <div className="drag-region h-10 shrink-0" />
         <div className="flex flex-1 flex-col items-center justify-center gap-4">
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-slate-400">
             请在下方完成 <strong>{site?.label ?? activeSiteId}</strong> 的登录
           </p>
           <button
-            className="no-drag text-xs text-gray-400 hover:text-gray-600 underline"
+            className="no-drag text-xs text-slate-500 hover:text-slate-300 underline"
             onClick={async () => {
               if (activeSiteId) await window.autoAI.site.closeLogin(activeSiteId)
               setView(sites.length > 0 ? 'manage' : 'onboarding')
@@ -1044,7 +1044,7 @@ export default function ResourcesPage(): React.JSX.Element {
       <div className="flex flex-col h-screen">
         <div className="drag-region h-10 shrink-0" />
         {errorMsg && (
-          <p className="px-6 py-2 text-xs text-red-500 text-center">{errorMsg}</p>
+          <p className="px-6 py-2 text-xs text-red-400 text-center">{errorMsg}</p>
         )}
         <OnboardingView
           onSelect={handleSelectSite}
@@ -1059,7 +1059,7 @@ export default function ResourcesPage(): React.JSX.Element {
     <>
       {errorMsg && (
         <div className="fixed top-12 inset-x-0 flex justify-center z-50 pointer-events-none">
-          <p className="text-xs text-red-500 bg-white border border-red-200 rounded-lg px-3 py-1.5 shadow-sm">
+          <p className="text-xs text-red-400 bg-stagent-surface border border-red-500/30 rounded-lg px-3 py-1.5 shadow-sm">
             {errorMsg}
           </p>
         </div>

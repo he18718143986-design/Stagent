@@ -19,12 +19,12 @@ export default function SidebarShell({
   if (layout.collapsed) {
     return (
       <div
-        className="relative shrink-0 flex flex-col items-center border-r border-gray-200 bg-gray-50 min-h-0 py-2 gap-1"
+        className="relative shrink-0 flex flex-col items-center border-r border-white/10 bg-stagent-ink min-h-0 py-2 gap-1"
         style={{ width: layout.outerWidth }}
       >
         <button
           type="button"
-          className="w-9 h-9 flex items-center justify-center rounded-md text-gray-600 hover:bg-gray-200 hover:text-gray-900"
+          className="w-9 h-9 flex items-center justify-center rounded-md text-slate-300 hover:bg-white/10 hover:text-slate-100"
           title="展开任务侧栏"
           aria-label="展开任务侧栏"
           onClick={layout.expand}
@@ -38,7 +38,7 @@ export default function SidebarShell({
         {onNewTask && (
           <button
             type="button"
-            className="w-9 h-9 flex items-center justify-center rounded-md text-blue-600 hover:bg-blue-50"
+            className="w-9 h-9 flex items-center justify-center rounded-md text-stagent-accent hover:bg-white/10"
             title="新建任务"
             aria-label="新建任务"
             onClick={onNewTask}
@@ -53,8 +53,8 @@ export default function SidebarShell({
             className="mt-1 flex flex-col items-center gap-0.5"
             title={`${taskCount} 个任务`}
           >
-            <span className="text-[10px] font-medium text-gray-500 tabular-nums">{taskCount}</span>
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+            <span className="text-[10px] font-medium text-slate-400 tabular-nums">{taskCount}</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-stagent-accent" />
           </div>
         )}
       </div>
@@ -63,14 +63,14 @@ export default function SidebarShell({
 
   return (
     <div
-      className="relative shrink-0 flex min-h-0 border-r border-gray-100 bg-gray-50"
+      className="relative shrink-0 flex min-h-0 border-r border-white/10 bg-stagent-ink"
       style={{ width: layout.outerWidth }}
     >
       <div className="flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden">{children}</div>
 
       <button
         type="button"
-        className="absolute top-2 right-1 z-10 w-6 h-6 flex items-center justify-center rounded text-gray-400 hover:bg-gray-200 hover:text-gray-700"
+        className="absolute top-2 right-1 z-10 w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:bg-white/10 hover:text-slate-200"
         title="收起侧栏"
         aria-label="收起侧栏"
         onClick={layout.toggleCollapsed}

@@ -9,7 +9,7 @@ const FAQ = [
 export function HowToUsePanel({ onClose, onRedownload }: { onClose: () => void; onRedownload?: () => void }): React.JSX.Element {
   const [openFaq, setOpenFaq] = React.useState<number | null>(null)
   return (
-    <div className="fixed inset-0 z-50 bg-stagent-cream overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-stagent-ink overflow-y-auto">
       <div className="max-w-lg mx-auto px-4 py-8">
         <h2 className={`${simpleTheme.heading} text-center mb-2`}>怎么用？</h2>
         <p className={`${simpleTheme.subheading} text-center mb-8`}>三步就能上手</p>
@@ -25,8 +25,8 @@ export function HowToUsePanel({ onClose, onRedownload }: { onClose: () => void; 
                   {s.n}
                 </span>
                 <div>
-                  <div className="font-semibold text-stone-800">{s.title}</div>
-                  <div className="text-sm text-stone-600 mt-1">{s.desc}</div>
+                  <div className="font-semibold text-slate-100">{s.title}</div>
+                  <div className="text-sm text-slate-300 mt-1">{s.desc}</div>
                 </div>
               </div>
             </div>
@@ -34,16 +34,16 @@ export function HowToUsePanel({ onClose, onRedownload }: { onClose: () => void; 
         </div>
         <div className="space-y-2 mb-8">
           {FAQ.map((item, i) => (
-            <div key={item.q} className="border border-stone-200 rounded-xl overflow-hidden">
+            <div key={item.q} className="border border-white/15 rounded-xl overflow-hidden">
               <button
                 type="button"
-                className="w-full text-left px-4 py-3 text-sm font-medium text-stone-700 flex justify-between"
+                className="w-full text-left px-4 py-3 text-sm font-medium text-slate-200 flex justify-between"
                 onClick={() => setOpenFaq(openFaq === i ? null : i)}
               >
                 {item.q}
                 <span>{openFaq === i ? '▼' : '▶'}</span>
               </button>
-              {openFaq === i && <div className="px-4 pb-3 text-sm text-stone-600">{item.a}</div>}
+              {openFaq === i && <div className="px-4 pb-3 text-sm text-slate-300">{item.a}</div>}
             </div>
           ))}
         </div>

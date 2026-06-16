@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import type { FrontendMessage } from '@stagent/core'
 import { humanizeJargon } from '../plainLanguage'
 import { simpleTheme } from '../theme'
@@ -10,8 +10,11 @@ import { QuestionForm } from '../components/QuestionForm'
 import { DecisionReview } from '../components/DecisionReview'
 import { RetryBox, renderOutput } from '../components/RetryBox'
 import { TechnicalDetailsCollapsible } from '../components/TechnicalDetailsCollapsible'
+import { ArtifactsPanel } from '../components/ArtifactsPanel'
 import { filterPlanSteps, simpleStageStatusLabel } from '../components/stageHelpers'
 import { deriveProgress } from '../derive/progress'
+import { newArtifactPaths } from '../derive/newArtifactPaths'
+import { deriveExecutionActivity, pickExecutionStart, formatElapsed } from '../derive/executionActivity'
 
 /**
  * 统一执行/验证屏(渐进式披露)。
@@ -56,6 +59,28 @@ export function ExecutionScreen({
 
   const decisionStageId = state.decisionStageId
   const pausedStageId = state.pausedStageId
+  const workspacePath = state.workflow?.meta?.taskWorkspacePath ?? ''
+  const newPaths = useMemo(() => newArtifactPaths(state.artifacts), [state.artifacts])
+
+  const activity = useMemo(
+    () =>
+      deriveExecutionActivity({
+        stages,
+        stageStatus: state.stageStatus,
+        decisionStageId,
+        pausedStageId,
+        questionsBefore: state.questionsBefore,
+        questions: state.questions,
+        engineActivityFeed: state.engineActivityFeed,
+      }),
+    [stages, state.stageStatus, decisionStageId, pausedStageId, state.questionsBefore, state.questions, state.engineActivityFeed],
+  )
+  const startRef = useRef<number>(pickExecutionStart(state.engineActivityFeed, Date.now()))
+  const [now, setNow] = useState<number>(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [])
 
   return (
     <div className={`${simpleTheme.card} max-w-2xl w-full mx-auto`}>
@@ -63,11 +88,21 @@ export function ExecutionScreen({
         <ProgressRing percent={progress.percent} size={84} label="执行进度" />
         <div className="min-w-0">
           <h1 className={`${simpleTheme.hero} text-xl`}>正在帮你做…</h1>
-          <p className={`${simpleTheme.subheading} mt-1 truncate`}>
-            {progress.currentTitle
-              ? `正在:${humanizeJargon(progress.currentTitle)}`
-              : '都会自动测试,确保能用,你可以先去忙别的'}
-          </p>
+          <div className={`${simpleTheme.subheading} mt-1 flex items-center gap-2 flex-wrap`}>
+            <span className="truncate">
+              {activity.state === 'self-heal'
+                ? `🔧 正在自动修复…（第 ${activity.selfHealAttempts} 次）`
+                : activity.state === 'waiting-you'
+                  ? '⏸ 在等你确认'
+                  : activity.currentTitle
+                    ? `⟳ 正在:${humanizeJargon(activity.currentTitle)}`
+                    : '⟳ 处理中…'}
+            </span>
+            <span className="text-slate-500 tabular-nums shrink-0">· 已用 {formatElapsed(now - startRef.current)}</span>
+          </div>
+          {activity.state === 'self-heal' && (
+            <div className="text-xs text-amber-300 mt-1">遇到问题会自动重试,通常不用你管</div>
+          )}
         </div>
       </div>
 
@@ -81,12 +116,12 @@ export function ExecutionScreen({
           return (
             <li
               key={s.id}
-              className={`flex items-center justify-between p-3 rounded-xl ${active ? 'bg-orange-50 border border-orange-100' : 'bg-stone-50'}`}
+              className={`flex items-center justify-between p-3 rounded-xl ${active ? 'bg-orange-500/10 border border-orange-500/20' : 'bg-white/5'}`}
             >
-              <span className="text-sm text-stone-800">{humanizeJargon(s.title)}</span>
+              <span className="text-sm text-slate-200">{humanizeJargon(s.title)}</span>
               <span
                 className={`text-xs font-medium ${
-                  tone === 'done' ? 'text-stagent-success' : tone === 'active' ? 'text-stagent-orange' : 'text-stone-400'
+                  tone === 'done' ? 'text-green-400' : tone === 'active' ? 'text-stagent-orange' : 'text-slate-500'
                 }`}
               >
                 {tone === 'active' && '⟳ '}
@@ -100,8 +135,8 @@ export function ExecutionScreen({
 
       {/* ── 闸门:始终显示、放大,无视密度开关 ───────────────────────── */}
       {decisionStageId && (
-        <div className="rounded-xl border border-purple-200 bg-purple-50/60 p-4 mb-4">
-          <div className="font-medium text-purple-900 mb-2">需要你确认一个关键决策</div>
+        <div className="rounded-xl border border-purple-500/30 bg-purple-500/10 p-4 mb-4">
+          <div className="font-medium text-purple-200 mb-2">需要你确认一个关键决策</div>
           <DecisionReview
             stageId={decisionStageId}
             initialRecord={renderOutput(state.outputs[decisionStageId]?.decisionRecord)}
@@ -114,8 +149,8 @@ export function ExecutionScreen({
       )}
 
       {pausedStageId && pausedStageId !== decisionStageId && (
-        <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 mb-4">
-          <div className="text-sm text-stone-700 mb-2">已暂停,等待你确认后继续。</div>
+        <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-4 mb-4">
+          <div className="text-sm text-slate-300 mb-2">已暂停,等待你确认后继续。</div>
           <button
             type="button"
             className="text-sm bg-blue-600 text-white px-4 py-2 rounded-full hover:bg-blue-700"
@@ -146,7 +181,7 @@ export function ExecutionScreen({
       {erroredStage && (
         <div
           id={state.focusFailedStageId === erroredStage.id ? 'stagent-focus-stage' : undefined}
-          className="rounded-xl border border-red-200 bg-red-50 p-4 mb-4 text-sm text-red-700"
+          className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 mb-4 text-sm text-red-300"
         >
           <div className="font-medium mb-1">这一步出错了:{humanizeJargon(erroredStage.title)}</div>
           {state.errors[erroredStage.id]?.userBody ?? state.errors[erroredStage.id]?.error ?? '阶段失败'}
@@ -155,15 +190,28 @@ export function ExecutionScreen({
       )}
 
       {state.failed && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 mb-4">
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300 mb-4">
           {state.failed.reason}
         </div>
       )}
 
       {testPassCount != null && testPassCount > 0 && (
-        <div className="flex items-center gap-2 p-3 rounded-xl bg-green-50 border border-green-100 text-sm text-stagent-success mb-4">
+        <div className="flex items-center gap-2 p-3 rounded-xl bg-green-500/10 border border-green-500/20 text-sm text-green-300 mb-4">
           <span>🛡️</span>
           <span>已通过 {testPassCount} 项自动测试</span>
+        </div>
+      )}
+
+      {/* ── 成果生长(从无到有的文件树) ──────────────────────────── */}
+      {workspacePath && (
+        <div className="mb-4">
+          <ArtifactsPanel
+            rootPath={workspacePath}
+            newPaths={newPaths}
+            refreshNonce={state.fileTreeRevision}
+            onOpenFolder={() => void send({ type: 'openArtifactFile', stageId: '', filePath: workspacePath })}
+            onSelectFile={(n) => void send({ type: 'openArtifactFile', stageId: '', filePath: n.path })}
+          />
         </div>
       )}
 
@@ -172,8 +220,8 @@ export function ExecutionScreen({
         <div className="space-y-3 py-1">
           <div>
             <div className="flex items-center justify-between mb-1">
-              <span className="font-medium text-stone-600">结构</span>
-              <button type="button" className="text-stone-500 hover:underline" onClick={() => void send({ type: 'copyDebugLog' })}>
+              <span className="font-medium text-slate-300">结构</span>
+              <button type="button" className="text-slate-400 hover:underline" onClick={() => void send({ type: 'copyDebugLog' })}>
                 复制调试日志
               </button>
             </div>
@@ -181,9 +229,9 @@ export function ExecutionScreen({
           </div>
           {state.engineActivityFeed.length > 0 && (
             <div>
-              <div className="font-medium text-stone-600 mb-1">引擎活动</div>
+              <div className="font-medium text-slate-300 mb-1">引擎活动</div>
               {state.engineActivityFeed.slice(-8).map((e, i) => (
-                <div key={i} className="text-stone-500">
+                <div key={i} className="text-slate-400">
                   [{e.kind}] {e.text}
                 </div>
               ))}
@@ -198,10 +246,10 @@ export function ExecutionScreen({
               return null
             }
             return (
-              <div key={s.id} className="border-t border-stone-100 pt-2">
+              <div key={s.id} className="border-t border-white/10 pt-2">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-stone-600">{s.title}</span>
-                  {confidence && <span className="text-stone-400">置信 {Math.round(confidence.score * 100)}%</span>}
+                  <span className="font-medium text-slate-300">{s.title}</span>
+                  {confidence && <span className="text-slate-500">置信 {Math.round(confidence.score * 100)}%</span>}
                 </div>
                 {stream && (
                   <pre className="mt-1 text-[11px] bg-gray-900 text-gray-100 rounded p-2 overflow-x-auto max-h-40 whitespace-pre-wrap">
@@ -210,7 +258,7 @@ export function ExecutionScreen({
                 )}
                 {outputs &&
                   Object.entries(outputs).map(([k, v]) => (
-                    <pre key={k} className="mt-1 text-[11px] bg-stone-50 border rounded p-2 max-h-32 overflow-auto whitespace-pre-wrap">
+                    <pre key={k} className="mt-1 text-[11px] bg-white/5 border border-white/10 rounded p-2 max-h-32 overflow-auto whitespace-pre-wrap text-slate-300">
                       {renderOutput(v)}
                     </pre>
                   ))}
@@ -220,7 +268,7 @@ export function ExecutionScreen({
                       <button
                         key={ai}
                         type="button"
-                        className="text-[11px] text-blue-600 border border-blue-200 rounded px-2 py-0.5"
+                        className="text-[11px] text-stagent-accent border border-stagent-accent/30 rounded px-2 py-0.5"
                         onClick={() => void send({ type: 'openArtifactFile', stageId: s.id, filePath: a.filePath })}
                       >
                         {a.filePath}
