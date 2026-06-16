@@ -7,6 +7,8 @@ import { HowToUsePanel } from '../components/HowToUsePanel'
 import { TechnicalDetailsCollapsible } from '../components/TechnicalDetailsCollapsible'
 import { ArtifactsPanel } from '../components/ArtifactsPanel'
 import { newArtifactPaths } from '../derive/newArtifactPaths'
+import { buildAcceptanceReport } from '../derive/acceptanceReport'
+import { buildRetrospective } from '../derive/retrospective'
 import { QualityReportPanel } from '../../QualityReportPanel'
 
 /**
@@ -15,7 +17,7 @@ import { QualityReportPanel } from '../../QualityReportPanel'
  * 折叠进技术报告(默认开合跟随 showTechnical)。
  */
 export function DeliveryScreen({ engine, form, send, onNewTask }: CockpitScreenProps): React.JSX.Element {
-  const { state } = engine
+  const { state, stages } = engine
   const [showHelp, setShowHelp] = useState(false)
   const title = state.workflow?.meta.title || form.draft.trim() || '你的成果'
   const workspace = state.workflow?.meta?.taskWorkspacePath ?? form.workspacePath
@@ -31,6 +33,22 @@ export function DeliveryScreen({ engine, form, send, onNewTask }: CockpitScreenP
     .flat()
     .find((a: StageArtifactHint) => /DELIVERY\.md/i.test(a.filePath))
   const newPaths = useMemo(() => newArtifactPaths(state.artifacts), [state.artifacts])
+  const acceptance = useMemo(
+    () => buildAcceptanceReport({ userInput: state.workflow?.meta.userInput ?? form.draft, qualityReport: state.qualityReport }),
+    [state.workflow?.meta.userInput, form.draft, state.qualityReport],
+  )
+  const retro = useMemo(
+    () => buildRetrospective({ stages, qualityReport: state.qualityReport, engineActivityFeed: state.engineActivityFeed }),
+    [stages, state.qualityReport, state.engineActivityFeed],
+  )
+  const acceptanceTone =
+    acceptance.overall === 'pass'
+      ? 'bg-green-500/15 text-green-300'
+      : acceptance.overall === 'fail'
+        ? 'bg-amber-500/15 text-amber-300'
+        : 'bg-white/10 text-slate-300'
+  const acceptanceLabel =
+    acceptance.overall === 'pass' ? '已通过' : acceptance.overall === 'fail' ? '未通过' : '无报告'
 
   const openFolder = (): void => {
     if (workspace) {
@@ -96,6 +114,74 @@ export function DeliveryScreen({ engine, form, send, onNewTask }: CockpitScreenP
             </span>
           </div>
         ))}
+
+      <div className={simpleTheme.card}>
+        <h2 className="font-semibold text-slate-100 mb-3">验收报告</h2>
+        <div className="space-y-3 text-sm">
+          <div>
+            <div className="text-xs text-slate-400 mb-1">需求清单</div>
+            <ul className="list-disc pl-4 text-slate-300 space-y-0.5">
+              {acceptance.requirements.length > 0 ? (
+                acceptance.requirements.map((r, i) => <li key={i}>{r}</li>)
+              ) : (
+                <li className="text-slate-500 list-none">（无）</li>
+              )}
+            </ul>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-400">整体验证</span>
+            <span className={`text-xs px-2 py-0.5 rounded-full ${acceptanceTone}`}>{acceptanceLabel}</span>
+          </div>
+          {acceptance.knownIssues.length > 0 && (
+            <div>
+              <div className="text-xs text-slate-400 mb-1">已知问题</div>
+              <ul className="list-disc pl-4 text-red-300 space-y-0.5">
+                {acceptance.knownIssues.slice(0, 5).map((r, i) => (
+                  <li key={i}>{r}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <div>
+            <div className="text-xs text-slate-400 mb-1">建议的下一步</div>
+            <ul className="list-disc pl-4 text-slate-300 space-y-0.5">
+              {acceptance.nextSteps.map((r, i) => (
+                <li key={i}>{r}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div className={simpleTheme.card}>
+        <h2 className="font-semibold text-slate-100 mb-3">本次复盘</h2>
+        <div className="grid grid-cols-4 gap-2 mb-3">
+          {[
+            { n: retro.decisions, label: '你的关键决策' },
+            { n: retro.stages, label: '执行阶段' },
+            { n: retro.testsPassed, label: '测试通过' },
+            { n: retro.selfHeals, label: '自动修复' },
+          ].map((t) => (
+            <div key={t.label} className="rounded-xl border border-white/10 bg-white/5 p-3 text-center">
+              <div className="text-2xl font-bold text-slate-100 tabular-nums">{t.n}</div>
+              <div className="text-[11px] text-slate-400 mt-0.5">{t.label}</div>
+            </div>
+          ))}
+        </div>
+        {retro.keyDecisions.length > 0 && (
+          <div>
+            <div className="text-xs text-slate-400 mb-1">关键决策</div>
+            <ul className="space-y-1">
+              {retro.keyDecisions.map((d, i) => (
+                <li key={i} className="text-sm text-slate-300 flex items-center gap-2">
+                  <span className="text-green-400">✓</span>
+                  {humanizeJargon(d)}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
 
       {workspace && (
         <ArtifactsPanel
