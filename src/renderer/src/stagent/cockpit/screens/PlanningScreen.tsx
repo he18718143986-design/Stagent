@@ -9,6 +9,7 @@ import { CredibilityStrip } from '../components/CredibilityStrip'
 import { MiniDag } from '../components/MiniDag'
 import { DecisionBoardPreview } from '../components/DecisionGatePanel'
 import { filterPlanSteps } from '../components/stageHelpers'
+import { buildPlanProposal } from '../derive/planProposal'
 
 /**
  * 统一规划/签字屏(合并 SimplePlanning + ProPlanning + ProSignOff)。
@@ -23,6 +24,7 @@ export function PlanningScreen({ engine, form, send, onNewTask }: CockpitScreenP
   const [modalOpen, setModalOpen] = useState(false)
 
   const planSteps = useMemo(() => filterPlanSteps(stages), [stages])
+  const proposal = useMemo(() => buildPlanProposal(stages), [stages])
 
   const workflow = state.workflow
 
@@ -69,16 +71,38 @@ export function PlanningScreen({ engine, form, send, onNewTask }: CockpitScreenP
 
         <CredibilityStrip confidence={state.confidence} className="mb-5" />
 
-        <ol className="space-y-3 mb-6">
-          {planSteps.map((s, i) => (
-            <li key={s.id} className="flex gap-3 p-3 rounded-xl bg-white/5 border border-white/10">
-              <span className="w-7 h-7 rounded-full bg-white/10 border border-white/15 flex items-center justify-center text-sm font-semibold text-stagent-orange shrink-0">
-                {i + 1}
+        <div className="mb-2 rounded-xl border border-white/10 overflow-hidden">
+          <div className="grid grid-cols-[1.2fr_1.4fr_auto] gap-x-3 px-3 py-2 text-[11px] text-slate-400 border-b border-white/10 bg-white/5">
+            <span>步骤</span>
+            <span>目的</span>
+            <span>怎么验证</span>
+          </div>
+          {proposal.rows.map((r, i) => (
+            <div
+              key={r.id}
+              className="grid grid-cols-[1.2fr_1.4fr_auto] gap-x-3 px-3 py-2 text-sm border-b border-white/5 last:border-0"
+            >
+              <span className="text-slate-200">
+                {i + 1}. {humanizeJargon(r.step)}
               </span>
-              <span className="text-sm text-slate-200 pt-0.5">{humanizeJargon(s.title)}</span>
-            </li>
+              <span className="text-slate-400">{humanizeJargon(r.purpose)}</span>
+              <span className="text-xs self-center">
+                {r.verification ? (
+                  <span className="text-green-300">✓ {humanizeJargon(r.verification)}</span>
+                ) : (
+                  <span className="text-slate-500">—</span>
+                )}
+              </span>
+            </div>
           ))}
-        </ol>
+        </div>
+        <div
+          className={`text-xs mb-6 ${
+            proposal.total > 0 && proposal.verifiedCount === proposal.total ? 'text-green-400' : 'text-amber-300'
+          }`}
+        >
+          {proposal.verifiedCount}/{proposal.total} 个功能步骤配了自动化验证
+        </div>
 
         {state.warnings.length > 0 && (
           <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 mb-4">
