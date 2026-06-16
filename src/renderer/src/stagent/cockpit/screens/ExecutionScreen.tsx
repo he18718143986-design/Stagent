@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import type { FrontendMessage } from '@stagent/core'
 import { humanizeJargon } from '../plainLanguage'
 import { simpleTheme } from '../theme'
@@ -14,6 +14,7 @@ import { ArtifactsPanel } from '../components/ArtifactsPanel'
 import { filterPlanSteps, simpleStageStatusLabel } from '../components/stageHelpers'
 import { deriveProgress } from '../derive/progress'
 import { newArtifactPaths } from '../derive/newArtifactPaths'
+import { deriveExecutionActivity, pickExecutionStart, formatElapsed } from '../derive/executionActivity'
 
 /**
  * 统一执行/验证屏(渐进式披露)。
@@ -61,17 +62,47 @@ export function ExecutionScreen({
   const workspacePath = state.workflow?.meta?.taskWorkspacePath ?? ''
   const newPaths = useMemo(() => newArtifactPaths(state.artifacts), [state.artifacts])
 
+  const activity = useMemo(
+    () =>
+      deriveExecutionActivity({
+        stages,
+        stageStatus: state.stageStatus,
+        decisionStageId,
+        pausedStageId,
+        questionsBefore: state.questionsBefore,
+        questions: state.questions,
+        engineActivityFeed: state.engineActivityFeed,
+      }),
+    [stages, state.stageStatus, decisionStageId, pausedStageId, state.questionsBefore, state.questions, state.engineActivityFeed],
+  )
+  const startRef = useRef<number>(pickExecutionStart(state.engineActivityFeed, Date.now()))
+  const [now, setNow] = useState<number>(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [])
+
   return (
     <div className={`${simpleTheme.card} max-w-2xl w-full mx-auto`}>
       <div className="flex items-center gap-4 mb-4">
         <ProgressRing percent={progress.percent} size={84} label="执行进度" />
         <div className="min-w-0">
           <h1 className={`${simpleTheme.hero} text-xl`}>正在帮你做…</h1>
-          <p className={`${simpleTheme.subheading} mt-1 truncate`}>
-            {progress.currentTitle
-              ? `正在:${humanizeJargon(progress.currentTitle)}`
-              : '都会自动测试,确保能用,你可以先去忙别的'}
-          </p>
+          <div className={`${simpleTheme.subheading} mt-1 flex items-center gap-2 flex-wrap`}>
+            <span className="truncate">
+              {activity.state === 'self-heal'
+                ? `🔧 正在自动修复…（第 ${activity.selfHealAttempts} 次）`
+                : activity.state === 'waiting-you'
+                  ? '⏸ 在等你确认'
+                  : activity.currentTitle
+                    ? `⟳ 正在:${humanizeJargon(activity.currentTitle)}`
+                    : '⟳ 处理中…'}
+            </span>
+            <span className="text-slate-500 tabular-nums shrink-0">· 已用 {formatElapsed(now - startRef.current)}</span>
+          </div>
+          {activity.state === 'self-heal' && (
+            <div className="text-xs text-amber-300 mt-1">遇到问题会自动重试,通常不用你管</div>
+          )}
         </div>
       </div>
 
