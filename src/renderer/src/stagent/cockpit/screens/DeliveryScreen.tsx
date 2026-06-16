@@ -1,10 +1,12 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import type { StageArtifactHint } from '@stagent/core'
 import { humanizeJargon } from '../plainLanguage'
 import { simpleTheme } from '../theme'
 import type { CockpitScreenProps } from '../types'
 import { HowToUsePanel } from '../components/HowToUsePanel'
 import { TechnicalDetailsCollapsible } from '../components/TechnicalDetailsCollapsible'
+import { ArtifactsPanel } from '../components/ArtifactsPanel'
+import { newArtifactPaths } from '../derive/newArtifactPaths'
 import { QualityReportPanel } from '../../QualityReportPanel'
 
 /**
@@ -28,6 +30,7 @@ export function DeliveryScreen({ engine, form, send, onNewTask }: CockpitScreenP
   const deliveryArtifact = Object.values(state.artifacts)
     .flat()
     .find((a: StageArtifactHint) => /DELIVERY\.md/i.test(a.filePath))
+  const newPaths = useMemo(() => newArtifactPaths(state.artifacts), [state.artifacts])
 
   const openFolder = (): void => {
     if (workspace) {
@@ -49,19 +52,19 @@ export function DeliveryScreen({ engine, form, send, onNewTask }: CockpitScreenP
         >
           {hasConcern ? '!' : '✓'}
         </div>
-        <h1 className={`text-3xl font-bold mb-1 ${hasConcern ? 'text-amber-600' : 'text-stagent-success'}`}>
+        <h1 className={`text-3xl font-bold mb-1 ${hasConcern ? 'text-amber-400' : 'text-green-400'}`}>
           {hasConcern ? '做完了，但有检查没通过' : '做好了！'}
         </h1>
-        <p className="text-stone-600">
+        <p className="text-slate-400">
           {hasConcern ? '部分自动检查未通过，建议先看下方技术报告再使用' : '已经测试通过，可以直接用了'}
         </p>
       </div>
 
       <div className={simpleTheme.card}>
-        <h2 className="font-semibold text-stone-800 mb-4">你的成果</h2>
+        <h2 className="font-semibold text-slate-100 mb-4">你的成果</h2>
         <div className="flex flex-col items-center text-center gap-3">
           <div className="text-4xl">📁</div>
-          <div className="font-bold text-lg text-stone-800">{humanizeJargon(title)}</div>
+          <div className="font-bold text-lg text-slate-100">{humanizeJargon(title)}</div>
           <button
             type="button"
             className={`${simpleTheme.primaryBtn} !bg-stagent-success hover:!bg-green-700`}
@@ -81,12 +84,12 @@ export function DeliveryScreen({ engine, form, send, onNewTask }: CockpitScreenP
 
       {testTotal > 0 &&
         (testsAllPassed ? (
-          <div className="flex items-center gap-2 p-3 rounded-xl bg-green-50 border border-green-100 text-sm text-stagent-success">
+          <div className="flex items-center gap-2 p-3 rounded-xl bg-green-500/10 border border-green-500/20 text-sm text-green-300">
             <span>🛡️</span>
             <span>全部 {testPass} 项测试通过 ✓</span>
           </div>
         ) : (
-          <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-700">
+          <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-sm text-amber-300">
             <span>⚠️</span>
             <span>
               {testPass}/{testTotal} 项测试通过（部分未通过，详见技术报告）
@@ -94,11 +97,21 @@ export function DeliveryScreen({ engine, form, send, onNewTask }: CockpitScreenP
           </div>
         ))}
 
+      {workspace && (
+        <ArtifactsPanel
+          rootPath={workspace}
+          newPaths={newPaths}
+          refreshNonce={state.fileTreeRevision}
+          onOpenFolder={openFolder}
+          onSelectFile={(n) => void send({ type: 'openArtifactFile', stageId: '', filePath: n.path })}
+        />
+      )}
+
       <TechnicalDetailsCollapsible title="技术报告(给开发者看)" defaultOpen={hasConcern || undefined}>
         <div className="space-y-3 py-2">
           {state.qualityReport && <QualityReportPanel report={state.qualityReport} />}
           <div>
-            <div className="font-medium text-stone-700 mb-1">做了什么</div>
+            <div className="font-medium text-slate-300 mb-1">做了什么</div>
             <ul className="list-disc pl-4 space-y-0.5">
               {(state.workflow?.meta.userInput ?? form.draft)
                 .split(/[。；\n]/)
@@ -110,7 +123,7 @@ export function DeliveryScreen({ engine, form, send, onNewTask }: CockpitScreenP
             </ul>
           </div>
           <div>
-            <div className="font-medium text-stone-700 mb-1">文件清单</div>
+            <div className="font-medium text-slate-300 mb-1">文件清单</div>
             <ul className="list-disc pl-4">
               {Object.values(state.artifacts)
                 .flat()
@@ -123,7 +136,7 @@ export function DeliveryScreen({ engine, form, send, onNewTask }: CockpitScreenP
           {deliveryArtifact && (
             <button
               type="button"
-              className="text-blue-600 hover:underline"
+              className="text-stagent-accent hover:underline"
               onClick={() =>
                 void send({ type: 'openArtifactFile', stageId: '', filePath: deliveryArtifact.filePath })
               }
@@ -136,7 +149,7 @@ export function DeliveryScreen({ engine, form, send, onNewTask }: CockpitScreenP
 
       <button
         type="button"
-        className="w-full flex items-center justify-between p-4 rounded-xl bg-orange-50 border border-orange-100 text-stone-700 hover:bg-orange-100/80"
+        className="w-full flex items-center justify-between p-4 rounded-xl bg-orange-500/10 border border-orange-500/20 text-slate-200 hover:bg-orange-500/15"
         onClick={() => {
           form.setDraft(state.workflow?.meta.userInput ?? form.draft)
           onNewTask()
