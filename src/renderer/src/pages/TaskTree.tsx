@@ -136,7 +136,7 @@ export default function TaskTree({
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                   {t.recoverable && (
                     <button
-                      className="text-[11px] text-blue-600 hover:underline"
+                      className="text-[11px] text-blue-400 hover:underline"
                       onClick={(e) => {
                         e.stopPropagation()
                         onResume(t.instanceKey)
@@ -146,7 +146,7 @@ export default function TaskTree({
                     </button>
                   )}
                   <button
-                    className="text-[11px] text-red-500 hover:underline"
+                    className="text-[11px] text-red-400 hover:underline"
                     onClick={(e) => {
                       e.stopPropagation()
                       setScope('record')
@@ -193,7 +193,7 @@ export default function TaskTree({
             </div>
 
             <div className="mt-4 space-y-2">
-              <label className="flex items-start gap-2 text-sm text-gray-700">
+              <label className="flex items-start gap-2 text-sm text-slate-200">
                 <input
                   type="radio"
                   name="del-scope"
@@ -203,12 +203,12 @@ export default function TaskTree({
                 />
                 <span>
                   <span className="font-medium">仅任务记录</span>
-                  <span className="block text-xs text-gray-400">
+                  <span className="block text-xs text-slate-500">
                     清除侧栏记录与 .stagent 状态目录，保留所有产物文件。
                   </span>
                 </span>
               </label>
-              <label className="flex items-start gap-2 text-sm text-gray-700">
+              <label className="flex items-start gap-2 text-sm text-slate-200">
                 <input
                   type="radio"
                   name="del-scope"
@@ -218,12 +218,12 @@ export default function TaskTree({
                 />
                 <span>
                   <span className="font-medium">连同任务新建的产物</span>
-                  <span className="block text-xs text-gray-400">
+                  <span className="block text-xs text-slate-500">
                     额外删除本任务生成的文件与需求分析文档/工作流规划，不动你原有或手改的文件。
                   </span>
                 </span>
               </label>
-              <label className="flex items-start gap-2 text-sm text-gray-700">
+              <label className="flex items-start gap-2 text-sm text-slate-200">
                 <input
                   type="radio"
                   name="del-scope"
@@ -232,11 +232,11 @@ export default function TaskTree({
                   onChange={() => setScope('folder')}
                 />
                 <span>
-                  <span className="font-medium text-red-600">整个工作文件夹</span>
-                  <span className="block text-xs text-gray-400">
+                  <span className="font-medium text-red-300">整个工作文件夹</span>
+                  <span className="block text-xs text-slate-500">
                     递归删除下面整个目录（含无关文件，不可恢复）：
                   </span>
-                  <span className="block text-xs text-red-500 break-all">
+                  <span className="block text-xs text-red-400 break-all">
                     {pendingDelete.taskWorkspacePath ?? '（无工作目录，无法整删）'}
                   </span>
                 </span>
@@ -244,14 +244,14 @@ export default function TaskTree({
             </div>
 
             {scope === 'folder' && (
-              <div className="mt-3 rounded bg-red-50 px-3 py-2 text-xs text-red-600">
+              <div className="mt-3 rounded bg-red-500/10 px-3 py-2 text-xs text-red-300">
                 警告：此操作将永久删除整个工作文件夹及其全部内容，无法撤销。
               </div>
             )}
 
             <div className="mt-5 flex justify-end gap-2">
               <button
-                className="rounded px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100"
+                className="rounded px-3 py-1.5 text-sm text-slate-300 hover:bg-white/10"
                 onClick={closeDelete}
               >
                 取消

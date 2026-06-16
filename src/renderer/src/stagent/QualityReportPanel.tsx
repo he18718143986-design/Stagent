@@ -3,16 +3,16 @@ import type { QualityReportPayload } from '@stagent/core'
 export function QualityReportPanel({ report }: { report: QualityReportPayload }): JSX.Element {
   const { afk, verificationRows, engineSummary } = report
   return (
-    <div className="border border-green-300 bg-white rounded-lg p-4 text-sm space-y-3">
-      <h3 className="font-semibold text-gray-800">质量报告</h3>
+    <div className="border border-green-300 bg-stagent-surface rounded-lg p-4 text-sm space-y-3">
+      <h3 className="font-semibold text-slate-100">质量报告</h3>
       <div
         className={`inline-block px-2 py-1 rounded text-xs font-medium ${
-          afk.passed ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+          afk.passed ? 'bg-green-500/20 text-green-200' : 'bg-red-500/20 text-red-800'
         }`}
       >
         AFK {afk.passed ? '通过' : '未通过'}
       </div>
-      <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
+      <div className="grid grid-cols-2 gap-2 text-xs text-slate-300">
         <div>稳定验证 {afk.stableVerificationPasses}/{afk.verificationStages}</div>
         <div>人工介入 {afk.humanInterventions}</div>
         <div>运行时重规划 {afk.runtimeReplanCount}</div>
@@ -24,7 +24,7 @@ export function QualityReportPanel({ report }: { report: QualityReportPayload })
       {verificationRows.length > 0 && (
         <table className="w-full text-xs border-collapse">
           <thead>
-            <tr className="text-left text-gray-500 border-b">
+            <tr className="text-left text-slate-400 border-b">
               <th className="py-1 pr-2">阶段</th>
               <th className="py-1 pr-2">通过/总计</th>
               <th className="py-1">状态</th>
@@ -32,7 +32,7 @@ export function QualityReportPanel({ report }: { report: QualityReportPayload })
           </thead>
           <tbody>
             {verificationRows.map((row) => (
-              <tr key={row.stageId} className="border-b border-gray-100">
+              <tr key={row.stageId} className="border-b border-white/10">
                 <td className="py-1 pr-2 font-mono">{row.stageId}</td>
                 <td className="py-1 pr-2">
                   {row.passCount}/{row.totalRuns}
@@ -45,9 +45,9 @@ export function QualityReportPanel({ report }: { report: QualityReportPayload })
           </tbody>
         </table>
       )}
-      <p className="text-gray-700 text-xs">{engineSummary}</p>
+      <p className="text-slate-200 text-xs">{engineSummary}</p>
       {afk.reasons.length > 0 && (
-        <ul className="text-xs text-red-700 list-disc pl-4 space-y-1">
+        <ul className="text-xs text-red-300 list-disc pl-4 space-y-1">
           {afk.reasons.map((r, i) => (
             <li key={i}>{r}</li>
           ))}

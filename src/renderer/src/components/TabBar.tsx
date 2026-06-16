@@ -61,7 +61,7 @@ export default function TabBar({
 
   return (
     // Full row is a drag region; all interactive elements carry no-drag
-    <div className="drag-region h-10 flex items-center shrink-0 bg-white border-b border-gray-100 select-none">
+    <div className="drag-region h-10 flex items-center shrink-0 bg-stagent-surface border-b border-white/10 select-none">
       {/* Traffic-light spacer — matches trafficLightPosition: { x:16, y:16 } */}
       <div className="w-20 shrink-0" />
 
@@ -73,7 +73,7 @@ export default function TabBar({
             <div
               key={s.siteId}
               className={`no-drag flex items-center gap-1 px-2.5 h-7 rounded-md text-xs font-medium whitespace-nowrap transition-colors cursor-pointer ${
-                isActive ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'
+                isActive ? 'bg-gray-900 text-white' : 'text-slate-300 hover:bg-white/10'
               }`}
               onClick={() => onActiveSiteIdChange(s.siteId)}
             >
@@ -82,7 +82,7 @@ export default function TabBar({
                 className={`no-drag flex items-center justify-center w-3.5 h-3.5 rounded-full text-[9px] leading-none transition-colors ${
                   isActive
                     ? 'text-white/60 hover:bg-white/20 hover:text-white'
-                    : 'text-gray-400 hover:bg-gray-200 hover:text-gray-700'
+                    : 'text-slate-500 hover:bg-white/10 hover:text-slate-200'
                 }`}
                 aria-label={`关闭 ${s.label}`}
                 onClick={async (e) => {
@@ -98,7 +98,7 @@ export default function TabBar({
 
         {/* Add-site button */}
         <button
-          className="no-drag flex items-center justify-center w-6 h-6 rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors shrink-0 text-base leading-none ml-0.5"
+          className="no-drag flex items-center justify-center w-6 h-6 rounded-md text-slate-500 hover:bg-white/10 hover:text-slate-300 transition-colors shrink-0 text-base leading-none ml-0.5"
           onClick={onAddSite}
           aria-label="添加 AI"
         >
@@ -109,7 +109,7 @@ export default function TabBar({
       {/* Stagent (工作流) button */}
       {onOpenStagent && (
         <button
-          className="no-drag flex items-center justify-center h-7 px-2 rounded-md mr-1 text-xs font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors shrink-0"
+          className="no-drag flex items-center justify-center h-7 px-2 rounded-md mr-1 text-xs font-medium text-slate-400 hover:bg-white/10 hover:text-slate-200 transition-colors shrink-0"
           onClick={onOpenStagent}
           title="决策式工作流"
         >
@@ -119,7 +119,7 @@ export default function TabBar({
 
       {/* Settings button */}
       <button
-        className="no-drag flex items-center justify-center w-7 h-7 rounded-md mr-3 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors shrink-0"
+        className="no-drag flex items-center justify-center w-7 h-7 rounded-md mr-3 text-slate-500 hover:bg-white/10 hover:text-slate-300 transition-colors shrink-0"
         onClick={onSettings}
         title="AI 资源设置"
       >

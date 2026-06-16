@@ -22,19 +22,19 @@ body {
   color: #e2e8f0;
 }
 
-/* 暗色驾驶舱内统一表单控件底色，避免浏览器默认白底在深色背景上刺眼 */
-.stagent-dark input:not([type='checkbox']):not([type='radio']),
-.stagent-dark textarea,
-.stagent-dark select {
+/* 整店深色:统一表单控件底色，避免浏览器默认白底在深色背景上刺眼 */
+input:not([type='checkbox']):not([type='radio']),
+textarea,
+select {
   background-color: #151b24;
   color: #e2e8f0;
   border-color: rgba(255, 255, 255, 0.15);
 }
-.stagent-dark input::placeholder,
-.stagent-dark textarea::placeholder {
+input::placeholder,
+textarea::placeholder {
   color: #64748b;
 }
-.stagent-dark select option {
+select option {
   background-color: #151b24;
   color: #e2e8f0;
 }

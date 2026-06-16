@@ -78,7 +78,7 @@ export function CockpitHeader({
             }`}
           >
             <span
-              className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+              className={`inline-block h-3 w-3 transform rounded-full bg-stagent-surface transition-transform ${
                 showTechnical ? 'translate-x-3.5' : 'translate-x-0.5'
               }`}
             />

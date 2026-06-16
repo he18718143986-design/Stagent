@@ -87,10 +87,10 @@ export function DecisionReview({
   }
 
   return (
-    <div className="space-y-2 border border-purple-200 bg-purple-50 rounded-lg p-3 mt-2">
-      <div className="text-sm font-medium text-purple-800">决策评审 — 填写决策记录后批准</div>
+    <div className="space-y-2 border border-purple-500/30 bg-purple-500/10 rounded-lg p-3 mt-2">
+      <div className="text-sm font-medium text-purple-200">决策评审 — 填写决策记录后批准</div>
       <textarea
-        className="w-full text-sm border border-gray-300 rounded px-2 py-1 resize-y min-h-[6rem] font-mono"
+        className="w-full text-sm border border-white/15 rounded px-2 py-1 resize-y min-h-[6rem] font-mono"
         placeholder="记录此处所做的关键决策、取舍与依据…"
         value={record}
         onChange={(e) => {
@@ -98,22 +98,22 @@ export function DecisionReview({
           setRecord(e.target.value)
         }}
       />
-      <div className="rounded border border-purple-100 bg-white p-2">
-        <div className="text-xs font-medium text-gray-600 mb-1">
+      <div className="rounded border border-white/10 bg-white/5 p-2">
+        <div className="text-xs font-medium text-slate-300 mb-1">
           结构自检（{checks.length - uncheckedCount}/{checks.length}）
         </div>
         <ul className="space-y-0.5">
           {checks.map((c) => (
             <li key={c.label} className="text-xs flex items-start gap-1.5">
-              <span className={c.ok ? 'text-green-600' : 'text-amber-500'}>{c.ok ? '✓' : '○'}</span>
-              <span className={c.ok ? 'text-gray-500' : 'text-gray-700'}>{c.label}</span>
+              <span className={c.ok ? 'text-green-400' : 'text-amber-400'}>{c.ok ? '✓' : '○'}</span>
+              <span className={c.ok ? 'text-slate-500' : 'text-slate-300'}>{c.label}</span>
             </li>
           ))}
         </ul>
       </div>
       {assumptions.length > 0 && (
-        <div className="rounded border border-amber-200 bg-amber-50 p-2">
-          <div className="text-xs font-medium text-amber-800 mb-1">
+        <div className="rounded border border-amber-500/30 bg-amber-500/10 p-2">
+          <div className="text-xs font-medium text-amber-200 mb-1">
             批准前请逐条知悉（AI 无法替你核实，需你担责）
           </div>
           <ul className="space-y-1">
@@ -121,11 +121,11 @@ export function DecisionReview({
               <li key={a} className="text-xs flex items-start gap-1.5">
                 <input
                   type="checkbox"
-                  className="mt-0.5 accent-amber-600 shrink-0"
+                  className="mt-0.5 accent-amber-500 shrink-0"
                   checked={!!acked[a]}
                   onChange={(e) => setAcked((m) => ({ ...m, [a]: e.target.checked }))}
                 />
-                <span className="text-gray-700">{a}</span>
+                <span className="text-slate-300">{a}</span>
               </li>
             ))}
           </ul>
@@ -142,19 +142,19 @@ export function DecisionReview({
         </button>
         <button
           type="button"
-          className="text-sm border border-purple-400 text-purple-700 px-3 py-1.5 rounded hover:bg-purple-100 disabled:opacity-50"
+          className="text-sm border border-purple-400/60 text-purple-300 px-3 py-1.5 rounded hover:bg-purple-500/15 disabled:opacity-50"
           disabled={!record.trim() || reviewing}
           onClick={() => void runReview()}
         >
           {reviewing ? 'AI 复核中…' : '🔍 AI 复核'}
         </button>
         {!allAcked && assumptions.length > 0 && (
-          <span className="text-xs text-amber-600">请先勾选上面的「已知悉」</span>
+          <span className="text-xs text-amber-400">请先勾选上面的「已知悉」</span>
         )}
       </div>
       {confirming && (
-        <div className="rounded border border-amber-300 bg-amber-50 p-2 space-y-2">
-          <div className="text-xs text-amber-800">
+        <div className="rounded border border-amber-500/40 bg-amber-500/10 p-2 space-y-2">
+          <div className="text-xs text-amber-200">
             这份方案还有 {uncheckedCount} 项没满足（{checks.filter((c) => !c.ok).map((c) => c.label).join('；')}）。仍要批准吗？
           </div>
           <div className="flex items-center gap-2">
@@ -170,7 +170,7 @@ export function DecisionReview({
             </button>
             <button
               type="button"
-              className="text-sm border border-gray-300 text-gray-600 px-3 py-1.5 rounded hover:bg-gray-50"
+              className="text-sm border border-white/15 text-slate-300 px-3 py-1.5 rounded hover:bg-white/5"
               onClick={() => setConfirming(false)}
             >
               再改改
@@ -179,13 +179,13 @@ export function DecisionReview({
         </div>
       )}
       {reviewErr && (
-        <div className="text-xs text-red-600 border border-red-200 bg-red-50 rounded px-2 py-1">
+        <div className="text-xs text-red-300 border border-red-500/30 bg-red-500/10 rounded px-2 py-1">
           AI 复核失败：{reviewErr}
         </div>
       )}
       {review && (
-        <div className="text-xs text-gray-800 border border-blue-200 bg-blue-50 rounded px-2 py-2 whitespace-pre-wrap">
-          <div className="font-medium text-blue-700 mb-1">
+        <div className="text-xs text-slate-200 border border-blue-500/30 bg-blue-500/10 rounded px-2 py-2 whitespace-pre-wrap">
+          <div className="font-medium text-blue-300 mb-1">
             AI 复核意见{reviewModel ? `（${reviewModel}）` : ''}
           </div>
           {review}

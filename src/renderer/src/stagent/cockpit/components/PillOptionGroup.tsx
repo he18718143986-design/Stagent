@@ -23,7 +23,7 @@ export function PillOptionGroup({
   const recommended = question.recommendedOption ?? question.options?.[0]
   return (
     <div className="space-y-3">
-      <div className="text-base font-medium text-stone-800">{question.text}</div>
+      <div className="text-base font-medium text-slate-100">{question.text}</div>
       {question.options && question.options.length > 0 ? (
         <div className="flex flex-wrap gap-2">
           {question.options.map((opt) => {
@@ -50,12 +50,12 @@ export function PillOptionGroup({
         </div>
       ) : (
         <input
-          className="w-full text-sm border border-stone-200 rounded-xl px-3 py-2"
+          className="w-full text-sm border border-white/15 rounded-xl px-3 py-2"
           value={value}
           onChange={(e) => onChange(e.target.value)}
         />
       )}
-      {question.hint && <p className="text-xs text-stone-500">{question.hint}</p>}
+      {question.hint && <p className="text-xs text-slate-400">{question.hint}</p>}
     </div>
   )
 }

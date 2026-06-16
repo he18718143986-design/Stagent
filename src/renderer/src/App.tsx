@@ -79,11 +79,11 @@ export default function App(): React.JSX.Element {
     setPage('/resources')
   }, [])
 
-  if (page === null) return <div className="h-screen bg-white" />
+  if (page === null) return <div className="h-screen bg-stagent-ink" />
 
   return (
     <NavigationContext.Provider value={navValue}>
-      <div className="flex flex-col h-screen bg-white">
+      <div className="flex flex-col h-screen bg-stagent-ink">
         {/* Title bar — TabBar on /chat, Stagent header on /stagent, gear header on /resources */}
         {page === '/chat' ? (
           <TabBar
@@ -123,7 +123,7 @@ export default function App(): React.JSX.Element {
             </button>
           </div>
         ) : (
-          <div className="drag-region h-10 flex items-center justify-between shrink-0 bg-white border-b border-gray-100">
+          <div className="drag-region h-10 flex items-center justify-between shrink-0 bg-stagent-ink border-b border-white/10">
             {/* Spacer for traffic lights */}
             <div className="w-20 shrink-0" />
             {/* Cancel button — visible above the WebContentsView when a login
@@ -131,20 +131,20 @@ export default function App(): React.JSX.Element {
                 This is the only React element the user can click in that state. */}
             {sites.some((s) => s.status === 'loading') && (
               <button
-                className="no-drag text-xs text-gray-500 hover:text-gray-800 underline underline-offset-2 transition-colors"
+                className="no-drag text-xs text-slate-400 hover:text-slate-100 underline underline-offset-2 transition-colors"
                 onClick={goSettings}
               >
                 取消登录
               </button>
             )}
             <button
-              className="no-drag h-7 px-2 rounded-md mr-1 text-xs font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+              className="no-drag h-7 px-2 rounded-md mr-1 text-xs font-medium text-slate-400 hover:bg-white/10 hover:text-slate-200 transition-colors"
               onClick={() => setPage('/stagent')}
             >
               工作流
             </button>
             <button
-              className="no-drag flex items-center justify-center w-7 h-7 rounded-md mr-3 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors shrink-0"
+              className="no-drag flex items-center justify-center w-7 h-7 rounded-md mr-3 text-slate-500 hover:bg-white/10 hover:text-slate-300 transition-colors shrink-0"
               onClick={goSettings}
               title="AI 资源设置"
             >

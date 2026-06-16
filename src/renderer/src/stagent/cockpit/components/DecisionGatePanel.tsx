@@ -26,10 +26,10 @@ export function DecisionGatePanel({
 
   if (pro) {
     return (
-      <div className="space-y-4 border border-purple-100 bg-purple-50/50 rounded-lg p-4">
-        <div className="text-sm font-medium text-purple-900">决策闸门</div>
+      <div className="space-y-4 border border-purple-500/30 bg-purple-500/10/50 rounded-lg p-4">
+        <div className="text-sm font-medium text-purple-200">决策闸门</div>
         {questions.map((q) => (
-          <div key={q.id} className="space-y-2 bg-white rounded-lg p-3 border border-purple-100">
+          <div key={q.id} className="space-y-2 bg-stagent-surface rounded-lg p-3 border border-purple-500/30">
             <PillOptionGroup
               question={{ ...q, recommendedOption: q.recommendedOption ?? inferRecommendedOption(q.options ?? []) }}
               value={answers[q.id] ?? ''}
@@ -72,7 +72,7 @@ export function DecisionBoardPreview({
   return (
     <div className="space-y-2">
       {items.slice(0, 8).map((item, i) => (
-        <div key={i} className="text-xs text-purple-800 flex gap-2">
+        <div key={i} className="text-xs text-purple-200 flex gap-2">
           <span>•</span>
           <span>
             {item.stageTitle ?? item.stageId}

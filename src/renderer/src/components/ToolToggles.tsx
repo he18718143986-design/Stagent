@@ -54,7 +54,7 @@ export default function ToolToggles({ site, isGenerating, onToggled }: ToolToggl
               'rounded-full px-2.5 py-1 text-xs font-medium border transition-colors',
               isOn
                 ? 'border-blue-400/60 bg-blue-500/15 text-blue-300'
-                : 'border-white/10 bg-white/5 text-gray-400 hover:bg-white/10 hover:text-gray-200',
+                : 'border-white/10 bg-white/5 text-slate-500 hover:bg-white/10 hover:text-gray-200',
               disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer',
             ].join(' ')}
           >

@@ -63,15 +63,15 @@ export default function FileEditor({
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      <div className="px-3 py-2 border-b border-gray-100 flex items-center gap-2">
-        <span className="text-sm text-gray-700 truncate" title={filePath}>
+      <div className="px-3 py-2 border-b border-white/10 flex items-center gap-2">
+        <span className="text-sm text-slate-200 truncate" title={filePath}>
           {name}
           {dirty && <span className="text-amber-500"> ●</span>}
         </span>
-        {savedHint && <span className="text-xs text-green-600">已保存 ✓</span>}
+        {savedHint && <span className="text-xs text-green-400">已保存 ✓</span>}
         <div className="ml-auto flex items-center gap-2">
           <button
-            className="text-xs text-gray-500 hover:text-gray-800 disabled:opacity-40"
+            className="text-xs text-slate-400 hover:text-slate-100 disabled:opacity-40"
             disabled={!dirty}
             onClick={() => setContent(savedContent)}
           >
@@ -84,18 +84,18 @@ export default function FileEditor({
           >
             {saving ? '保存中…' : '保存'}
           </button>
-          <button className="text-xs text-gray-500 hover:text-gray-800" onClick={onClose}>
+          <button className="text-xs text-slate-400 hover:text-slate-100" onClick={onClose}>
             关闭文件
           </button>
         </div>
       </div>
       {fileError ? (
-        <div className="flex-1 flex items-center justify-center text-sm text-red-500">
+        <div className="flex-1 flex items-center justify-center text-sm text-red-400">
           无法编辑：{fileError}
         </div>
       ) : (
         <textarea
-          className="flex-1 w-full resize-none font-mono text-[13px] leading-5 p-3 outline-none text-gray-800"
+          className="flex-1 w-full resize-none font-mono text-[13px] leading-5 p-3 outline-none text-slate-100"
           spellCheck={false}
           value={content}
           onChange={(e) => setContent(e.target.value)}
