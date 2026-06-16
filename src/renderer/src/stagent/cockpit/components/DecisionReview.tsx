@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { extractDecisionAssumptions } from '../derive/decisionRecordSections'
 
 function computeDecisionChecks(text: string): { label: string; ok: boolean }[] {
   const scenarioCount = (text.match(/场景\s*[0-9一二三四五六七八九十]/g) || []).length
@@ -45,6 +46,27 @@ export function DecisionReview({
   const checks = computeDecisionChecks(record)
   const uncheckedCount = checks.filter((c) => !c.ok).length
 
+  // 逼出判断 #1:AI 无法替你核实的假设/风险,须逐条勾选「已知悉」后才能批准。
+  const assumptions = useMemo(() => extractDecisionAssumptions(record), [record])
+  const [acked, setAcked] = useState<Record<string, boolean>>({})
+  const allAcked = assumptions.every((a) => acked[a])
+  // 逼出判断 #2:结构自检未满足时,「批准」需二次确认,不能一键放行。
+  const [confirming, setConfirming] = useState(false)
+
+  const canApprove = !!record.trim() && allAcked
+
+  const handleApprove = (): void => {
+    if (!canApprove) {
+      return
+    }
+    if (uncheckedCount > 0 && !confirming) {
+      setConfirming(true)
+      return
+    }
+    setConfirming(false)
+    onApprove(record.trim())
+  }
+
   const runReview = async (): Promise<void> => {
     setReviewing(true)
     setReview(null)
@@ -89,12 +111,32 @@ export function DecisionReview({
           ))}
         </ul>
       </div>
+      {assumptions.length > 0 && (
+        <div className="rounded border border-amber-200 bg-amber-50 p-2">
+          <div className="text-xs font-medium text-amber-800 mb-1">
+            批准前请逐条知悉（AI 无法替你核实，需你担责）
+          </div>
+          <ul className="space-y-1">
+            {assumptions.map((a) => (
+              <li key={a} className="text-xs flex items-start gap-1.5">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 accent-amber-600 shrink-0"
+                  checked={!!acked[a]}
+                  onChange={(e) => setAcked((m) => ({ ...m, [a]: e.target.checked }))}
+                />
+                <span className="text-gray-700">{a}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="flex items-center gap-2 flex-wrap">
         <button
           type="button"
           className="text-sm bg-purple-600 text-white px-3 py-1.5 rounded hover:bg-purple-700 disabled:opacity-50"
-          disabled={!record.trim()}
-          onClick={() => onApprove(record.trim())}
+          disabled={!canApprove}
+          onClick={handleApprove}
         >
           批准决策并继续
         </button>
@@ -106,10 +148,36 @@ export function DecisionReview({
         >
           {reviewing ? 'AI 复核中…' : '🔍 AI 复核'}
         </button>
-        {uncheckedCount > 0 && (
-          <span className="text-xs text-amber-600">还有 {uncheckedCount} 条结构项未满足（可忽略直接批准）</span>
+        {!allAcked && assumptions.length > 0 && (
+          <span className="text-xs text-amber-600">请先勾选上面的「已知悉」</span>
         )}
       </div>
+      {confirming && (
+        <div className="rounded border border-amber-300 bg-amber-50 p-2 space-y-2">
+          <div className="text-xs text-amber-800">
+            这份方案还有 {uncheckedCount} 项没满足（{checks.filter((c) => !c.ok).map((c) => c.label).join('；')}）。仍要批准吗？
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="text-sm bg-amber-600 text-white px-3 py-1.5 rounded hover:bg-amber-700"
+              onClick={() => {
+                setConfirming(false)
+                onApprove(record.trim())
+              }}
+            >
+              仍要批准
+            </button>
+            <button
+              type="button"
+              className="text-sm border border-gray-300 text-gray-600 px-3 py-1.5 rounded hover:bg-gray-50"
+              onClick={() => setConfirming(false)}
+            >
+              再改改
+            </button>
+          </div>
+        </div>
+      )}
       {reviewErr && (
         <div className="text-xs text-red-600 border border-red-200 bg-red-50 rounded px-2 py-1">
           AI 复核失败：{reviewErr}
