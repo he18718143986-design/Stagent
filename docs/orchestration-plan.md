@@ -37,7 +37,7 @@
 | 2 | per-role 模型路由 env 解耦（ADR-0006） | — | — | — | ✅ **已完成（无需做）** | 已在主干 |
 | 3a | best-of-N **选择策略纯函数核**（无 token） | P1 | 方案 B | `cursor/best-of-n-selection-core-3713` | ✅ **已合并 main**（#23）：`selectBestCandidate`（按 Strict QA 择优，纯函数永不抛）；新测 14/14 | #23 |
 | 3b | best-of-N **执行器接线 + T6 验证** | P1 | 方案 A（重 live） | `cursor/best-of-n-executor-wiring-dac2` | ⚠️ **接线完成但负面结果**（PR #24，ADR-0010，**未合并 main**）：接线正确/安全/默认关/单测过/live 生效；但**未提升 T6**（1/5 vs 1d 的 2/5，在方差内）且 **~3× 成本**。根因：静态 post-stage 评分**看不到 test_run 结果** + best-of-N 未覆盖 decide。**默认保持关**。升级 A 仅覆盖 test_run 红残留 | #24 |
-| 1e | **decide 契约欠声明修复**（3b 新发现，确定性 bug）：statemachine 漏声明导出 → impl 正确导出反被 **export-extra 门**拦 | P0 | 方案 A（重 live） | `cursor/decide-under-declaration-dac2` | ✅ **目标 bug 已根治**（PR #25，draft）：statemachine 欠声明 + DictReader 占位 5 次未复现；`sanitizeCrossSliceContamination` 增 slice⊊global 回退/global 兜底/export-noise 内建符号过滤。**strict-pass 1d 2/5 → 1e 1/5（方差内，非回归）**。核心 1090/9 零新增、headless 30/30、vitest 243 | #25 |
+| 1e | **decide 契约欠声明修复**（3b 新发现，确定性 bug）：statemachine 漏声明导出 → impl 正确导出反被 **export-extra 门**拦 | P0 | 方案 A（重 live） | `cursor/decide-under-declaration-dac2` | ✅ **目标 bug 已根治 + 已合并 main**（PR #25，commit 4f6a832）：statemachine 欠声明 + DictReader 占位 5 次未复现；`sanitizeCrossSliceContamination` 增 slice⊊global 回退/global 兜底/export-noise 内建符号过滤。**strict-pass 1d 2/5 → 1e 1/5（方差内，非回归）**。核心 1090/9 零新增、headless 30/30、vitest 243 | #25 |
 | 1f | **decide/test-gen 长尾确定性净化**（1e 后残留）：sdk-path test-import、fixture 漏列、契约内建噪声等 | P0 | 方案 A（重 live） | 待启动（建议 resume dac2） | 待启动 | — |
 | 4 | 对抗式审查（异族/更强模型独立挑错回喂；**加分项，不替代确定性门**） | P2 | 方案 A | `cursor/adversarial-review-3713` | 排后（依赖 #1/#3） | — |
 
@@ -76,6 +76,10 @@
   - run#4：契约含内建符号（run#4 后已补 export-noise；本 batch 内仍可能命中）
   - run#5：test_run 红
 - **策略转向**：继续 **1f 确定性长尾净化**（比 best-of-N 更划算）；静态 best-of-N **保持关**（#24 可不合并，除非要做升级 A）；升级 A 仅针对纯 test_run 红残留、且成本高。
+
+**方法论修正（关键，1e 触发）**：在 ~50% 单次率 + N=5 下，**聚合 strict-pass 率已被统计噪声淹没**——2/5 vs 1/5 在二项噪声内不可区分（真实 p≈0.4 时两者都极常见）。故「1e 把率从 40% 降到 20%」是**不成立的结论**，率根本没有可测量变化。→ **长尾修复的判据应从「聚合 strict-pass 率」改为「特定失败模式的复现率」**（如 1e 的「statemachine 5 次未复现」）：更灵敏、更便宜、可累积。**1f 成功判据 = sdk-path / fixture 漏列两类不再复现**，而非总率上升。
+
+**战略备注（1b~1f = 手工版 2B）**：1b/1c/1d/1e/1f 本质都是同一动作——「定位复发的确定性失败模式 → 写确定性净化/门 → 永久消灭」，即**手工执行的 2B（失败→规则沉淀）**。做 1~2 轮长尾后，应把这些模式喂给 **2B（PR #16，已建未接线）**，让长尾识别半自动化、形成累积复利。**停损点**：若 1f/1g 两轮后旧模式消失却总被新模式快速替代（长尾近乎无限），则停止逐项手工修，转 **best-of-N 升级 A**（逐候选 test_run 评分，针对剩余 test_run 红方差）。
 
 ---
 
