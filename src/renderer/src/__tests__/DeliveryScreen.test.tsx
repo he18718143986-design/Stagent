@@ -108,4 +108,13 @@ describe('DeliveryScreen (unified)', () => {
     expect(screen.queryByText('做好了！')).toBeNull()
     expect(screen.getByText(/0\/1 项测试通过/)).toBeTruthy()
   })
+
+  it('switches between acceptance and retrospective tabs', () => {
+    renderDelivery()
+    expect(screen.getByRole('tab', { name: '验收' })).toBeTruthy()
+    expect(screen.getByText('验收报告')).toBeTruthy()
+    fireEvent.click(screen.getByRole('tab', { name: '复盘' }))
+    expect(screen.getByText('本次复盘')).toBeTruthy()
+    expect(screen.queryByText('验收报告')).toBeNull()
+  })
 })

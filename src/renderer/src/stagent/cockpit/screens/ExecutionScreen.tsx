@@ -5,6 +5,7 @@ import { simpleTheme } from '../theme'
 import type { CockpitEngineSlice } from '../types'
 import { ProgressRing } from '../components/ProgressRing'
 import { CredibilityStrip } from '../components/CredibilityStrip'
+import { ExecutionQualityBar } from '../components/ExecutionQualityBar'
 import { MiniDag } from '../components/MiniDag'
 import { QuestionForm } from '../components/QuestionForm'
 import { DecisionReview } from '../components/DecisionReview'
@@ -33,10 +34,6 @@ export function ExecutionScreen({
   const { state, stages, reviewDecision } = engine
   const planSteps = useMemo(() => filterPlanSteps(stages), [stages])
   const progress = useMemo(() => deriveProgress(planSteps, state.stageStatus), [planSteps, state.stageStatus])
-
-  const testPassCount = state.qualityReport
-    ? state.qualityReport.verificationRows.reduce((n, r) => n + r.passCount, 0)
-    : null
 
   const pendingQuestions = useMemo(() => {
     for (const s of stages) {
@@ -106,7 +103,9 @@ export function ExecutionScreen({
         </div>
       </div>
 
-      <CredibilityStrip confidence={state.confidence} className="mb-4" />
+      <CredibilityStrip confidence={state.confidence} className="mb-3" />
+
+      <ExecutionQualityBar qualityReport={state.qualityReport} />
 
       <ul className="space-y-2 mb-4">
         {planSteps.map((s) => {
@@ -192,13 +191,6 @@ export function ExecutionScreen({
       {state.failed && (
         <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300 mb-4">
           {state.failed.reason}
-        </div>
-      )}
-
-      {testPassCount != null && testPassCount > 0 && (
-        <div className="flex items-center gap-2 p-3 rounded-xl bg-green-500/10 border border-green-500/20 text-sm text-green-300 mb-4">
-          <span>🛡️</span>
-          <span>已通过 {testPassCount} 项自动测试</span>
         </div>
       )}
 

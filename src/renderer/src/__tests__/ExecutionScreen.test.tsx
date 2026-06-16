@@ -61,4 +61,34 @@ describe('ExecutionScreen (unified) — gates are always on', () => {
     renderExec({ failed: { reason: '执行失败了', errorType: 'x' } })
     expect(screen.getByText(/执行失败了/)).toBeTruthy()
   })
+
+  it('always shows execution quality bar (neutral without report)', () => {
+    renderExec({ stageStatus: { stage_impl_a: 'running' } })
+    expect(screen.getByRole('status', { name: /质量/ })).toBeTruthy()
+    expect(screen.getByText(/尚未生成/)).toBeTruthy()
+  })
+
+  it('quality bar reflects partial test results', () => {
+    renderExec({
+      stageStatus: { stage_impl_a: 'running' },
+      qualityReport: {
+        afk: {
+          passed: true,
+          stableVerificationPasses: 1,
+          verificationStages: 1,
+          humanInterventions: 0,
+          runtimeReplanCount: 0,
+          dodDeliverablesSatisfied: 1,
+          dodDeliverablesTotal: 1,
+          charterCoverageRate: 1,
+          flakyStages: [],
+          dodConfigured: true,
+          reasons: [],
+        },
+        verificationRows: [{ stageId: 's1', passCount: 2, totalRuns: 3, stable: true, flaky: false }],
+        engineSummary: 'x',
+      },
+    })
+    expect(screen.getByText(/2\/3 通过/)).toBeTruthy()
+  })
 })
