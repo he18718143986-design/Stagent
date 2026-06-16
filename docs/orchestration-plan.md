@@ -35,15 +35,16 @@
 | 1c | **test-slice-import 门 order-aware 调和**（②） | P0 | 方案 A（重 live） | `cursor/test-slice-import-reconcile-dac2` | ✅ **达成**（PR #20）：order-aware 放行前序真实协作者、仍拦 __init__/前向/未声明（L101+L174 两处）。**T6 真正抵达并通过 A1 smoke、workflow 完成、产物真实非平凡**（`python main.py → {"imported":3,...}`）。核心 1050/9 零新增、headless 30/30、vitest 204 | #20 |
 | 1d | **残留 bug 定向修 + 测试生成 prompt 加固**（快赢） | P0 | 方案 A（重 live） | `cursor/t6-residual-fixes-dac2` | ✅ **达成**（PR #22）：(a) 协作者 import 来源纪律 (b) status 透传 + smoke status 保真断言 (c) test_main tmp 隔离 (d) materialize_stub_main 引擎修。**T6 strict-pass 0/3 → 有效 2/4（~50%），两次均产物真实运行 + status 语义核验**。核心 1059/9 零新增、headless 30/30、vitest 240。剩余=生成方差 + ① | #22 |
 | 2 | per-role 模型路由 env 解耦（ADR-0006） | — | — | — | ✅ **已完成（无需做）** | 已在主干 |
-| 3a | best-of-N **选择策略纯函数核**（无 token） | P1 | 方案 B | `cursor/best-of-n-selection-core-3713` | ✅ **完成（待合并）** PR #23：`selectBestCandidate`（按 Strict QA 择优，纯函数永不抛）；新测 14/14、核心 9 零新增、vitest 243 | #23 |
-| 3b | best-of-N **执行器接线 + T6 验证** | P1 | 方案 A（重 live） | `cursor/best-of-n-executor-wiring-dac2` | ⚠️ **接线完成但负面结果**（PR #24，ADR-0010）：接线正确/安全/默认关/单测过/live 生效；但**未提升 T6**（1/5 vs 1d 的 2/5，在方差内）且 **~3× 成本**。根因：静态 post-stage 评分**看不到 test_run 结果**（残留=test_run 红）+ best-of-N 未覆盖 decide。**默认保持关**。升级路径见下 A/B | #24 |
-| 1e | **decide 契约欠声明修复**（3b 新发现，确定性 bug）：statemachine 漏声明导出 → impl 正确导出反被 **export-extra 门**拦。1b/1c 式定向契约修，**便宜高杠杆** | P0 | 方案 A（重 live） | 待启动（建议 resume dac2） | 待启动 | — |
+| 3a | best-of-N **选择策略纯函数核**（无 token） | P1 | 方案 B | `cursor/best-of-n-selection-core-3713` | ✅ **已合并 main**（#23）：`selectBestCandidate`（按 Strict QA 择优，纯函数永不抛）；新测 14/14 | #23 |
+| 3b | best-of-N **执行器接线 + T6 验证** | P1 | 方案 A（重 live） | `cursor/best-of-n-executor-wiring-dac2` | ⚠️ **接线完成但负面结果**（PR #24，ADR-0010，**未合并 main**）：接线正确/安全/默认关/单测过/live 生效；但**未提升 T6**（1/5 vs 1d 的 2/5，在方差内）且 **~3× 成本**。根因：静态 post-stage 评分**看不到 test_run 结果** + best-of-N 未覆盖 decide。**默认保持关**。升级 A 仅覆盖 test_run 红残留 | #24 |
+| 1e | **decide 契约欠声明修复**（3b 新发现，确定性 bug）：statemachine 漏声明导出 → impl 正确导出反被 **export-extra 门**拦 | P0 | 方案 A（重 live） | `cursor/decide-under-declaration-dac2` | ✅ **目标 bug 已根治**（PR #25，draft）：statemachine 欠声明 + DictReader 占位 5 次未复现；`sanitizeCrossSliceContamination` 增 slice⊊global 回退/global 兜底/export-noise 内建符号过滤。**strict-pass 1d 2/5 → 1e 1/5（方差内，非回归）**。核心 1090/9 零新增、headless 30/30、vitest 243 | #25 |
+| 1f | **decide/test-gen 长尾确定性净化**（1e 后残留）：sdk-path test-import、fixture 漏列、契约内建噪声等 | P0 | 方案 A（重 live） | 待启动（建议 resume dac2） | 待启动 | — |
 | 4 | 对抗式审查（异族/更强模型独立挑错回喂；**加分项，不替代确定性门**） | P2 | 方案 A | `cursor/adversarial-review-3713` | 排后（依赖 #1/#3） | — |
 
 > 优先级依据见 `docs/live-findings-2026-06-15.md` 与 ADR-0006/0007/0008/0009：**门的强度比模型档位更决定产物质量**；无外部验证器的自我批判会"假性收敛"（业界自我纠正研究一致结论），故评审循环必须绑定可执行验证器。
 
 **协作备注**：
-- 本看板目前只在 PR #12 分支（未并入 main），故 off-main 的实现会话**看不到也无法回填**——状态由实现会话**报告给指挥会话代填**，或先把本文件并入 main。
+- 本看板已在 **main**；实现会话 `git pull` 后可自行查阅/回填。
 - 分支后缀按各会话自身策略（如 `-dac2` / `-3713`），不必统一；以 PR 链接为准对账。
 
 **T6 strict-pass 阻断链进展（1c 后，2026-06-15）**：
@@ -65,6 +66,16 @@
 - **(iii) decide 契约欠声明**（statemachine 漏声明 → impl 被 export-extra 误拦）：**确定性 bug → 子任务 1e**（1b/1c 式定向修，便宜高杠杆，最该先做）。
 
 > **成本/收益诚实判断**：核心目标"拆解→真实可交付"对确定性 T6 **已基本达成**（~50% 单次、真实+status 核验）。从 ~50% 推到"**稳定** strict-pass"需 best-of-N 升级 A（**昂贵**，逐候选 test_run）。建议**先做便宜的 1e（确定性 bug）→ 复测**，再决定是否值得为剩余方差投 A。
+
+**1e 后（2026-06-16）— 目标 bug 已修，残留转为混合长尾**：
+- **1e 达成**：statemachine 欠声明（`decide_statemachine.exports=["InvalidTransition"]` vs global 完整 4 符号）已根治；`slice ⊊ global → 回退 global`、占位 DictReader 净化、export-noise 内建符号过滤；5 次 live **均未复现**目标 bug。run#1 ✓，产物 `{todo:1,in_progress:1,done:1,cancelled:1}` 真实+status 正确。
+- **strict-pass 率**：1d 2/5（40%）→ 1e 1/5（20%）——**在方差内，勿判为回归**；N=5 小样本不足以定论升降。
+- **残留非纯 test_run 方差，而是混合**：
+  - run#2：**sdk-path test-import**（test-gen）
+  - run#3：post-strict pytest 红 + **fixture 漏列**（tasks.csv status）
+  - run#4：契约含内建符号（run#4 后已补 export-noise；本 batch 内仍可能命中）
+  - run#5：test_run 红
+- **策略转向**：继续 **1f 确定性长尾净化**（比 best-of-N 更划算）；静态 best-of-N **保持关**（#24 可不合并，除非要做升级 A）；升级 A 仅针对纯 test_run 红残留、且成本高。
 
 ---
 
@@ -287,3 +298,52 @@ ruleStore 等）。若已部分存在，先回报现状再决定增量。
 若优先做 2A：给 `Stage` 加 `capabilities`（allowedWritePaths / allowedCommands / network:false /
 highRiskNeedsApproval），在 `code-runner`/`file-write` 执行前校验；高风险命令（rm -rf / git push /
 DROP）走 HITL 审批门；单测覆盖"越界写入/高风险命令被拦"。它同时是**并行多实例 worktree 写入隔离**的前提。
+
+---
+
+## 子任务 1f · 可直接粘贴 prompt（decide/test-gen 长尾确定性净化，接续 1e/PR #25）
+
+> 用法：resume dac2 会话粘贴；基于最新 main（先合并 #25 或基于 #25 分支）。live 需 `DEEPSEEK_API_KEY`。
+
+```text
+# 任务：T6 decide/test-gen 长尾确定性净化（子任务 1f，接续 1e/PR #25）
+
+## 起手
+git fetch origin main && git checkout main && git pull。若 #25 已合并则从 main 切；否则基于
+cursor/decide-under-declaration-dac2（含 1e）。新分支 cursor/t6-longtail-purify-<suffix>。新 PR。
+
+## 背景（1e 后 T6 残留 = 混合长尾，非纯 test_run 方差）
+1e 已根治 statemachine 欠声明 + DictReader 占位（5 次未复现）。strict-pass 1/5（方差内）。
+残留按 run 分类（从 1e N=5 --keep 工作区取证）：
+- run#2：**sdk-path test-import**（test-gen 写了不在 plan 里的 import 路径）
+- run#3：post-strict pytest 红 + **fixture 漏列**（tasks.csv 缺 status 列）
+- run#4：decide 契约含内建符号（1e 已补 export-noise，确认是否仍漏）
+- run#5：test_run 红（纯方差，本切片不主攻 best-of-N）
+策略：逐项做 **prevention-at-decide / prevention-at-test-write / smokeDataBootstrap** 确定性修，
+比 best-of-N 升级 A 更划算。不放宽任何门。
+
+## 证据先行
+从 1e batch 的 --keep 工作区逐一定位上述 (a) sdk-path、(b) fixture 漏列 的确切触发点
+（哪个 stage、哪段生成/test、哪条门报红），贴进 PR/findings。区分 prompt 缺口 vs 引擎 bug。
+
+## 修法（对症，prevention 优先）
+1. **sdk-path test-import**：test-write/impl prompt 或 module-contract 门——测试 import 路径
+   必须来自 plan/契约已声明模块，禁止 `from sdk.xxx` 等幻觉路径；加 mock 单测 + T6 真实样本。
+2. **fixture 漏列**：强化 smokeDataBootstrap schema 感知（status 等列从代码/契约推断），
+   确保种子 CSV 覆盖测试断言所需列；必要时加 fixture 一致性门或 smoke 断言。
+3. **export-noise 补漏**：若 run#4 类仍出现，扩展内建符号过滤列表并加单测。
+4. 全程不放宽门；不投 best-of-N（静态形态保持关）。
+
+## 验证（双重）
+- 单测：每项新增 mock/T6 样本断言；核心 dist/test/*.test.js 9 失败零新增；headless 全绿；vitest 全绿。
+- live：feedback:live:t6:batch N=5（flash + decision/test-write/integration=pro），
+  记录修前（1e 1/5）/修后 strict-pass 率；每次 pass 做产物真实运行 + status 语义核验。
+  在 findings 分类：哪些 run 模式被消除、哪些仍是纯 test_run 方差。
+- 判据：至少消除 1~2 类确定性长尾；strict-pass 率趋势上升即达成。
+
+## 硬性约束
+- 不放宽门；prevention-at-decide/test-write 优先；不提交密钥/artifacts/examples/test1；不碰 GUI。
+- 改门/prompt 前读 ADR-0007/0008/0009/0010；扩展 ADR/findings。
+- 开 PR，正文列：各 run 证据、修法、修前/后 strict-pass 率、产物核验、回归、残留分类。
+- 回报【分支 + PR + 修前/后 strict-pass 率 + 残留是否仍混合/是否纯方差】给指挥会话。
+```
