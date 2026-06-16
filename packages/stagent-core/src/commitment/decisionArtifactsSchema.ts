@@ -160,21 +160,30 @@ export function sanitizeCrossSliceContamination(
     otherNames.has(s) || otherExports.has(s) || s === semantic;
   const crossSliceContaminated = sliceExports.some(isContaminant);
 
-  // 类方法过度列举：slice 把某导出类的方法名也当模块级 export（T6 store=[TaskStore,add,get,
-  // delete,update,list_all,...]，global store=[TaskStore]）。判据：global 有非空 M 列表，且
-  // slice ⊇ global（含 global 全部符号）并有额外项 → 视为 over-list。合法 refine 是「替换」coarse
-  // 符号（slice 不会同时保留 global 全部符号再加项），故 superset+extras 是污染的强信号。
+  // 与 global 架构契约对账（global 同时看见所有模块，是干净的跨切片权威）。两类偏差都回退 global：
+  //  - **过度列举**（1b）：slice ⊇ global 且有额外项（如 store=[TaskStore,add,get,...]，global=[TaskStore]）——
+  //    类方法/占位被误列；合法 refine 是「替换」coarse 符号，不会保留 global 全部再加项。
+  //  - **欠声明**（1e，3b run#2 发现）：slice ⊊ global，漏掉 global 已声明的真实导出
+  //    （如 statemachine slice=[InvalidTransition]，global=[ALLOWED_TRANSITIONS,can_transition,
+  //    apply_transition,InvalidTransition]）——impl 正确导出全集反被 export-extra 判红。
+  // 二者皆「slice 与 global 互为子集且不相等」；「替换式 refine」（双方各有独有符号、互不为子集）不触发，保留 slice。
   const globalEntry = normalizeModuleExports(globalModules).find((m) => m.name === semantic);
   const globalExports = globalEntry?.exports ?? [];
+  const globalSet = new Set(globalExports);
+  const sliceSet = new Set(sliceExports);
   const overListsGlobal =
     globalExports.length > 0 &&
     sliceExports.length > globalExports.length &&
-    globalExports.every((g) => sliceExports.includes(g));
+    globalExports.every((g) => sliceSet.has(g));
+  const underDeclaresGlobal =
+    globalExports.length > 0 &&
+    sliceExports.length < globalExports.length &&
+    sliceExports.every((s) => globalSet.has(s));
 
-  if (!crossSliceContaminated && !overListsGlobal) {
+  if (!crossSliceContaminated && !overListsGlobal && !underDeclaresGlobal) {
     return sliceExports;
   }
-  // 被污染：优先回退到 global 的干净 M 列表（清除方法名/占位/跨切片符号等纯幻觉符号）。
+  // 偏差：优先回退到 global 的完整/干净 M 列表（补全欠声明、清除过度列举/污染）。
   if (globalExports.length > 0) {
     return globalExports;
   }

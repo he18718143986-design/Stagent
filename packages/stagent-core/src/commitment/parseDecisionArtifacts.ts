@@ -31,7 +31,13 @@ sidecar JSON 的 modules 须含**恰好一条**：{"name":"<本切片语义名>"
   ② 任何模块名/包名（如 store、statemachine、pipeline 自身——模块名不是可 import 的符号）；
   ③ 导入的占位/标准库别名（如 DictReader=csv.DictReader、import 进来的类型构造器）。
   本切片只需把**别的切片**的能力当依赖调用（如 pipeline 接收 store 实例为参数），不得把它们列进本切片 exports。
-- 可与全局架构 modules[] 不一致时，以本切片 sidecar 为准。`;
+- exports 须**完整**——列出本切片所有公开导出，**勿漏**（漏声明会使 impl 正确导出的符号被 export-extra 判红）。
+  按切片语义把约定的标准符号全部列入，例如：
+  · 状态机：ALLOWED_TRANSITIONS、can_transition、apply_transition、自定义异常（如 InvalidTransition）全列；
+  · 数据管道：import_tasks_from_csv、summarize 等公开函数全列；
+  · 仓储：公开类（如 TaskStore）——其方法由类承载，不单列为模块级 export。
+  与全局架构 modules[] 的本切片条目对照：凡 global 已为本切片声明的公开符号，本 sidecar 不得遗漏。
+- 可与全局架构 modules[] 不一致时以本切片 sidecar 为准，但**不得少于** global 已声明的本切片导出（只可补充，不可遗漏）。`;
 
 /** signals 等切片：decide 须产出 behaviorSpec 机读行为契约。 */
 export const BEHAVIOR_SPEC_SLICE_SUFFIX = `
