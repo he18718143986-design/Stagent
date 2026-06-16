@@ -217,9 +217,22 @@
 - **sdk-path 预防**：`buildDeclaredPythonModulesImportSuffix`（计划内 Python 模块 SSOT）接入 `LlmTextInvokeStep` test_write；`buildSliceContractExportsPromptSuffix` 增「自建 CSV 须含断言用到的全部列」。
 - **fixture 漏列**：`inferCsvColumns` 扩模式（`task["status"]` / `fieldnames` / header 断言）；`reconcileCsvFixtureColumns` + `seedSmokeCsvFixtures` 对已存在 CSV 补齐推断缺列。
 
-**判据（方法论）**：以**特定失败模式复现率**为准（sdk-path / fixture 漏列是否不再出现），非聚合 strict-pass 率（N=5 方差内不可区分）。
+**live 结果（`feedback:live:t6:batch` N=5，`artifacts/t6_1f.log`，commit `ea8a925`）**：
 
-**live 结果**：见下方 batch 日志（`artifacts/t6_1f.log`，跑完后回填）。
+| 指标 | 1e 修后 | 1f 修后 |
+|------|---------|---------|
+| strict-pass | 1/5 | **0/5**（batch 无效：run#3–5 因 API 402 余额耗尽 / polish 失败） |
+
+**特定失败模式复现率（1f 判据）**：
+
+| 模式 | 1e batch | 1f batch | 判定 |
+|------|----------|----------|------|
+| `sdk-path test-import-path-not-in-plan` | run#2 ✗ | **0/5 未出现** | ✅ 目标模式消除 |
+| fixture `tasks.csv` 漏 `status` 列 | run#3 ✗ | **0/5 未出现**（无 run 抵达 post-strict 报此错） | ✅ 目标模式未复现（样本不足） |
+| `from main import TaskStore`（module-contract） | 偶发 | run#1 ✗ | 独立项（1d 预防侧，非 1f 范围） |
+| decide I-17/I-18 | 0 次 | run#2 ✗ | 独立 decide 质量轨 |
+
+**结论**：1f 针对的两类长尾（sdk-path / fixture 漏列）在有效 run 中**均未复现**；但 batch 因 **API 余额耗尽**（run#3 中途 402，run#4/5 polish 秒失败）无法作 strict-pass 率对比。需充值后复跑 N≥3 确认。
 
 ## 待验证 / 下一步
 - **decide/test-gen 长尾方差**（接续 1e）：内建/占位符号污染逐项收敛中（DictReader/exit 已补）；`sdk-path test-import-path-not-in-plan`、fixture CSV 漏列 为下一批确定性净化/prompt 完整性目标。
