@@ -199,8 +199,25 @@
 
 **结论**：快赢达成——单次 strict-pass 可靠性从 **0 → ~40-50%**，(a)~(d) 四类残留 bug 全部消除，产物 status 语义经真实运行核验正确。剩余为**生成方差 + decide 内容完整性**，单纯定向修边际递减。
 
+## sub-task 3b：best-of-N 执行器接线 + T6 验证（2026-06-15）
+
+实施 [ADR-0010](adr/0010-best-of-n-gated-selection.md)：把 3a 纯择优核接进 `runLlmTextStage`——对 impl/test_write 切片跑 N 候选，各候选经 post-stage Strict-QA 静态门 + `OutputQualityScorer` 评分 → `selectBestCandidate` 选优；胜者仍走完整门/test_run/smoke（择优不替代门）；默认关，`STAGENT_BEST_OF_N=<N>` 开关。
+
+**live 验证（`STAGENT_BEST_OF_N=3 feedback:live:t6:batch` N_runs=5；`artifacts/t6_best_of_n.log`）**：
+
+| 指标 | 1d（无 best-of-N） | 3b（best-of-N=3 impl/test_write） |
+|---|---|---|
+| strict-pass | 2/5（40%） | **1/5（20%）** |
+| 平均时长/run | ~424s | ~1384s（**~3.3×**） |
+| token in/out（N=5 合计） | ~250k/180k | 860k/640k（**~3.4×**） |
+
+best-of-N 确认 live 生效（debug `best_of_n_selected`：如 `stage_test_write_models` count=3，3 候选评分选优）。run#5 ✓ 产物 status 语义正确。
+
+**结论（负面结果，诚实记录）**：best-of-N 接线**正确、安全（默认关）、单测通过**、live 生效，但「**静态 Strict-QA 评分 + 仅 impl/test_write**」**未提升 T6 strict-pass（1/5 vs 2/5，在方差内），却带来 ~3× token / ~3× 时长**。根因：① 残留以 **test_run 红**为主（run#3/#4）——静态 post-stage 门**不含 test 执行结果**，按静态分选优的胜者仍可能 test_run 失败；② **decide 阶段问题**（run#1 内容 lint、run#2 statemachine 契约欠声明）——best-of-N 仅作用 impl/test_write，未覆盖 decide。即评分信号太弱、作用切片不对。
+
 ## 待验证 / 下一步
-- **建议升级 best-of-N（子任务 3）**：剩余失败以 run 间生成方差为主（test_run 红 / decide 内容 lint），best-of-N 采样压方差是拉高 strict-pass 率的下一杠杆。
+- **best-of-N 要见效需换评分信号/切片**（接续 3b）：A. **逐候选 test_run/smoke 评分**（重切片，逐候选工作区/venv 隔离）直接压 test_run 红方差；B. **decide 角色 best-of-N**（按决策内容 lint / 契约完整性评分）压 run#1/#2 类 decide 方差。当前静态-QA impl/test_write best-of-N 默认保持关（成本 ~3× 无收益）。
+- **decide 契约欠声明**（新增）：run#2 statemachine 仅声明 InvalidTransition、漏 can_transition/apply_transition/ALLOWED_TRANSITIONS → impl 正确导出却被 export-extra 判红。属 decide 契约完整性（prevention-at-decide 续作）。
 - **decide 内容 lint（I-17/I-18）稳定性**：slice/global decide 的「AI 无法验证的假设 / 边界压力测试」节完整性（decide-prompt 或阈值）——独立治理项。
 - **环境**：live 跑依赖 DEEPSEEK_API_KEY 余额；本轮 run#5 因 402 余额耗尽中断（非代码）。
 - **非对称成本配置**：`LLM_MODEL=deepseek-v4-flash` + `LLM_MODEL_TEST_WRITE=deepseek-v4-pro`（已写入 `.env.local`）→ 待第二阻碍缓解后再跑，验证「叶子 flash、decide/集成 pro」既省又能过（否则大概率同样卡在 forward-slice import）。
