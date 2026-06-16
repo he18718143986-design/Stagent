@@ -216,6 +216,12 @@ const PYTHON_TYPING_DATACLASS_NOISE = new Set([
   'defaultdict',
   'counter',
   'deque',
+  // csv 等标准库「读写器」成员——import 进来的 stdlib 类，绝非模块级 API（T6：decide 误把
+  // csv.DictReader 列入 pipeline 契约，1b/1e 多次复现）。
+  'dictreader',
+  'dictwriter',
+  'reader',
+  'writer',
 ]);
 
 /** 异常类名（DecisionRecord 正文「抛出 KeyError」等），非模块 API。 */

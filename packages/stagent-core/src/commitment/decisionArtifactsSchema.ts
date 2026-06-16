@@ -208,27 +208,43 @@ export function resolveModuleExports(
     return resolved;
   };
 
+  let resolved: string[] | null = null;
+  let declaredNonEmpty = false;
+
   const sliceEntry = normalizeModuleExports(sliceArtifacts?.modules).find((m) => m.name === semantic);
   if (sliceEntry && sliceEntry.exports.length > 0) {
+    declaredNonEmpty = true;
     const decontaminated = sanitizeCrossSliceContamination(
       semantic,
       sliceEntry.exports,
       sliceArtifacts?.modules,
       globalArtifacts?.modules,
     );
-    return mainEntryFallback(sanitizeModuleExports(semantic, decontaminated), true);
-  }
-  if (sliceDecisionRecord?.trim()) {
-    const fromRecord = extractModuleExportsFromDecisionRecord(semantic, sliceDecisionRecord);
-    if (fromRecord?.length) {
-      return fromRecord;
+    const sanitized = sanitizeModuleExports(semantic, decontaminated);
+    // slice 净化后非空才采信；若净化后为空（契约全是噪声/占位，如仅 [DictReader]），
+    // **落到 global 兜底**而非返回空契约——避免 import_tasks_from_csv 等真实导出被判未声明（1e/3b run#2）。
+    if (sanitized.length > 0) {
+      resolved = sanitized;
     }
   }
-  const globalEntry = normalizeModuleExports(globalArtifacts?.modules).find((m) => m.name === semantic);
-  if (globalEntry && globalEntry.exports.length > 0) {
-    return mainEntryFallback(sanitizeModuleExports(semantic, globalEntry.exports), true);
+  if (!resolved && sliceDecisionRecord?.trim()) {
+    const fromRecord = extractModuleExportsFromDecisionRecord(semantic, sliceDecisionRecord);
+    if (fromRecord?.length) {
+      resolved = fromRecord;
+      declaredNonEmpty = true;
+    }
   }
-  return null;
+  if (!resolved) {
+    const globalEntry = normalizeModuleExports(globalArtifacts?.modules).find((m) => m.name === semantic);
+    if (globalEntry && globalEntry.exports.length > 0) {
+      declaredNonEmpty = true;
+      const sanitized = sanitizeModuleExports(semantic, globalEntry.exports);
+      if (sanitized.length > 0) {
+        resolved = sanitized;
+      }
+    }
+  }
+  return mainEntryFallback(resolved, declaredNonEmpty);
 }
 
 export function normalizeDependencies(deps: string[] | undefined): string[] {
