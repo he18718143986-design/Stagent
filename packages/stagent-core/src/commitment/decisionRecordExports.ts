@@ -154,6 +154,13 @@ const BUILTIN_EXPORT_NOISE = new Set([
   'property',
   'staticmethod',
   'classmethod',
+  // 进程/解释器内建——decide 偶把 `exit`/`quit` 等列为 main 导出（T6 run#4），impl 不会导出 → export-missing 误拦。
+  'exit',
+  'quit',
+  'help',
+  'globals',
+  'locals',
+  'callable',
 ]);
 
 /**
@@ -216,6 +223,12 @@ const PYTHON_TYPING_DATACLASS_NOISE = new Set([
   'defaultdict',
   'counter',
   'deque',
+  // csv 等标准库「读写器」成员——import 进来的 stdlib 类，绝非模块级 API（T6：decide 误把
+  // csv.DictReader 列入 pipeline 契约，1b/1e 多次复现）。
+  'dictreader',
+  'dictwriter',
+  'reader',
+  'writer',
 ]);
 
 /** 异常类名（DecisionRecord 正文「抛出 KeyError」等），非模块 API。 */

@@ -434,6 +434,40 @@ test('lintImplExportsAgainstModuleContract：main 缺非入口符号仍判缺失
   assert.equal(issue?.symbol, 'orchestrate_pipeline');
 });
 
+test('lintImplExportsAgainstModuleContract：欠声明 slice + 完整 global → impl 全量导出不判 export-extra（1e）', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'impl-statemachine-under-'));
+  const implPath = 'statemachine/__init__.py';
+  fs.mkdirSync(path.join(dir, 'statemachine'), { recursive: true });
+  fs.writeFileSync(
+    path.join(dir, implPath),
+    [
+      'ALLOWED_TRANSITIONS = {}',
+      'class InvalidTransition(Exception):',
+      '    pass',
+      'def can_transition(frm, to):',
+      '    return True',
+      'def apply_transition(task, to):',
+      '    return task',
+      '',
+    ].join('\n'),
+  );
+  // slice 欠声明（只 InvalidTransition），global 完整 → resolveModuleExports 取 global 完整集 → 无 export-extra。
+  const slice = { version: 1 as const, files: [], modules: [{ name: 'statemachine', exports: ['InvalidTransition'] }] };
+  const global = {
+    version: 1 as const,
+    files: [],
+    modules: [{ name: 'statemachine', exports: ['ALLOWED_TRANSITIONS', 'can_transition', 'apply_transition', 'InvalidTransition'] }],
+  };
+  const issue = lintImplExportsAgainstModuleContract({
+    workspaceRoot: dir,
+    implRelPath: implPath,
+    semantic: 'statemachine',
+    sliceArtifacts: slice,
+    globalArtifacts: global,
+  });
+  assert.equal(issue, null);
+});
+
 test('lintImplExportsAgainstModuleContract still blocks non-entry extra export on main', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'impl-main-extra-'));
   const implPath = 'main.py';
