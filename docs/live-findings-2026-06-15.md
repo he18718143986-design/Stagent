@@ -199,8 +199,19 @@
 
 **结论**：快赢达成——单次 strict-pass 可靠性从 **0 → ~40-50%**，(a)~(d) 四类残留 bug 全部消除，产物 status 语义经真实运行核验正确。剩余为**生成方差 + decide 内容完整性**，单纯定向修边际递减。
 
+## sub-task 1e：decide 契约欠声明修复（2026-06-15）
+
+修 3b run#2 发现的确定性 bug（与 1b 过度列举对称）。证据（`Bdv7uR`）：slice `decide_statemachine.exports=["InvalidTransition"]`，global 完整 `[ALLOWED_TRANSITIONS,can_transition,apply_transition,InvalidTransition]`；`resolveModuleExports` 优先欠声明 slice → impl 正确导出 `can_transition` 被 `python-impl-export-extra` 判红。
+
+**修法**（prevention-at-decide 优先，不放宽门）：① `sanitizeCrossSliceContamination` 增对账——slice ⊊ global（欠声明）回退 global 完整列表（与 1b superset 对称；替换式 refine 互不为子集不触发）；② slice 净化后为空（全占位/噪声如仅 `[DictReader]`）落 global 兜底（不返回空契约）；③ export-noise 增 `DictReader/DictWriter/reader/writer` + 进程内建 `exit/quit/help/globals/locals/callable`；④ `SLICE_MODULE_CONTRACT_SUFFIX` 要求完整声明、勿漏、不得少于 global。
+
+**strict-pass 率（`feedback:live:t6:batch` N=5，无 best-of-N；`artifacts/t6_1e.log`）**：修前（1d）2/5；修后（1e `6ed3ff2`）**1/5（run 间方差内，无显著变化）**。run#1 ✓（产物 status 正确 `{todo:1,in_progress:1,done:1,cancelled:1}`）。
+
+**结论**：1e **确定性修复目标 bug**——statemachine 欠声明 + `DictReader` 占位 **5 次运行均未复现**（单测锁定 + 非复现）。但率未显著变化，残留转为**多样 run 间 decide/test-gen 方差**：run#2 `sdk-path test-import-path-not-in-plan`、run#3 post-strict（pytest 红 + fixture `tasks.csv` 漏 `status` 列）、run#4 `main` 契约含内建 `exit`（本批次后已补 noise 修复）、run#5 test_run 红。**残留是混合**（decide 契约质量长尾 + test-gen + test_run 红），**非纯 test_run 方差**。
+
 ## 待验证 / 下一步
-- **建议升级 best-of-N（子任务 3）**：剩余失败以 run 间生成方差为主（test_run 红 / decide 内容 lint），best-of-N 采样压方差是拉高 strict-pass 率的下一杠杆。
+- **decide/test-gen 长尾方差**（接续 1e）：内建/占位符号污染逐项收敛中（DictReader/exit 已补）；`sdk-path test-import-path-not-in-plan`、fixture CSV 漏列 为下一批确定性净化/prompt 完整性目标。
+- **best-of-N（子任务 3）**：升级 A（逐候选 test_run 评分）仅覆盖 test_run 红那部分残留；当前静态-QA impl/test_write best-of-N 默认保持关（ADR-0010：无收益、~3× 成本）。decide/test-gen 长尾更适合「确定性净化 + prompt」逐项收敛。
 - **decide 内容 lint（I-17/I-18）稳定性**：slice/global decide 的「AI 无法验证的假设 / 边界压力测试」节完整性（decide-prompt 或阈值）——独立治理项。
 - **环境**：live 跑依赖 DEEPSEEK_API_KEY 余额；本轮 run#5 因 402 余额耗尽中断（非代码）。
 - **非对称成本配置**：`LLM_MODEL=deepseek-v4-flash` + `LLM_MODEL_TEST_WRITE=deepseek-v4-pro`（已写入 `.env.local`）→ 待第二阻碍缓解后再跑，验证「叶子 flash、decide/集成 pro」既省又能过（否则大概率同样卡在 forward-slice import）。

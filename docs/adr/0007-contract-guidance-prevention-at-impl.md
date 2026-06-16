@@ -69,6 +69,19 @@ A1（ADR-0008 决策 1b）落地后，T6 端到端仍 0/4，失败**均在 smoke
 实现（组合，遵循「门强 > 模型档」）：
 
 - **确定性净化（主力）**：`sanitizeCrossSliceContamination`（`commitment/decisionArtifactsSchema.ts`，接入 `resolveModuleExports`）——某模块 slice 契约若混入「他模块名 / 他模块声明导出 / 自身模块名」即判**污染**；污染时**优先回退 global 架构的干净 M 列表**（彻底清除方法名/占位等纯幻觉符号），无 global 兜底则**剥离**可判定污染符号。未污染契约**原样返回**（不影响 T4/T5）。单点修复覆盖 prompt 与门两侧。
+
+### 1b 续：契约**欠声明**（与过度列举对称，sub-task 1e）
+
+3b run#2 暴露反向偏差：slice **漏声明**真实导出（如 `decide_statemachine.exports=["InvalidTransition"]`，global 完整 `[ALLOWED_TRANSITIONS,can_transition,apply_transition,InvalidTransition]`）→ impl 正确导出全集反被 `python-impl-export-extra` 误拦。统一对账规则（`sanitizeCrossSliceContamination`）：
+
+- **过度列举**：slice ⊇ global 且有额外项 → 回退 global。
+- **欠声明**：slice ⊊ global（全部 ∈ global 且更少）→ 回退 global 完整列表。
+- **全占位/噪声**：slice 净化后为空（如仅 `[DictReader]`）→ `resolveModuleExports` 落 global 兜底，不返回空契约。
+- **替换式 refine**（双方各有独有符号、互不为子集）→ 保留 slice（不误伤合法细化）。
+- **import 来的 stdlib/进程内建**（`DictReader/DictWriter/reader/writer`、`exit/quit/help/globals/locals/callable`）并入 export-noise——它们非模块级 API，decide 偶误列致 export-extra/missing 误拦。
+- prompt（`SLICE_MODULE_CONTRACT_SUFFIX`）同步要求**完整声明、勿漏、不得少于 global**。
+
+**边界**：本类确定性净化收敛「契约 over/under/占位」长尾，但 T6 strict-pass 率受**多样 run 间 decide/test-gen 方差**（test_run 红、`sdk-path test-import`、fixture 漏列）共同制约，单项修复率提升在方差内（见 `live-findings` 1e）。
 - **decide prompt 预防**：`SLICE_MODULE_CONTRACT_SUFFIX`（`commitment/parseDecisionArtifacts.ts`）明确「exports 只能是本切片自身顶层 def/class 公开符号；禁列他切片符号 / 模块名 / 导入占位别名；他切片能力当依赖调用而非列入本切片 exports」。
 - **不放宽 module-contract 门**：该门正确判红了真会 `ImportError` 的 pipeline；放宽 = 重造空心绿（ADR-0008）。未把 main-only 的 `crossSliceExports` 豁免泛化到集成切片。
 
