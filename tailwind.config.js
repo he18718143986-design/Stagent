@@ -11,6 +11,11 @@ export default {
           cream: '#FFF8F0',
           orange: '#F97316',
           success: '#16A34A',
+          // 暗色「简约·科技」画布与表面
+          ink: '#0B0F14',
+          surface: '#151B24',
+          surface2: '#1B232E',
+          accent: '#5FA8FF',
         },
       },
       animation: {

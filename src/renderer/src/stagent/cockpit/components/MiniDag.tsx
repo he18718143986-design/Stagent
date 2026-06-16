@@ -3,11 +3,11 @@ import type { StageStatus } from '@stagent/core'
 import { deriveMiniDag, type DagStageInput, type StageRole } from '../derive/dag'
 
 const ROLE_META: Record<StageRole, { label: string; cls: string }> = {
-  decision: { label: '决策', cls: 'border-purple-300 bg-purple-50 text-purple-700' },
-  impl: { label: '实现', cls: 'border-blue-300 bg-blue-50 text-blue-700' },
-  test: { label: '测试', cls: 'border-green-300 bg-green-50 text-green-700' },
-  integration: { label: '集成', cls: 'border-orange-300 bg-orange-50 text-orange-700' },
-  other: { label: '', cls: 'border-stone-200 bg-stone-50 text-stone-600' },
+  decision: { label: '决策', cls: 'border-purple-400/40 bg-purple-500/15 text-purple-300' },
+  impl: { label: '实现', cls: 'border-blue-400/40 bg-blue-500/15 text-blue-300' },
+  test: { label: '测试', cls: 'border-green-400/40 bg-green-500/15 text-green-300' },
+  integration: { label: '集成', cls: 'border-orange-400/40 bg-orange-500/15 text-orange-300' },
+  other: { label: '', cls: 'border-white/15 bg-white/5 text-slate-300' },
 }
 
 function statusDecoration(status: StageStatus): { ring: string; opacity: string; mark: string } {
@@ -42,7 +42,7 @@ export function MiniDag({
   const nodes = deriveMiniDag(stages, stageStatus)
 
   if (nodes.length === 0) {
-    return <div className="text-xs text-stone-400">暂无阶段</div>
+    return <div className="text-xs text-slate-500">暂无阶段</div>
   }
 
   return (
@@ -52,7 +52,7 @@ export function MiniDag({
         const deco = statusDecoration(n.status)
         return (
           <React.Fragment key={n.id}>
-            {i > 0 && <span className="shrink-0 w-3 h-px bg-stone-300" aria-hidden="true" />}
+            {i > 0 && <span className="shrink-0 w-3 h-px bg-white/15" aria-hidden="true" />}
             <div
               className={`shrink-0 flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] ${role.cls} ${deco.ring} ${deco.opacity}`}
               title={`${i + 1}. ${n.title}${role.label ? ` · ${role.label}` : ''}`}
@@ -60,7 +60,7 @@ export function MiniDag({
               {deco.mark && <span className="text-[10px]">{deco.mark}</span>}
               <span className="max-w-[7rem] truncate">{n.title}</span>
               {role.label && (
-                <span className="text-[9px] px-1 rounded bg-white/60">{role.label}</span>
+                <span className="text-[9px] px-1 rounded bg-black/30">{role.label}</span>
               )}
             </div>
           </React.Fragment>

@@ -96,18 +96,18 @@ export default function App(): React.JSX.Element {
             onOpenStagent={() => setPage('/stagent')}
           />
         ) : page === '/stagent' ? (
-          <div className="drag-region h-10 flex items-center shrink-0 bg-white border-b border-gray-100">
+          <div className="drag-region h-10 flex items-center shrink-0 bg-stagent-ink border-b border-white/10">
             <div className="w-20 shrink-0" />
-            <span className="text-sm font-semibold text-gray-700 select-none">Stagent 工作流</span>
+            <span className="text-sm font-semibold text-slate-200 select-none">Stagent 工作流</span>
             <div className="flex-1" />
             <button
-              className="no-drag h-7 px-2 rounded-md mr-1 text-xs font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+              className="no-drag h-7 px-2 rounded-md mr-1 text-xs font-medium text-slate-400 hover:bg-white/10 hover:text-slate-200 transition-colors"
               onClick={() => setPage('/chat')}
             >
               聊天
             </button>
             <button
-              className="no-drag flex items-center justify-center w-7 h-7 rounded-md mr-3 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors shrink-0"
+              className="no-drag flex items-center justify-center w-7 h-7 rounded-md mr-3 text-slate-400 hover:bg-white/10 hover:text-slate-200 transition-colors shrink-0"
               onClick={goSettings}
               title="AI 资源设置"
             >

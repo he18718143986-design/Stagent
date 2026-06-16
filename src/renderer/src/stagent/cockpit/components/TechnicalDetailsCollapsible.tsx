@@ -37,13 +37,13 @@ export function TechnicalDetailsCollapsible({
       <button
         type="button"
         aria-expanded={open}
-        className="w-full text-left text-sm text-stone-500 bg-stone-100/80 hover:bg-stone-100 rounded-lg px-4 py-2.5 flex items-center gap-2"
+        className="w-full text-left text-sm text-slate-300 bg-white/5 hover:bg-white/10 rounded-lg px-4 py-2.5 flex items-center gap-2"
         onClick={toggle}
       >
         <span className="text-xs">{open ? '▼' : '▶'}</span>
         {title}
       </button>
-      {open && <div className="mt-2 text-xs text-stone-600 space-y-1 px-1">{children}</div>}
+      {open && <div className="mt-2 text-xs text-slate-400 space-y-1 px-1">{children}</div>}
     </div>
   )
 }

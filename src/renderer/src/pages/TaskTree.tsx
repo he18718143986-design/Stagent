@@ -102,16 +102,16 @@ export default function TaskTree({
   return (
     <div className="flex flex-col h-full min-h-0 w-full">
       <div className="p-3 pr-8 flex items-center justify-between shrink-0">
-        <span className="text-sm font-semibold text-gray-700">任务</span>
+        <span className="text-sm font-semibold text-slate-200">任务</span>
         <button
-          className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700"
+          className="text-xs bg-stagent-accent text-white px-2 py-1 rounded hover:brightness-110"
           onClick={onNewTask}
         >
           + 新建
         </button>
       </div>
       <div className="flex-1 overflow-y-auto px-1 pb-2">
-        {tasks.length === 0 && <div className="text-xs text-gray-400 px-3 py-3">暂无任务</div>}
+        {tasks.length === 0 && <div className="text-xs text-slate-500 px-3 py-3">暂无任务</div>}
         {tasks.map((t) => {
           const expanded = t.instanceKey === selectedTaskKey
           const wsDup = t.taskWorkspacePath ? (workspaceDuplicateCounts.get(t.taskWorkspacePath) ?? 0) > 1 : false
@@ -119,16 +119,16 @@ export default function TaskTree({
             <div key={t.instanceKey} className="mb-0.5">
               <div
                 className={`group flex items-center gap-1 px-2 py-1 rounded cursor-pointer ${
-                  expanded ? 'bg-blue-50' : 'hover:bg-gray-100'
+                  expanded ? 'bg-stagent-accent/15' : 'hover:bg-white/5'
                 }`}
                 style={{ paddingLeft: '6px' }}
                 title={t.taskWorkspacePath ?? t.title}
                 onClick={() => onSelectTask(t.instanceKey)}
               >
-                <span className="inline-block w-4 text-gray-400">{expanded ? '▾' : '▸'}</span>
+                <span className="inline-block w-4 text-slate-500">{expanded ? '▾' : '▸'}</span>
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm text-gray-800 truncate">{t.title}</div>
-                  <div className="text-[11px] text-gray-400">
+                  <div className="text-sm text-slate-200 truncate">{t.title}</div>
+                  <div className="text-[11px] text-slate-500">
                     {t.completedStages}/{t.stageCount} · {statusLabel(t.status)}
                     {wsDup && t.createdAt ? ` · ${formatTaskTime(t.createdAt)}` : ''}
                   </div>
@@ -169,7 +169,7 @@ export default function TaskTree({
                     onSelectFile={onSelectFile}
                   />
                 ) : (
-                  <div className="px-2 py-1 text-xs text-gray-400" style={{ paddingLeft: '24px' }}>
+                  <div className="px-2 py-1 text-xs text-slate-500" style={{ paddingLeft: '24px' }}>
                     无工作目录
                   </div>
                 ))}
@@ -184,11 +184,11 @@ export default function TaskTree({
           onClick={closeDelete}
         >
           <div
-            className="w-[420px] max-w-[90vw] rounded-lg bg-white p-5 shadow-xl"
+            className="w-[420px] max-w-[90vw] rounded-lg bg-stagent-surface border border-white/10 p-5 shadow-xl text-slate-200"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="text-base font-semibold text-gray-800">删除任务</div>
-            <div className="mt-1 text-sm text-gray-500 truncate" title={pendingDelete.title}>
+            <div className="text-base font-semibold text-slate-100">删除任务</div>
+            <div className="mt-1 text-sm text-slate-400 truncate" title={pendingDelete.title}>
               {pendingDelete.title}
             </div>
 

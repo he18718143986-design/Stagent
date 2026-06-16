@@ -18,6 +18,23 @@ body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
-  background-color: #ffffff;
-  color: #111827;
+  background-color: #0b0f14;
+  color: #e2e8f0;
+}
+
+/* 暗色驾驶舱内统一表单控件底色，避免浏览器默认白底在深色背景上刺眼 */
+.stagent-dark input:not([type='checkbox']):not([type='radio']),
+.stagent-dark textarea,
+.stagent-dark select {
+  background-color: #151b24;
+  color: #e2e8f0;
+  border-color: rgba(255, 255, 255, 0.15);
+}
+.stagent-dark input::placeholder,
+.stagent-dark textarea::placeholder {
+  color: #64748b;
+}
+.stagent-dark select option {
+  background-color: #151b24;
+  color: #e2e8f0;
 }
