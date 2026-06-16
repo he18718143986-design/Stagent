@@ -81,7 +81,7 @@ A1（ADR-0008 决策 1b）落地后，T6 端到端仍 0/4，失败**均在 smoke
 - **import 来的 stdlib/进程内建**（`DictReader/DictWriter/reader/writer`、`exit/quit/help/globals/locals/callable`）并入 export-noise——它们非模块级 API，decide 偶误列致 export-extra/missing 误拦。
 - prompt（`SLICE_MODULE_CONTRACT_SUFFIX`）同步要求**完整声明、勿漏、不得少于 global**。
 
-**边界**：本类确定性净化收敛「契约 over/under/占位」长尾，但 T6 strict-pass 率受**多样 run 间 decide/test-gen 方差**（test_run 红、`sdk-path test-import`、fixture 漏列）共同制约，单项修复率提升在方差内（见 `live-findings` 1e）。
+**边界**：本类确定性净化收敛「契约 over/under/占位」长尾；子任务 1f 接续治理 **sdk-path test-import**（test_write 计划内模块 SSOT 预防）与 **fixture CSV 漏列**（`inferCsvColumns` 扩模式 + `reconcileCsvFixtureColumns` 对齐已存在 CSV）。判据以**特定失败模式复现率**为准，非聚合 strict-pass 率（见 `live-findings` 1e 方法论修正）。
 - **decide prompt 预防**：`SLICE_MODULE_CONTRACT_SUFFIX`（`commitment/parseDecisionArtifacts.ts`）明确「exports 只能是本切片自身顶层 def/class 公开符号；禁列他切片符号 / 模块名 / 导入占位别名；他切片能力当依赖调用而非列入本切片 exports」。
 - **不放宽 module-contract 门**：该门正确判红了真会 `ImportError` 的 pipeline；放宽 = 重造空心绿（ADR-0008）。未把 main-only 的 `crossSliceExports` 豁免泛化到集成切片。
 

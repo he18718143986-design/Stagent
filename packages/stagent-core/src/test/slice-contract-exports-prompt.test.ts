@@ -3,6 +3,7 @@ import * as assert from 'node:assert/strict';
 import type { Stage, WorkflowDefinition } from '../WorkflowDefinition';
 import {
   buildCrossModulePatchExportsPromptSuffix,
+  buildDeclaredPythonModulesImportSuffix,
   buildSliceContractExportsPromptSuffix,
   resolveSliceContractExports,
 } from '../commitment/sliceContractExports';
@@ -142,6 +143,7 @@ test('buildSliceContractExportsPromptSuffix test_write 含协作者来源 + 隔�
   // (c) 测试隔离 + patch 目标
   assert.ok(suffix?.includes('tmp_path'));
   assert.ok(suffix?.includes('main.import_tasks_from_csv'));
+  assert.ok(suffix?.includes('title,priority,status'));
 });
 
 test('buildCrossModulePatchExportsPromptSuffix lists peer module exports for main test_write（Run #49）', () => {
@@ -200,4 +202,49 @@ test('buildCrossModulePatchExportsPromptSuffix lists peer module exports for mai
   assert.ok(suffix?.includes('patch("indicators.'));
   assert.ok(suffix?.includes('signals: SignalDetector'));
   assert.ok(suffix?.includes('禁止 patch compute'));
+});
+
+test('buildDeclaredPythonModulesImportSuffix lists plan modules (1f sdk-path prevention)', () => {
+  const wf: WorkflowDefinition = {
+    id: 'wf',
+    version: '2.0',
+    meta: baseMeta,
+    stages: [
+      {
+        ...llmStage('stage_test_write_store'),
+        id: 'stage_test_write_store',
+        toolConfig: {
+          type: 'llm-text',
+          systemPrompt: 'x',
+          writeOutputToFile: 'test_store.py',
+          writePathBase: 'workspace',
+        },
+      },
+      {
+        ...llmStage('stage_impl_store'),
+        id: 'stage_impl_store',
+        toolConfig: {
+          type: 'llm-text',
+          systemPrompt: 'x',
+          writeOutputToFile: 'store.py',
+          writePathBase: 'workspace',
+        },
+      },
+      {
+        ...llmStage('stage_impl_pipeline'),
+        id: 'stage_impl_pipeline',
+        toolConfig: {
+          type: 'llm-text',
+          systemPrompt: 'x',
+          writeOutputToFile: 'pipeline.py',
+          writePathBase: 'workspace',
+        },
+      },
+    ],
+  };
+  const suffix = buildDeclaredPythonModulesImportSuffix(wf, wf.stages[0]!);
+  assert.ok(suffix?.includes('test-import-path-not-in-plan'));
+  assert.ok(suffix?.includes('store'));
+  assert.ok(suffix?.includes('pipeline'));
+  assert.ok(suffix?.includes('utils'));
 });

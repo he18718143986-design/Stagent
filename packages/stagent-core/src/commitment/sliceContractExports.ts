@@ -1,4 +1,5 @@
 import type { Stage, StageRuntime, WorkflowDefinition } from '../WorkflowDefinition';
+import { collectWorkflowArtifacts } from '../WorkflowArtifactRegistry';
 import { DECISION_ARTIFACTS_OUTPUT_KEY } from '../WorkflowOutputKeys';
 import { coerceDecisionArtifacts } from '../python-contract/ModuleContractLint';
 import {
@@ -91,6 +92,7 @@ export function buildSliceContractExportsPromptSuffix(
     // (c) 测试隔离 + patch 目标纪律（子任务 1d）：避免 post-strict 复跑因 cwd 文件缺失 / patch 落空而红。
     lines.push(
       '测试隔离：凡读写文件（config.yaml / CSV / 输出 JSON）的用例必须用 `tmp_path` + `monkeypatch.chdir(tmp_path)` 自建所需 fixture（含被读取的 CSV），禁止依赖工作区既有文件或当前工作目录状态。',
+      '自建 CSV fixture 须包含测试断言用到的**全部列**（如 `title,priority,status`）；若断言 `status` 字段，表头与每行都必须有 `status` 列，禁止只写 `title,priority`。',
       'patch 目标须是「被测模块**绑定后**的名字」：若 `main.py` 写 `from pipeline import import_tasks_from_csv`，则 patch `main.import_tasks_from_csv`（而非 `pipeline.import_tasks_from_csv`），否则 patch 落空、真实函数被调用导致 FileNotFoundError 等。',
     );
   } else {
@@ -106,6 +108,40 @@ export function buildSliceContractExportsPromptSuffix(
     );
   }
 
+  return lines.join('\n');
+}
+
+/**
+ * test_write 预防 M39.2 `test-import-path-not-in-plan`：仅允许 import 工作流计划内 Python 模块。
+ */
+export function buildDeclaredPythonModulesImportSuffix(
+  wf: WorkflowDefinition,
+  stage: Stage,
+): string | undefined {
+  if (!isTestWriteStageId(stage.id)) {
+    return undefined;
+  }
+  const registry = collectWorkflowArtifacts(wf);
+  const modules = registry.pythonModules.filter((m) => m !== 'conftest');
+  if (modules.length === 0) {
+    return undefined;
+  }
+  const semantic = semanticNameFromTestWriteStageId(stage.id);
+  const peerModules = modules.filter((m) => m !== semantic);
+  const lines = [
+    '【计划内 Python 模块 SSOT（M39.2 sdk-path 门 · 子任务 1f）】',
+    `测试文件只能 \`from <下列模块> import ...\`（或相对 import 指向计划内落盘路径）；`,
+    `**禁止** import 未列模块（如 utils / sdk / helpers / common）——会被 \`test-import-path-not-in-plan\` 判红。`,
+    `计划内顶层模块：${modules.join(', ')}`,
+  ];
+  if (peerModules.length > 0) {
+    lines.push(
+      `需要协作者时从其模块名 import（如 ${peerModules.slice(0, 3).map((m) => `\`from ${m} import ...\``).join('、')}），勿发明新包名。`,
+    );
+  }
+  lines.push(
+    '相对 import（`from . import` / `from ..`）仅当目标路径在工作流 writeOutputToFile 计划内；勿 import 计划外子路径。',
+  );
   return lines.join('\n');
 }
 

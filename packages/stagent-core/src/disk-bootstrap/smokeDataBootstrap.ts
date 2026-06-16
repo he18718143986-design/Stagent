@@ -66,20 +66,46 @@ function collectProjectPyText(workspaceRoot: string): string {
 }
 
 /**
- * 从代码中推断 CSV 列名：匹配 `row["x"]` / `row['x']` / `row.get("x")` 等 DictReader 字段访问，
+ * 从代码中推断 CSV 列名：
+ * - `row["x"]` / `row.get("x")` / `task["status"]` 等 DictReader 字段访问
+ * - `fieldnames = ["title", "status"]` / DictWriter 声明
  * 按出现顺序去重返回。
  */
 export function inferCsvColumns(pyText: string): string[] {
   const cols: string[] = [];
   const seen = new Set<string>();
-  const re = /\brow(?:\.get\(\s*|\s*\[\s*)['"]([A-Za-z_][\w]*)['"]/g;
-  for (const m of pyText.matchAll(re)) {
-    const c = m[1];
-    if (c && !seen.has(c)) {
-      seen.add(c);
-      cols.push(c);
+  const add = (name: string | undefined): void => {
+    const c = name?.trim();
+    if (!c || seen.has(c)) {
+      return;
+    }
+    seen.add(c);
+    cols.push(c);
+  };
+
+  const fieldAccessPatterns = [
+    /\brow(?:\.get\(\s*|\s*\[\s*)['"]([A-Za-z_][\w]*)['"]/g,
+    /\b(?:task|record|r|item|entry|line|rec|d)\s*(?:\.get\(\s*|\[\s*)['"]([A-Za-z_][\w]*)['"]/g,
+  ];
+  for (const re of fieldAccessPatterns) {
+    re.lastIndex = 0;
+    for (const m of pyText.matchAll(re)) {
+      add(m[1]);
     }
   }
+
+  const fieldnamesAssignRe = /fieldnames\s*=\s*\[([^\]]+)\]/g;
+  for (const m of pyText.matchAll(fieldnamesAssignRe)) {
+    for (const v of (m[1] ?? '').matchAll(/['"]([A-Za-z_][\w-]*)['"]/g)) {
+      add(v[1]);
+    }
+  }
+
+  const headerAssertRe = /['"]([A-Za-z_][\w]*)['"]\s+in\s+(?:fieldnames|header|columns|reader\.fieldnames)/gi;
+  for (const m of pyText.matchAll(headerAssertRe)) {
+    add(m[1]);
+  }
+
   return cols;
 }
 
@@ -157,6 +183,57 @@ export function buildSeedCsv(columns: string[], pyText: string, rows?: number): 
   return `${header}\n${body.join('\n')}\n`;
 }
 
+function parseCsvHeaderLine(line: string): string[] {
+  return line.split(',').map((h) => h.trim()).filter(Boolean);
+}
+
+/**
+ * 为已存在但缺列的 CSV 补齐推断列（子任务 1f：fixture 漏列）。
+ * @returns 是否改写文件
+ */
+export function reconcileCsvFixtureColumns(
+  absPath: string,
+  requiredColumns: string[],
+  pyText: string,
+): boolean {
+  if (!fs.existsSync(absPath) || requiredColumns.length === 0) {
+    return false;
+  }
+  const raw = fs.readFileSync(absPath, 'utf8');
+  const lines = raw.trim().split('\n');
+  if (lines.length === 0) {
+    return false;
+  }
+  const header = parseCsvHeaderLine(lines[0]!);
+  const headerSet = new Set(header);
+  const missing = requiredColumns.filter((c) => !headerSet.has(c));
+  if (missing.length === 0) {
+    return false;
+  }
+  const mergedHeader = [...header, ...missing];
+  const enumValues = inferEnumValues(pyText);
+  const out: string[] = [mergedHeader.join(',')];
+  const dataLines = lines.slice(1);
+  if (dataLines.length === 0) {
+    const rowCount = Math.min(Math.max(enumValues.length, 2), 4);
+    for (let i = 0; i < rowCount; i++) {
+      out.push(mergedHeader.map((c) => sampleValueForColumn(c, i, enumValues)).join(','));
+    }
+  } else {
+    for (let i = 0; i < dataLines.length; i++) {
+      const cells = dataLines[i]!.split(',');
+      const row = new Map<string, string>();
+      header.forEach((h, idx) => row.set(h, cells[idx] ?? ''));
+      for (const col of missing) {
+        row.set(col, sampleValueForColumn(col, i, enumValues));
+      }
+      out.push(mergedHeader.map((h) => row.get(h) ?? '').join(','));
+    }
+  }
+  fs.writeFileSync(absPath, `${out.join('\n')}\n`, 'utf8');
+  return true;
+}
+
 /**
  * 为单个缺失 CSV 选择种子内容：优先从代码推断列（schema 感知，避免「用了别的任务的种子」），
  * 推断不到列时回落最小 OHLCV fixture。
@@ -171,9 +248,10 @@ export function resolveSeedCsvContent(workspaceRoot: string): string {
 }
 
 /**
- * smoke 前：为 config.yaml 引用的缺失 CSV 写入与任务字段一致的最小 fixture（幂等）。
+ * smoke 前：为 config.yaml 引用的缺失 CSV 写入与任务字段一致的最小 fixture（幂等）；
+ * 对已存在但缺推断列的 CSV 做 schema 对齐（子任务 1f）。
  * 种子内容按工作区代码推断列（ADR-0009：禁止复用其它任务的种子，如把期货 K 线塞进 todo 任务）。
- * @returns 新创建文件的相对路径列表
+ * @returns 新创建或对齐改写的相对路径列表
  */
 export function seedSmokeCsvFixtures(workspaceRoot: string, yamlRelPath = 'config.yaml'): string[] {
   const yamlPath = path.join(workspaceRoot, yamlRelPath);
@@ -181,21 +259,36 @@ export function seedSmokeCsvFixtures(workspaceRoot: string, yamlRelPath = 'confi
     return [];
   }
   const yaml = fs.readFileSync(yamlPath, 'utf8');
-  const missing = extractCsvPathsFromYaml(yaml).filter((rel) => {
+  const allPaths = extractCsvPathsFromYaml(yaml);
+  const pyText = collectProjectPyText(workspaceRoot);
+  const inferredColumns = inferCsvColumns(pyText);
+
+  const missing = allPaths.filter((rel) => {
     const abs = path.isAbsolute(rel) ? rel : path.join(workspaceRoot, rel);
     return !fs.existsSync(abs);
   });
-  if (missing.length === 0) {
-    return [];
+
+  const touched: string[] = [];
+
+  if (missing.length > 0) {
+    const content =
+      inferredColumns.length > 0 ? buildSeedCsv(inferredColumns, pyText) : MINIMAL_KLINE_CSV;
+    for (const rel of missing) {
+      const abs = path.isAbsolute(rel) ? rel : path.join(workspaceRoot, rel);
+      fs.mkdirSync(path.dirname(abs), { recursive: true });
+      fs.writeFileSync(abs, content, 'utf8');
+      touched.push(rel);
+    }
   }
-  // 仅在确有缺失时推断一次种子内容（schema 感知）。
-  const content = resolveSeedCsvContent(workspaceRoot);
-  const created: string[] = [];
-  for (const rel of missing) {
-    const abs = path.isAbsolute(rel) ? rel : path.join(workspaceRoot, rel);
-    fs.mkdirSync(path.dirname(abs), { recursive: true });
-    fs.writeFileSync(abs, content, 'utf8');
-    created.push(rel);
+
+  if (inferredColumns.length > 0) {
+    for (const rel of allPaths) {
+      const abs = path.isAbsolute(rel) ? rel : path.join(workspaceRoot, rel);
+      if (fs.existsSync(abs) && reconcileCsvFixtureColumns(abs, inferredColumns, pyText)) {
+        touched.push(rel);
+      }
+    }
   }
-  return created;
+
+  return touched;
 }
