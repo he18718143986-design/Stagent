@@ -157,6 +157,18 @@ test('resolveModuleExports：干净 slice 契约不受影响', () => {
   assert.deepEqual(resolveModuleExports('pipeline', slice, global), ['import_tasks_from_csv', 'summarize']);
 });
 
+test('sanitizeModuleExports：main 契约仅 `main`（被剔空）→ 规范为 [main]（子任务 1d）', () => {
+  // 'main' 在 SKIP_IDENT 中被 pruneExportNoise 剔除 → 旧逻辑返回 []（无契约指引）。
+  assert.deepEqual(sanitizeModuleExports('main', ['main']), ['main']);
+  // 非 main 切片不受影响（被剔空仍为空）。
+  assert.deepEqual(sanitizeModuleExports('store', ['main']), []);
+});
+
+test('resolveModuleExports：main 仅声明 `main` → 解析为 [main]（供 prompt/门/stub）', () => {
+  const slice = { version: 1 as const, files: [], modules: [{ name: 'main', exports: ['main'] }] };
+  assert.deepEqual(resolveModuleExports('main', slice, null), ['main']);
+});
+
 test('synthesizeSliceDecisionArtifacts builds modules[] when sidecar missing', () => {
   const artifacts = synthesizeSliceDecisionArtifacts('indicators', RUN19_RECORD, null);
   assert.equal(artifacts?.modules?.length, 1);

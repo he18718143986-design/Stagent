@@ -60,6 +60,17 @@ Proposed — 2026-06-15
 | 禁止占位导出 | 所有 impl 切片注入「禁止自赋值 / 无意义模块级常量」 | ✅ 已落地 |
 | Fixture 与任务契约一致 | fixture 一致性门（ADR-0008 决策 3） | ✅ 已落地 |
 
+#### 1a. test-slice-import 门 order-aware 调和（子任务 1c，2026-06-15）
+
+**背景**：`ModuleContractLint.lintTestImportsAgainstModuleContract`（L101 `modRoot !== semantic`）强制「切片测试只能 `from 本切片 import`」，导致 `test_pipeline.py` 写 `from store import TaskStore` / `from models import validate_task`（**真实前序协作者**）被判 `python-test-slice-import-module-mismatch`，挡在 A1 smoke 之前。该门与本 ADR「测真实协作者、禁 mock 内部协作者」**直接冲突**（证据：T6 `--keep` 工作区，store/models 构建序在 pipeline 之前、已落盘、契约已声明 `TaskStore`/`validate_task`）。
+
+**决策：调和而非放宽**（保留 forward-slice 防护，ADR-0008 命门）：
+- **允许** `from <modRoot> import`：modRoot 是 decisionArtifacts.modules 已声明、且**构建序在当前 semantic 之前**的兄弟切片（已落盘真实协作者）；导入符号须在该协作者契约 `exports` 中（防幻觉符号）。
+- **仍拦**：`__init__` 等（`FORBIDDEN_SLICE_TEST_MODULE_NAMES`）；**前向/未落盘**切片（构建序不在当前之前 → per-slice test_run 会 ImportError）；**未声明**模块（防幻觉）。
+- **构建序来源**：优先工作流真实落盘序（`collectSliceBuildOrder`：`stage_impl_<semantic>` 顺序，排除 bundle-write/conftest），缺省回退 global `decisionArtifacts.modules` 声明顺序。两生产调用点（`sliceContractGateHelpers` post-mutate 门、`postStageGates` test-write 门）均传入 authoritative 工作流序。
+- **两处 `modRoot !== semantic` 一致**：L101（import）改 order-aware；L174（`lintTestPatchTargetsAgainstModuleContract` 的自模块 patch 检查）本就 `continue`（跨切片 patch 委托 `lintTestCrossModulePatchTargetsAgainstContracts` 按各模块契约校验），二者对「跨模块引用」的策略一致——真实前序协作者放行、未声明符号各自契约拦、不在 import 门误拦。
+- **不简单删 check**：未删除任何拦截；前向/未声明/`__init__` 仍硬拦。
+
 **prompt 要求（prevention-at-impl，已实现于 `commitment/deliverablePreventionSuffixes.ts`）**：在 `test-write` / `impl` 阶段注入简短后缀，明确：
 
 - **主入口可运行**（main impl）：必须 `if __name__ == "__main__": main()` 且真正执行业务路径、写出输出文件——直接预防本次 T6「`main()` 定义却从未被调用、`python main.py` 空转无产出」。
