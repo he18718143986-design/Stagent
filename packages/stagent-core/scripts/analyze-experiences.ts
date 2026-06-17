@@ -6,11 +6,18 @@ import {
   analyzeFailurePatterns,
   formatFailureAnalysisMarkdown,
 } from '../src/FailurePatternAnalyzer';
+import { resolveCandidateRuleStorePath } from '../src/rule-distillation/CandidateRuleStore';
+import {
+  formatCandidateRuleDistillationSummary,
+  runRuleDistillation,
+} from '../src/rule-distillation/runRuleDistillation';
 
 interface CliOptions {
   workspace?: string;
   topFailures?: number;
   format?: 'markdown' | 'json';
+  distill?: boolean;
+  candidateStore?: string;
 }
 
 function parseArgs(argv: string[]): CliOptions {
@@ -25,6 +32,11 @@ function parseArgs(argv: string[]): CliOptions {
       i += 1;
     } else if (a === '--format') {
       opts.format = argv[i + 1] as 'markdown' | 'json';
+      i += 1;
+    } else if (a === '--distill') {
+      opts.distill = true;
+    } else if (a === '--candidate-store') {
+      opts.candidateStore = argv[i + 1];
       i += 1;
     }
   }
@@ -53,6 +65,19 @@ function main(): void {
 
   if (kindCount < 3 && experiences.length >= 3) {
     console.warn('⚠️ Fewer than 3 actionable pattern kinds; add more diverse failure fixtures.');
+  }
+
+  if (opts.distill) {
+    const candidateStorePath =
+      opts.candidateStore ?? resolveCandidateRuleStorePath(workspace);
+    const result = runRuleDistillation({
+      experienceStorePath: storePath,
+      candidateStorePath,
+    });
+    console.log('');
+    console.log(
+      formatCandidateRuleDistillationSummary(result.distilled, result.summary),
+    );
   }
 
   process.exit(0);
