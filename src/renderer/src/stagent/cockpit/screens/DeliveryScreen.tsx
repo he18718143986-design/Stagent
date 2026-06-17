@@ -4,6 +4,7 @@ import { humanizeJargon } from '../plainLanguage'
 import { simpleTheme } from '../theme'
 import type { CockpitScreenProps } from '../types'
 import { HowToUsePanel } from '../components/HowToUsePanel'
+import { ScreenTabs } from '../components/ScreenTabs'
 import { TechnicalDetailsCollapsible } from '../components/TechnicalDetailsCollapsible'
 import { ArtifactsPanel } from '../components/ArtifactsPanel'
 import { newArtifactPaths } from '../derive/newArtifactPaths'
@@ -19,6 +20,7 @@ import { QualityReportPanel } from '../../QualityReportPanel'
 export function DeliveryScreen({ engine, form, send, onNewTask }: CockpitScreenProps): React.JSX.Element {
   const { state, stages } = engine
   const [showHelp, setShowHelp] = useState(false)
+  const [detailTab, setDetailTab] = useState<'acceptance' | 'retro' | 'artifacts'>('acceptance')
   const title = state.workflow?.meta.title || form.draft.trim() || '你的成果'
   const workspace = state.workflow?.meta?.taskWorkspacePath ?? form.workspacePath
 
@@ -101,6 +103,7 @@ export function DeliveryScreen({ engine, form, send, onNewTask }: CockpitScreenP
       </div>
 
       {testTotal > 0 &&
+        detailTab === 'acceptance' &&
         (testsAllPassed ? (
           <div className="flex items-center gap-2 p-3 rounded-xl bg-green-500/10 border border-green-500/20 text-sm text-green-300">
             <span>🛡️</span>
@@ -115,6 +118,18 @@ export function DeliveryScreen({ engine, form, send, onNewTask }: CockpitScreenP
           </div>
         ))}
 
+      <ScreenTabs
+        className="mb-3"
+        active={detailTab}
+        onChange={(id) => setDetailTab(id as typeof detailTab)}
+        tabs={[
+          { id: 'acceptance', label: '验收' },
+          { id: 'retro', label: '复盘' },
+          { id: 'artifacts', label: '成果' },
+        ]}
+      />
+
+      {detailTab === 'acceptance' && (
       <div className={simpleTheme.card}>
         <h2 className="font-semibold text-slate-100 mb-3">验收报告</h2>
         <div className="space-y-3 text-sm">
@@ -152,7 +167,9 @@ export function DeliveryScreen({ engine, form, send, onNewTask }: CockpitScreenP
           </div>
         </div>
       </div>
+      )}
 
+      {detailTab === 'retro' && (
       <div className={simpleTheme.card}>
         <h2 className="font-semibold text-slate-100 mb-3">本次复盘</h2>
         <div className="grid grid-cols-4 gap-2 mb-3">
@@ -168,7 +185,7 @@ export function DeliveryScreen({ engine, form, send, onNewTask }: CockpitScreenP
             </div>
           ))}
         </div>
-        {retro.keyDecisions.length > 0 && (
+        {retro.keyDecisions.length > 0 ? (
           <div>
             <div className="text-xs text-slate-400 mb-1">关键决策</div>
             <ul className="space-y-1">
@@ -180,10 +197,13 @@ export function DeliveryScreen({ engine, form, send, onNewTask }: CockpitScreenP
               ))}
             </ul>
           </div>
+        ) : (
+          <p className="text-sm text-slate-500">本次流程未经过显式决策阶段。</p>
         )}
       </div>
+      )}
 
-      {workspace && (
+      {detailTab === 'artifacts' && workspace && (
         <ArtifactsPanel
           rootPath={workspace}
           newPaths={newPaths}
@@ -191,6 +211,10 @@ export function DeliveryScreen({ engine, form, send, onNewTask }: CockpitScreenP
           onOpenFolder={openFolder}
           onSelectFile={(n) => void send({ type: 'openArtifactFile', stageId: '', filePath: n.path })}
         />
+      )}
+
+      {detailTab === 'artifacts' && !workspace && (
+        <div className={`${simpleTheme.card} text-sm text-slate-500 text-center py-8`}>暂无工作区路径</div>
       )}
 
       <TechnicalDetailsCollapsible title="技术报告(给开发者看)" defaultOpen={hasConcern || undefined}>

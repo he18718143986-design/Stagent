@@ -69,4 +69,16 @@ describe('PlanningScreen (unified)', () => {
     renderPlanning({})
     expect(screen.getByText(/尚无数据/)).toBeTruthy()
   })
+
+  it('shows risk register with warning and block items', () => {
+    renderPlanning({ warnings: ['需确认 Python 版本'], blockReasons: ['lint fail'], blocked: true })
+    expect(screen.getByText('风险登记')).toBeTruthy()
+    expect(screen.getByText(/需确认 Python 版本/)).toBeTruthy()
+    expect(screen.getByText(/lint fail/)).toBeTruthy()
+  })
+
+  it('shows clear risk register when no items', () => {
+    renderPlanning({})
+    expect(screen.getByText(/未发现需登记的风险项/)).toBeTruthy()
+  })
 })

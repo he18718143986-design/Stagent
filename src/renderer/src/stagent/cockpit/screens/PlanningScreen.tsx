@@ -8,6 +8,7 @@ import { TechnicalDetailsCollapsible } from '../components/TechnicalDetailsColla
 import { CredibilityStrip } from '../components/CredibilityStrip'
 import { MiniDag } from '../components/MiniDag'
 import { DecisionBoardPreview } from '../components/DecisionGatePanel'
+import { RiskRegisterPanel } from '../components/RiskRegisterPanel'
 import { filterPlanSteps } from '../components/stageHelpers'
 import { buildPlanProposal } from '../derive/planProposal'
 
@@ -104,17 +105,16 @@ export function PlanningScreen({ engine, form, send, onNewTask }: CockpitScreenP
           {proposal.verifiedCount}/{proposal.total} 个功能步骤配了自动化验证
         </div>
 
-        {state.warnings.length > 0 && (
-          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 mb-4">
-            <div className="font-medium text-amber-200 mb-1">❓ 需要你确认的地方</div>
-            <p className="text-sm text-amber-300">{humanizeJargon(state.warnings[0])}</p>
-          </div>
-        )}
+        <RiskRegisterPanel
+          warnings={state.warnings}
+          blockReasons={state.blockReasons}
+          blocked={state.blocked}
+        />
 
-        {/* 闸门:红灯禁止执行(常驻,无视密度开关) */}
+        {/* 闸门:红灯禁止执行(常驻,无视密度开关) — 与风险登记联动,保留简短条 */}
         {state.blocked && state.blockReasons.length > 0 && (
-          <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 mb-4 text-sm text-red-300">
-            🔴 还有地方没对上,暂时不能开始。{humanizeJargon(state.blockReasons[0])}
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 mb-4 text-sm text-red-300">
+            🔴 暂时不能开始 — 请查看上方风险登记
           </div>
         )}
 
@@ -155,21 +155,6 @@ export function PlanningScreen({ engine, form, send, onNewTask }: CockpitScreenP
                 ))}
               </div>
             </div>
-            {(state.warnings.length > 0 || state.blockReasons.length > 0) && (
-              <div>
-                <div className="font-medium text-slate-300 mb-1">风险 lint</div>
-                {state.blockReasons.map((r, i) => (
-                  <div key={`b${i}`} className="text-red-300">
-                    🔴 {r}
-                  </div>
-                ))}
-                {state.warnings.map((w, i) => (
-                  <div key={`w${i}`} className="text-amber-300">
-                    🟡 {w}
-                  </div>
-                ))}
-              </div>
-            )}
             {state.decisionBoard && state.decisionBoard.summary.total > 0 && (
               <div>
                 <div className="font-medium text-purple-300 mb-1">决策板摘要</div>

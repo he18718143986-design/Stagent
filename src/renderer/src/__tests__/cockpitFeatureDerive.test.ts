@@ -8,6 +8,7 @@ import {
 import { buildPlanProposal } from '../stagent/cockpit/derive/planProposal'
 import { buildAcceptanceReport } from '../stagent/cockpit/derive/acceptanceReport'
 import { buildRetrospective } from '../stagent/cockpit/derive/retrospective'
+import { deriveExecutionQuality } from '../stagent/cockpit/derive/executionQuality'
 
 const baseActivity = {
   stages: [
@@ -149,5 +150,29 @@ describe('buildRetrospective', () => {
     expect(info.testsPassed).toBe(5)
     expect(info.selfHeals).toBe(2)
     expect(info.keyDecisions).toEqual(['架构决策', '依赖决策'])
+  })
+})
+
+describe('deriveExecutionQuality', () => {
+  it('neutral when no report', () => {
+    expect(deriveExecutionQuality(null).tone).toBe('neutral')
+  })
+  it('good when all tests pass and afk ok', () => {
+    const q = deriveExecutionQuality(qr(true, 3, 3))
+    expect(q.tone).toBe('good')
+    expect(q.label).toMatch(/3\/3/)
+  })
+  it('bad when tests incomplete or afk failed', () => {
+    expect(deriveExecutionQuality(qr(false, 1, 3)).tone).toBe('bad')
+    expect(deriveExecutionQuality(qr(true, 1, 3)).tone).toBe('bad')
+  })
+  it('does not show misleading 0/0 when report exists but no test runs yet', () => {
+    const q = deriveExecutionQuality({
+      ...qr(true, 0, 0),
+      verificationRows: [],
+    })
+    expect(q.tone).toBe('good')
+    expect(q.label).not.toMatch(/0\/0/)
+    expect(q.label).toMatch(/尚无逐阶段测试|AFK/)
   })
 })
