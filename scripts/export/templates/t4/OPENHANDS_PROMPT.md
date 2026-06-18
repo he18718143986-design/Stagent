@@ -18,7 +18,16 @@
 - `main.py` — 无额外参数可运行：`python main.py` exit 0
 - `requirements.txt` — 仅必要依赖（PyYAML、pandas、numpy、pytest）
 - `tests/` — pytest 覆盖 L1/L2；**不得削弱** bundle 预置的 `tests/test_e2e_signal.py`
-- `DELIVERY.md` — 运行说明
+- `DELIVERY.md` — 运行说明（**非空**；含 `python main.py` / `pytest -q` / 数据路径）
+
+## 完成前自检（Gate 裁判前必做）
+
+```bash
+pytest -q
+python main.py
+# signals.csv 含 OPEN_LONG 或 OPEN_SHORT；backtest_summary.json 中 open_long+open_short >= 1
+test -s DELIVERY.md
+```
 
 ## 数据与 fixture（P0）
 

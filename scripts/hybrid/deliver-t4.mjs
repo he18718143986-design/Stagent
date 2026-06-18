@@ -28,7 +28,7 @@ function usage() {
 Options:
   --workspace PATH   工作区根目录（必填；可空目录，将自动创建）
   --mock             跳过 CodeAct（export + fixture 种子 + gate only）
-  --max-retries N    Gate 失败后 CodeAct 回流次数（默认 2）
+  --max-retries N    Gate 失败后 CodeAct 回流次数（默认 3）
   --force            覆盖已有 seed / fixture 文件
   --json             stdout 输出完整 hybrid 报告
   -h, --help         显示帮助
@@ -46,7 +46,7 @@ function parseArgs(argv) {
   const out = {
     workspace: null,
     mock: false,
-    maxRetries: 2,
+    maxRetries: 3,
     force: false,
     json: false,
     help: false,
@@ -86,7 +86,7 @@ export function runDeliverT4(ctx) {
   const {
     workspace,
     mock = false,
-    maxRetries = 2,
+    maxRetries = 3,
     force = false,
     runId = `deliver-t4-${crypto.randomBytes(4).toString('hex')}`,
   } = ctx

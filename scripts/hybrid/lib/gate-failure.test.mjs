@@ -24,6 +24,21 @@ test('classifyGateFailure: G-signals → implementation', () => {
   assert.equal(cat, 'implementation')
 })
 
+test('buildFixPrompt: T4 G-signals + DELIVERY 定向清单', () => {
+  const text = buildFixPrompt({
+    checks: [
+      { id: 'G-signals-nonzero', pass: false, message: '需要至少 1 条 OPEN_LONG/OPEN_SHORT 信号' },
+      { id: 'mvp', pass: false, message: 'missing or empty DELIVERY.md' },
+      { id: 'mvp', pass: false, message: 'pytest failed (exit 1):' },
+    ],
+  }, 2)
+  assert.match(text, /DELIVERY\.md/)
+  assert.match(text, /G-signals-nonzero|信号产出/)
+  assert.match(text, /OPEN_LONG/)
+  assert.match(text, /pytest -q/)
+  assert.match(text, /第 2 轮回流/)
+})
+
 test('buildFixPrompt: 列出失败 checks', () => {
   const text = buildFixPrompt({
     checks: [

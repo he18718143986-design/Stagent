@@ -1189,7 +1189,7 @@ async function runHybridLiveTier(ctx, tier) {
     tier,
     workspace: ws,
     mock: !ctx.live,
-    maxRetries: 2,
+    maxRetries: 3,
     runId: `headless-hybrid-t${tier}`,
   })
   if (!report.pass) {

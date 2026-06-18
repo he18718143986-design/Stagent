@@ -30,7 +30,7 @@ function usage() {
 Options:
   --tier t4|t5|t6|t7     任务档位（必填）
   --workspace PATH       工作区根目录（必填）
-  --max-retries N        Gate 失败后 CodeAct 回流次数（默认 2）
+  --max-retries N        Gate 失败后 CodeAct 回流次数（默认 3）
   --mock                 跳过 CodeAct（只 export + gate，不烧 API）
   --skip-export          跳过 spec:export（bundle 须已存在）
   --skip-codeact         只跑 gate（不调用 CodeAct）
@@ -46,7 +46,7 @@ function parseArgs(argv) {
   const out = {
     tier: null,
     workspace: null,
-    maxRetries: 2,
+    maxRetries: 3,
     mock: false,
     skipExport: false,
     skipCodeact: false,
@@ -99,7 +99,7 @@ export function runHybridPipeline(ctx) {
   const {
     tier,
     workspace,
-    maxRetries = 2,
+    maxRetries = 3,
     mock = false,
     skipExport = false,
     skipCodeact = false,
@@ -236,7 +236,7 @@ async function main() {
   const report = runHybridPipeline({
     tier,
     workspace: args.workspace,
-    maxRetries: typeof args.maxRetries === 'number' ? args.maxRetries : 2,
+    maxRetries: typeof args.maxRetries === 'number' ? args.maxRetries : 3,
     mock: args.mock,
     skipExport: args.skipExport,
     skipCodeact: args.skipCodeact,

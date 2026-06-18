@@ -36,6 +36,8 @@ def _compose_user_message(bundle: TaskBundle, fix_prompt: str | None) -> str:
         "- 不得修改 tests/ 与 scripts/acceptance.sh 的断言语义\n"
         "- 不得自判交付完成；Stagent Gate 为唯一裁判\n"
         "- fixture CSV 须落盘并在 config 默认路径可运行\n"
+        "- 必须写入**非空** `DELIVERY.md`（含 python main.py / pytest / 数据路径说明）\n"
+        "- `signals.csv` 与 `backtest_summary.json` 须含 ≥1 条 OPEN_LONG/OPEN_SHORT 信号\n"
     )
     cfg = resolve_codeact_config(bundle)
     if cfg.forbidden_patterns:
