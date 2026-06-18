@@ -53,6 +53,41 @@ const T6_USER_INPUT = `用 Python 开发一个「任务清单（Todo）批处理
 6. 交付：config.yaml、models/、store/、statemachine/、pipeline/、main.py、tests/（pytest 覆盖每个切片的契约与边界）、DELIVERY.md。
 7. 依赖：仅 PyYAML 用于读取 config.yaml；其余一律使用 Python 标准库（csv、json、dataclasses、enum）。不接任何外部服务；CSV 样例可自带 fixture。`
 
+// T7 = 工程进度与财务管控系统（对比 OpenHands/AI Studio 的同一清晰业务任务）。
+// 确定性业务 CRUD：进度管控 + 财务匹配 + 进度预警 + 预算预警 + 月度报表。
+// 与 T6 同属"可规约"靶子，但更贴近真实小软件；用于三方横向对比（同 DeepSeek 模型 vs OpenHands）。
+const T7_USER_INPUT = `用 Python 开发一个「工程进度与财务管控系统」MVP（命令行 / 后端，电脑本地使用，不做 GUI）。这是一个**确定性业务系统**：所有计算都有精确、可逐例断言的契约，不涉及任何统计/预测类模糊语义。
+
+按 software 多切片组织，先做架构决策，再实现并验证以下垂直切片，最后用 main.py 串联：
+
+1. models/（数据模型 + 校验，标准库 dataclasses）
+   - \`Project\`(id:int, name:str, budget:float, start_date:str, end_date:str, status:str)
+   - \`Milestone\`(id:int, project_id:int, name:str, weight:float, planned_end:str, status:str)  # status ∈ {"pending","in_progress","done"}
+   - \`FinanceRecord\`(id:int, project_id:int|None, category:str, amount:float, record_type:str, record_date:str)  # record_type ∈ {"income","expense"}
+   - \`Budget\`(id:int, project_id:int, category:str, planned_amount:float, fiscal_month:str)  # fiscal_month 形如 "2026-06"
+   - 每个模型提供 validate(data:dict) -> list[str]，返回错误信息列表（空表示合法）。
+
+2. store/（CRUD 仓储 + JSON 持久化，标准库）
+   - 对 Project/Milestone/FinanceRecord/Budget 提供 add/get/update/delete/list 方法，内存自增 id。
+   - save_json(path)/load_json(path) 覆盖式持久化，恢复后 next_id 取最大 id+1。
+
+3. progress/（进度管控）
+   - \`project_progress(store, project_id) -> dict\`：按里程碑 weight 加权计算完成百分比 = sum(done.weight)/sum(all.weight)*100；返回 {"percent":x, "total_weight":w}。total_weight 为 0 时 percent=0。
+
+4. finance/（财务数据匹配）
+   - \`match_records_to_budget(store, project_id, fiscal_month) -> dict\`：把该项目该月的 expense 财务记录按 category 汇总，与对应 Budget.planned_amount 配对；返回 {category: {"planned":p, "actual":a, "exec_rate": a/p*100}}（p 为 0 时 exec_rate=0）。
+
+5. alerts/（进度预警 + 财务预算预警）
+   - \`progress_alerts(store, today:str) -> list[dict]\`：按时间应完成比例（elapsed/total_days）对比实际 percent，滞后>20% 记 level="danger"，>10% 记 level="warning"。
+   - \`budget_alerts(store, fiscal_month) -> list[dict]\`：exec_rate>=100 记 level="danger"，>=80 记 level="warning"。
+
+6. report/（月度报表）
+   - \`monthly_report(store, fiscal_month) -> dict\`：返回 {"fiscal_month":fm, "income_total":x, "expense_total":y, "balance":x-y, "project_costs":[{project_id,name,cost}], "budget_execution":[...] }。
+
+7. main.py / cli：读取 config.yaml（含 data_json 路径、当前 fiscal_month），加载/初始化 store，输出当月 monthly_report 到 output_json，并打印 progress_alerts + budget_alerts 数量。
+8. 交付：config.yaml、models/、store/、progress/、finance/、alerts/、report/、main.py、tests/（pytest 覆盖每个切片的契约与边界，含一份自带 fixture 数据）、DELIVERY.md。
+9. 依赖：仅 PyYAML 读取 config.yaml；其余用 Python 标准库（csv、json、dataclasses、datetime、enum）。不接任何外部服务/数据库驱动；样例数据自带 fixture（可用 JSON 种子）。`
+
 export const LIVE_TASK_TIERS = {
   1: {
     id: 'live-t1-minimal',
@@ -186,6 +221,59 @@ export const LIVE_TASK_TIERS = {
       maxStages: 60,
     },
   },
+  7: {
+    id: 'live-t7-project-finance-mgmt',
+    label: 'T7 三方对比：工程进度与财务管控系统（CRUD+匹配+预警+月报）',
+    taskType: 'software',
+    userInput: T7_USER_INPUT,
+    polish: true,
+    timeoutMs: 2_400_000,
+    generationAttempts: 2,
+    mvp: {
+      moduleDirs: ['models', 'store', 'progress', 'finance', 'alerts', 'report'],
+      // 真实集成冒烟：跑 main 入口，断言月报产出非「全 0/空」（捕获空心绿）。
+      smoke: { run: 'main', outputFile: 'output.json', jsonNotAllZero: true },
+      architectureScan: true,
+      traceability: [
+        {
+          id: 'progress-calc',
+          dirs: ['progress', 'tests'],
+          requireDirPy: 'progress',
+          pattern: /project_progress|weight/,
+          hint: 'progress/ 含 project_progress（里程碑权重加权进度）',
+        },
+        {
+          id: 'finance-match',
+          dirs: ['finance', 'tests'],
+          requireDirPy: 'finance',
+          pattern: /match_records_to_budget|exec_rate/,
+          hint: 'finance/ 含 match_records_to_budget（财务↔预算匹配）',
+        },
+        {
+          id: 'alerts',
+          dirs: ['alerts', 'tests'],
+          requireDirPy: 'alerts',
+          pattern: /progress_alerts|budget_alerts/,
+          hint: 'alerts/ 含 progress_alerts / budget_alerts（进度+预算预警）',
+        },
+        {
+          id: 'monthly-report',
+          dirs: ['report', 'tests'],
+          requireDirPy: 'report',
+          pattern: /monthly_report/,
+          hint: 'report/ 含 monthly_report（月度报表聚合）',
+        },
+      ],
+    },
+    pass: {
+      terminal: 'workflowCompleted',
+      strict: true,
+      minStages: 6,
+      // 6 切片（models/store/progress/finance/alerts/report）+ main + skeleton-compiler 链；
+      // 6 切片 × decide/test_write/gate/impl/test_run/fix + venv/verify/smoke/delivery，留足余量。
+      maxStages: 96,
+    },
+  },
 }
 
 /** 默认 T4 工作区：autoAI 上级目录的 T4/ */
@@ -273,8 +361,8 @@ export function resolveLiveTiers(tier) {
     return [1, 2, 3, 4, 5]
   }
   const n = Number(tier)
-  if (![1, 2, 3, 4, 5, 6].includes(n)) {
-    throw new Error(`--live-tier must be 1, 2, 3, 4, 5, 6, or all (got: ${tier})`)
+  if (![1, 2, 3, 4, 5, 6, 7].includes(n)) {
+    throw new Error(`--live-tier must be 1, 2, 3, 4, 5, 6, 7, or all (got: ${tier})`)
   }
   return [n]
 }

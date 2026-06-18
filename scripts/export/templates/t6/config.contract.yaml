@@ -1,0 +1,18 @@
+# T6 目录与模块契约
+moduleDirs:
+  - models
+  - store
+  - statemachine
+  - pipeline
+
+requiredFiles:
+  - config.yaml
+  - main.py
+  - DELIVERY.md
+  - requirements.txt
+
+outputs:
+  - summary.json
+
+forbidden:
+  - openctp

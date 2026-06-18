@@ -1,0 +1,10 @@
+openhands-sdk
+tree-sitter>=0.24
+tree-sitter-bash>=0.23
+binaryornot>=0.4.4
+cachetools
+libtmux>=0.53.0
+pydantic>=2.11.7
+browser-use>=0.8.0
+func-timeout>=4.3.5
+tom-swe>=1.0.3

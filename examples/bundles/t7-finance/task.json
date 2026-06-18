@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "tier": 7,
+  "taskId": "live-t7-project-finance-mgmt",
+  "taskType": "software",
+  "language": "py",
+  "workspace": ".",
+  "specRefs": [],
+  "mvp": {
+    "moduleDirs": [
+      "models",
+      "store",
+      "progress",
+      "finance",
+      "alerts",
+      "report"
+    ],
+    "traceability": [
+      {
+        "id": "progress-calc",
+        "dirs": [
+          "progress",
+          "tests"
+        ],
+        "requireDirPy": "progress",
+        "pattern": {},
+        "hint": "progress/ 含 project_progress（里程碑权重加权进度）"
+      },
+      {
+        "id": "finance-match",
+        "dirs": [
+          "finance",
+          "tests"
+        ],
+        "requireDirPy": "finance",
+        "pattern": {},
+        "hint": "finance/ 含 match_records_to_budget（财务↔预算匹配）"
+      },
+      {
+        "id": "alerts",
+        "dirs": [
+          "alerts",
+          "tests"
+        ],
+        "requireDirPy": "alerts",
+        "pattern": {},
+        "hint": "alerts/ 含 progress_alerts / budget_alerts（进度+预算预警）"
+      },
+      {
+        "id": "monthly-report",
+        "dirs": [
+          "report",
+          "tests"
+        ],
+        "requireDirPy": "report",
+        "pattern": {},
+        "hint": "report/ 含 monthly_report（月度报表聚合）"
+      }
+    ],
+    "smoke": {
+      "run": "main",
+      "outputFile": "output.json",
+      "jsonNotAllZero": true
+    },
+    "architectureScan": true
+  },
+  "codeact": {
+    "maxSteps": 60,
+    "timeoutMs": 2400000,
+    "enableBrowser": false,
+    "forbiddenPatterns": [
+      "openctp",
+      "np.random"
+    ]
+  },
+  "llm": {
+    "model": "${LLM_MODEL}",
+    "baseUrl": "${LLM_BASE_URL}",
+    "apiKeyEnv": "DEEPSEEK_API_KEY"
+  }
+}

@@ -1,0 +1,2 @@
+[console_scripts]
+stagent-codeact = stagent_codeact.__main__:main

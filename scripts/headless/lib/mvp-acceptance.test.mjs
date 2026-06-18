@@ -14,6 +14,10 @@ import {
   evaluatePlaceholderExports,
   resolveWorkspaceArtifact,
   dirHasTs,
+  extractCsvPathsFromConfig,
+  evaluateSignalsNonZero,
+  evaluateHybridGateChecks,
+  runStrictGate,
 } from './mvp-acceptance.mjs'
 
 function tmpWs() {
@@ -340,4 +344,39 @@ test('assertStrictMvpPass: 默认（不传 language）仍按 Python 报 missing 
   assert.match(msg, /missing main entry \(main\.py, cli\.py, or src\/main\.py\)/)
   assert.match(msg, /missing tests\/test_\*\.py/)
   assert.doesNotMatch(msg, /\*\.ts|config\.json/)
+})
+
+test('extractCsvPathsFromConfig: 解析引号内 csv 路径', () => {
+  const ws = tmpWs()
+  writeFile(ws, 'config.yaml', "data_path: 'fixtures/kline.csv'\nindex: \"data/index.csv\"\n")
+  assert.deepEqual(extractCsvPathsFromConfig(ws).sort(), ['data/index.csv', 'fixtures/kline.csv'])
+})
+
+test('evaluateSignalsNonZero: summary open_long+open_short', () => {
+  const ws = tmpWs()
+  writeFile(ws, 'backtest_summary.json', JSON.stringify({ open_long: 1, open_short: 0 }))
+  assert.equal(evaluateSignalsNonZero(ws, 1), null)
+  writeFile(ws, 'backtest_summary.json', JSON.stringify({ open_long: 0, open_short: 0 }))
+  assert.match(evaluateSignalsNonZero(ws, 1), /至少 1 条/)
+})
+
+test('evaluateHybridGateChecks: G-no-ctp 拦截 openctp', () => {
+  const ws = tmpWs()
+  writeFile(ws, 'requirements.txt', 'openctp-ctp\n')
+  const { errors, checks } = evaluateHybridGateChecks(ws, { forbidCtp: true })
+  assert.ok(errors.some((e) => e.startsWith('G-no-ctp:')))
+  assert.equal(checks.find((c) => c.id === 'G-no-ctp')?.pass, false)
+})
+
+test('runStrictGate: hybrid 检查不重复计入 errors', () => {
+  const ws = tmpWs()
+  writeFile(ws, 'config.yaml', "csv: 'missing.csv'\n")
+  const report = runStrictGate(ws, {
+    outcome: 'workflowCompleted',
+    moduleDirs: ['indicators'],
+    requireTraceability: false,
+    hybridGate: { requireFixturesOnDisk: true, forbidCtp: true },
+  })
+  const fixtureFails = report.errors.filter((e) => e.startsWith('G-fixtures-on-disk:'))
+  assert.equal(fixtureFails.length, 1)
 })

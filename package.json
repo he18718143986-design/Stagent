@@ -26,7 +26,7 @@
     "lint:fix": "eslint src --fix",
     "test": "vitest run --config vitest.config.ts",
     "test:watch": "vitest --config vitest.config.ts",
-    "test:headless": "npm run build:core && node --test scripts/headless/lib/*.test.mjs",
+    "test:headless": "npm run build:core && node --test scripts/headless/lib/*.test.mjs scripts/gate/*.test.mjs scripts/export/*.test.mjs scripts/hybrid/**/*.test.mjs",
     "test:e2e": "npm run build && playwright test",
     "feedback": "npm run build:core && node scripts/headless/run.mjs",
     "feedback:quick": "node scripts/headless/run.mjs",
@@ -50,6 +50,13 @@
     "log:draft": "node scripts/generate-run-log-entry.mjs",
     "log:manifest": "node scripts/generate-run-log-entry.mjs --init-manifest",
     "adapter:gates": "node scripts/check-adapter-gates.js",
+    "codeact:install": "bash scripts/codeact/install-venv.sh",
+    "codeact:smoke": "bash scripts/codeact/smoke-import.sh",
+    "codeact:run": "node scripts/hybrid/spawn-codeact.mjs",
+    "spec:export": "node scripts/export/task-bundle.mjs",
+    "gate:strict": "node scripts/gate/strict.mjs",
+    "hybrid:t4": "node scripts/hybrid/run-hybrid.mjs --tier 4",
+    "hybrid:t7": "node scripts/hybrid/run-hybrid.mjs --tier 7",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {

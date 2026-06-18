@@ -413,6 +413,200 @@ export function assertSmoke(ws, smoke) {
   return errors
 }
 
+/** 从 config.yaml 提取引号内的 .csv 相对路径。 */
+export function extractCsvPathsFromConfig(ws) {
+  const configPath = path.join(ws, 'config.yaml')
+  if (!fs.existsSync(configPath)) return []
+  let yaml = ''
+  try {
+    yaml = fs.readFileSync(configPath, 'utf8')
+  } catch {
+    return []
+  }
+  const paths = new Set()
+  for (const m of yaml.matchAll(/['"]([^'"]+\.csv)['"]/gi)) {
+    if (m[1]) paths.add(m[1])
+  }
+  return [...paths]
+}
+
+/**
+ * T4 hybrid 门：open_long + open_short >= minSignals，或 signals.csv 数据行 > 0。
+ * @returns {string|null} 错误信息，通过则 null
+ */
+export function evaluateSignalsNonZero(ws, minSignals = 1) {
+  const summaryCandidates = ['backtest_summary.json', 'output/summary.json', 'summary.json']
+  for (const rel of summaryCandidates) {
+    const p = resolveWorkspaceArtifact(ws, rel)
+    if (!p || !fs.existsSync(p)) continue
+    try {
+      const data = JSON.parse(fs.readFileSync(p, 'utf8'))
+      const long = Number(data.open_long ?? data.openLong ?? 0)
+      const short = Number(data.open_short ?? data.openShort ?? 0)
+      if (long + short >= minSignals) return null
+    } catch {
+      /* try next */
+    }
+  }
+  for (const rel of ['signals.csv', 'output/signals.csv']) {
+    const p = resolveWorkspaceArtifact(ws, rel)
+    if (!p || !fs.existsSync(p)) continue
+    const lines = fs
+      .readFileSync(p, 'utf8')
+      .split(/\r?\n/)
+      .filter((l) => l.trim() !== '')
+    const dataRows = Math.max(0, lines.length - 1)
+    if (dataRows >= minSignals) return null
+  }
+  return `需要至少 ${minSignals} 条 OPEN_LONG/OPEN_SHORT 信号（summary 或 signals.csv 均为空）`
+}
+
+/**
+ * Hybrid Gate 加重检查（OpenHands 探针教训：G-fixtures / G-main / G-signals / G-ctp / G-e2e）。
+ * @param {string} ws
+ * @param {{
+ *   requireFixturesOnDisk?: boolean,
+ *   requireDefaultMainExit0?: boolean,
+ *   minSignals?: number,
+ *   forbidCtp?: boolean,
+ *   requireE2eTest?: boolean,
+ * }} opts
+ * @returns {{ errors: string[], checks: { id: string, pass: boolean, message: string }[] }}
+ */
+export function evaluateHybridGateChecks(ws, opts = {}) {
+  const errors = []
+  const checks = []
+
+  const add = (id, pass, message) => {
+    checks.push({ id, pass, message })
+    if (!pass) errors.push(`${id}: ${message}`)
+  }
+
+  if (opts.requireFixturesOnDisk) {
+    const csvPaths = extractCsvPathsFromConfig(ws)
+    if (csvPaths.length === 0) {
+      add('G-fixtures-on-disk', false, 'config.yaml 未声明任何 .csv 数据路径')
+    } else {
+      const missing = []
+      for (const rel of csvPaths) {
+        const p = resolveWorkspaceArtifact(ws, rel)
+        if (!p || !fs.existsSync(p) || fs.statSync(p).size === 0) {
+          missing.push(rel)
+        }
+      }
+      add(
+        'G-fixtures-on-disk',
+        missing.length === 0,
+        missing.length === 0
+          ? `已落盘 ${csvPaths.length} 个 CSV`
+          : `缺失或为空：${missing.join(', ')}`,
+      )
+    }
+  }
+
+  if (opts.requireDefaultMainExit0) {
+    const entry = findMainEntry(ws)
+    if (!entry) {
+      add('G-default-main-exit0', false, '无 main.py/cli.py 入口')
+    } else {
+      const r = runMainEntryInWorkspace(ws)
+      add(
+        'G-default-main-exit0',
+        r.exitCode === 0,
+        r.exitCode === 0
+          ? `${r.cmd} exit 0`
+          : `exit ${r.exitCode}: ${(r.stderr || r.stdout || '').slice(0, 300)}`,
+      )
+    }
+  }
+
+  if (typeof opts.minSignals === 'number' && opts.minSignals > 0) {
+    const sigErr = evaluateSignalsNonZero(ws, opts.minSignals)
+    add('G-signals-nonzero', sigErr === null, sigErr ?? `open_long+open_short >= ${opts.minSignals}`)
+  }
+
+  if (opts.forbidCtp !== false) {
+    const reqPath = path.join(ws, 'requirements.txt')
+    let ctpHit = false
+    if (fs.existsSync(reqPath)) {
+      const req = fs.readFileSync(reqPath, 'utf8')
+      if (/openctp|openctp-ctp/i.test(req)) ctpHit = true
+    }
+    if (!ctpHit) {
+      for (const file of collectPyFiles(ws)) {
+        let content
+        try {
+          content = fs.readFileSync(file, 'utf8')
+        } catch {
+          continue
+        }
+        if (/^\s*import\s+openctp|from\s+openctp/i.test(content)) {
+          ctpHit = true
+          break
+        }
+      }
+    }
+    add('G-no-ctp', !ctpHit, ctpHit ? '发现 openctp/CTP 实盘依赖或 import' : '无 CTP 实盘依赖')
+  }
+
+  if (opts.requireE2eTest) {
+    const e2e = path.join(ws, 'tests/test_e2e_signal.py')
+    const ok = fs.existsSync(e2e) && fs.statSync(e2e).size > 0
+    add('G-e2e-test-exists', ok, ok ? 'tests/test_e2e_signal.py 存在' : '缺少 tests/test_e2e_signal.py')
+  }
+
+  return { errors, checks }
+}
+
+/**
+ * 运行 Strict Gate（MVP + 可选 hybrid），返回结构化报告（不抛错）。
+ * @param {string} ws
+ * @param {object} opts — 同 assertStrictMvpPass + hybridGate
+ * @returns {{ pass: boolean, workspace: string, taskId: string|null, timestamp: string, checks: object[], errors: string[], mvp: object|null, warnings: string[] }}
+ */
+export function runStrictGate(ws, opts = {}) {
+  const absWs = path.resolve(ws)
+  const { hybridGate, ...mvpOpts } = opts
+  const mvpErrors = []
+  let mvpResult = null
+
+  try {
+    mvpResult = assertStrictMvpPass(absWs, mvpOpts)
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    const body = msg.replace(/^strict MVP acceptance failed:\n?/, '')
+    for (const line of body.split('\n')) {
+      const t = line.replace(/^- /, '').trim()
+      if (t) mvpErrors.push(t)
+    }
+  }
+
+  const hybrid = hybridGate
+    ? evaluateHybridGateChecks(absWs, hybridGate)
+    : { errors: [], checks: [] }
+
+  const allErrors = [...mvpErrors, ...hybrid.errors]
+  const mvpChecks = mvpErrors.map((message) => ({
+    id: 'mvp',
+    pass: false,
+    message,
+  }))
+  if (mvpErrors.length === 0) {
+    mvpChecks.push({ id: 'mvp', pass: true, message: 'assertStrictMvpPass OK' })
+  }
+
+  return {
+    pass: allErrors.length === 0,
+    workspace: absWs,
+    taskId: opts.taskId ?? null,
+    timestamp: new Date().toISOString(),
+    checks: [...mvpChecks, ...hybrid.checks],
+    errors: allErrors,
+    mvp: mvpResult,
+    warnings: mvpResult?.warnings ?? [],
+  }
+}
+
 /**
  * Strict MVP 验收（T4/T5 量化任务 + T6 确定性平台任务共用）。
  * 量化语义靶子（module dirs / traceability）默认为南华期货；确定性平台任务通过
@@ -514,6 +708,14 @@ export function assertStrictMvpPass(ws, opts = {}) {
   if (opts.architectureScan) {
     for (const e of evaluatePlaceholderExports(ws)) {
       errors.push(`arch: ${e}`)
+    }
+  }
+
+  // Hybrid Gate（gate:strict CLI / CodeAct 后验）
+  if (opts.hybridGate) {
+    const hybrid = evaluateHybridGateChecks(ws, opts.hybridGate)
+    for (const e of hybrid.errors) {
+      errors.push(e)
     }
   }
 

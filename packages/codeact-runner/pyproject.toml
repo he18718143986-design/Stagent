@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stagent-codeact-runner"
+version = "0.1.0"
+description = "Stagent CodeAct runner — wraps vendored openhands-sdk for hybrid delivery"
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+license = { text = "Proprietary — see repository root LICENSE" }
+dependencies = [
+  "openhands-sdk==1.28.0",
+  "openhands-tools==1.28.0",
+]
+
+[project.scripts]
+stagent-codeact = "stagent_codeact.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["stagent_codeact*"]

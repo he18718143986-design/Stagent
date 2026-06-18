@@ -1,0 +1,27 @@
+# T4 目录与模块契约（机读，供 CodeAct / Gate 对齐）
+moduleDirs:
+  - indicators
+  - signals
+  - risk
+  - broker
+
+requiredFiles:
+  - config.yaml
+  - main.py
+  - DELIVERY.md
+  - requirements.txt
+
+dataFiles:
+  - data/bars_3m.csv
+  - data/bars_1m.csv
+  - data/index_sh.csv
+  - data/index_sz.csv
+
+outputs:
+  - signals.csv
+  - backtest_summary.json
+
+forbidden:
+  - openctp
+  - openctp-ctp
+  - np.random

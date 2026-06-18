@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "tier": 4,
+  "taskId": "live-t4-nanhua-futures",
+  "taskType": "software",
+  "language": "py",
+  "workspace": ".",
+  "specRefs": [
+    "期货策略-可验收回测规格.md"
+  ],
+  "mvp": {
+    "moduleDirs": [
+      "indicators",
+      "signals",
+      "risk",
+      "broker"
+    ],
+    "traceability": [
+      {
+        "id": "index-resonance",
+        "dirs": [
+          "signals",
+          "tests"
+        ],
+        "hint": "signals/ 或 tests/ 应含指数共振相关逻辑或 fixture",
+        "pattern": {
+          "source": "上证|深证|指数|index",
+          "flags": "i"
+        }
+      },
+      {
+        "id": "hedge-stop-loss",
+        "dirs": [
+          "risk",
+          "tests"
+        ],
+        "hint": "risk/ 非空且 tests/ 或 risk/ 含 hedge/stop_loss 相关符号",
+        "requireDirPy": "risk",
+        "pattern": {
+          "source": "hedge|stop_loss|止损|对冲",
+          "flags": "i"
+        }
+      },
+      {
+        "id": "sim-broker",
+        "dirs": [
+          "broker",
+          "src"
+        ],
+        "hint": "broker/ 或 src/ 含 SimBroker 或 BrokerAdapter",
+        "pattern": {
+          "source": "SimBroker|BrokerAdapter",
+          "flags": ""
+        }
+      }
+    ],
+    "smoke": {
+      "run": "main",
+      "minSignals": 1
+    }
+  },
+  "codeact": {
+    "maxSteps": 80,
+    "timeoutMs": 2400000,
+    "enableBrowser": false,
+    "forbiddenPatterns": [
+      "openctp",
+      "np.random"
+    ]
+  },
+  "llm": {
+    "model": "${LLM_MODEL}",
+    "baseUrl": "${LLM_BASE_URL}",
+    "apiKeyEnv": "DEEPSEEK_API_KEY"
+  }
+}
