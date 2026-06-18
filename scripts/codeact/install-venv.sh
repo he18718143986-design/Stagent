@@ -22,6 +22,10 @@ fi
 echo "==> Stagent CodeAct venv: $VENV"
 echo "==> Python: $($PY --version)"
 
+if ! command -v tmux >/dev/null 2>&1; then
+  echo "WARN: tmux not found — TerminalTool will fail at runtime. Install tmux (apt install tmux / brew install tmux)." >&2
+fi
+
 "$PY" -m venv "$VENV"
 # shellcheck disable=SC1091
 source "$VENV/bin/activate"
