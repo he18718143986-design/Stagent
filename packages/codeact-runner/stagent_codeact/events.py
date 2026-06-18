@@ -84,10 +84,13 @@ def emit_llm_usage(conversation: Any) -> None:
     try:
         stats = conversation.conversation_stats.get_combined_metrics()
         snapshot = stats.get_snapshot()
+        usage = snapshot.accumulated_token_usage
+        prompt = int(usage.prompt_tokens or 0) if usage else 0
+        completion = int(usage.completion_tokens or 0) if usage else 0
         emit(
             "llm_usage",
-            promptTokens=int(snapshot.prompt_tokens or 0),
-            completionTokens=int(snapshot.completion_tokens or 0),
+            promptTokens=prompt,
+            completionTokens=completion,
             cost=float(snapshot.accumulated_cost or 0.0),
         )
     except Exception as e:

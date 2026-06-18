@@ -10,8 +10,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 from stagent_codeact.bundle import load_bundle, resolve_llm_from_bundle
-from stagent_codeact.events import scan_forbidden_patterns
+from stagent_codeact.events import emit_llm_usage, scan_forbidden_patterns
 from stagent_codeact.protocol import emit
+from openhands.sdk.llm.utils.metrics import MetricsSnapshot, TokenUsage
 
 
 class ProtocolTests(unittest.TestCase):
@@ -78,6 +79,33 @@ class ForbiddenPatternTests(unittest.TestCase):
             (venv / "bad.py").write_text("openctp", encoding="utf-8")
             hits = scan_forbidden_patterns(ws, ["openctp"])
             self.assertEqual(hits, [])
+
+
+class EmitLlmUsageTests(unittest.TestCase):
+    def test_emit_llm_usage_reads_accumulated_token_usage(self) -> None:
+        snapshot = MetricsSnapshot(
+            accumulated_cost=0.012,
+            accumulated_token_usage=TokenUsage(
+                prompt_tokens=100,
+                completion_tokens=50,
+            ),
+        )
+
+        class FakeStats:
+            def get_snapshot(self):
+                return snapshot
+
+        class FakeConversation:
+            conversation_stats = type("CS", (), {"get_combined_metrics": lambda self: FakeStats()})()
+
+        buf = StringIO()
+        with patch("stagent_codeact.events.emit", lambda event, **kw: buf.write(json.dumps({"event": event, **kw}) + "\n")):
+            emit_llm_usage(FakeConversation())
+        data = json.loads(buf.getvalue().strip())
+        self.assertEqual(data["event"], "llm_usage")
+        self.assertEqual(data["promptTokens"], 100)
+        self.assertEqual(data["completionTokens"], 50)
+        self.assertAlmostEqual(data["cost"], 0.012)
 
 
 if __name__ == "__main__":

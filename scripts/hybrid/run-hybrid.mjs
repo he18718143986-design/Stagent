@@ -16,6 +16,7 @@ import { exportTaskBundle } from '../export/task-bundle.mjs'
 import { resolveStrictGateOpts } from '../gate/gate-profiles.mjs'
 import { runStrictGate } from '../headless/lib/mvp-acceptance.mjs'
 import { loadEnvLocal } from '../lib/load-env-local.mjs'
+import { applyDeepSeekDefaults } from './lib/deepseek-env.mjs'
 import {
   buildFixPrompt,
   classifyGateFailure,
@@ -217,9 +218,7 @@ function printHumanSummary(report, reportPath) {
 
 async function main() {
   loadEnvLocal()
-  if (!process.env.OPENHANDS_SUPPRESS_BANNER) {
-    process.env.OPENHANDS_SUPPRESS_BANNER = '1'
-  }
+  applyDeepSeekDefaults({ requireKey: false })
 
   const args = parseArgs(process.argv)
   if (args.help) {

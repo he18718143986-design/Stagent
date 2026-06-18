@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url'
 
 import { parseTierArg } from '../export/bundle-profiles.mjs'
 import { loadEnvLocal } from '../lib/load-env-local.mjs'
+import { applyDeepSeekDefaults } from './lib/deepseek-env.mjs'
 import { runHybridPipeline } from './run-hybrid.mjs'
 
 function usage() {
@@ -57,6 +58,7 @@ function parseArgs(argv) {
 
 async function main() {
   loadEnvLocal()
+  applyDeepSeekDefaults({ requireKey: false })
   const args = parseArgs(process.argv)
   if (args.help) {
     console.log(usage())

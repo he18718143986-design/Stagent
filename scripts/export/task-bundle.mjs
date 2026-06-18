@@ -18,6 +18,7 @@ import {
   resolveBundleProfile,
   resolveSpecRefPath,
 } from './bundle-profiles.mjs'
+import { seedT4FixtureCsvs } from './t4-fixture-seeds.mjs'
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url))
 
@@ -157,6 +158,10 @@ export function exportTaskBundle(ctx) {
     const acc = path.join(workspaceDir, 'scripts/acceptance.sh')
     if (!dryRun && fs.existsSync(acc)) {
       fs.chmodSync(acc, 0o755)
+    }
+    if (tier === 4 || tier === 5) {
+      const seeded = seedT4FixtureCsvs(workspaceDir, { force, dryRun })
+      written.push(...seeded)
     }
   }
 
