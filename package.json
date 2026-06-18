@@ -52,6 +52,7 @@
     "adapter:gates": "node scripts/check-adapter-gates.js",
     "codeact:install": "bash scripts/codeact/install-venv.sh",
     "codeact:smoke": "bash scripts/codeact/smoke-import.sh",
+    "codeact:test": "packages/codeact-runner/.venv/bin/python -m unittest discover -s packages/codeact-runner/tests -p 'test_*.py'",
     "codeact:run": "node scripts/hybrid/spawn-codeact.mjs",
     "spec:export": "node scripts/export/task-bundle.mjs",
     "gate:strict": "node scripts/gate/strict.mjs",
@@ -60,7 +61,6 @@
     "hybrid:t4:batch": "node scripts/hybrid/run-hybrid-batch.mjs --tier 4 --repeat 3",
     "deliver:t4": "node scripts/hybrid/deliver-t4.mjs",
     "deliver:t4:batch": "node scripts/hybrid/run-hybrid-batch.mjs --tier 4 --repeat 3",
-    "codeact:test": "packages/codeact-runner/.venv/bin/python -m unittest discover -s packages/codeact-runner/tests -p 'test_*.py'",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {

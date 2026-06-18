@@ -3,11 +3,13 @@ pyproject.toml
 stagent_codeact/__init__.py
 stagent_codeact/__main__.py
 stagent_codeact/bundle.py
+stagent_codeact/config.py
+stagent_codeact/events.py
 stagent_codeact/protocol.py
 stagent_codeact/runner.py
 stagent_codeact_runner.egg-info/PKG-INFO
 stagent_codeact_runner.egg-info/SOURCES.txt
 stagent_codeact_runner.egg-info/dependency_links.txt
 stagent_codeact_runner.egg-info/entry_points.txt
-stagent_codeact_runner.egg-info/requires.txt
 stagent_codeact_runner.egg-info/top_level.txt
+tests/test_runner_unit.py

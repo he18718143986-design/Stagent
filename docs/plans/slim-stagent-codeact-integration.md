@@ -32,9 +32,14 @@
 | 冒烟 | `npm run codeact:smoke` | ✅ |
 | L0 单测 | `npm run codeact:test` | ✅ |
 | Spawn | `npm run codeact:run` → `scripts/hybrid/spawn-codeact.mjs` | ✅ |
+| Runner 配置 | `maxSteps` / `timeoutMs` / `enableBrowser` → SDK `Conversation` | ✅ |
+| SDK 事件回调 | NDJSON `terminal` / `file_edited` / `llm_usage` / `runner_warning` | ✅ |
+| `--fix-prompt-file` | 长 Gate 报告经文件传递，避免 ARG_MAX | ✅ |
+| vendored SSOT | `requirements-vendored.txt` + `install --no-deps` | ✅ |
 | Gate | `scripts/gate/strict.mjs` + G-* | ✅ |
 | Export | `scripts/export/task-bundle.mjs` | ✅ |
 | Hybrid 一键 | `scripts/hybrid/run-hybrid.mjs` | ✅（含 mock E2E + 回流） |
+| 大陆 T4 交付 | `npm run deliver:t4` | ✅ |
 | Hybrid 批量 | `npm run hybrid:t4:batch` | ✅ |
 | Headless 接线 | `scripts/headless/run.mjs --runner hybrid` | ✅（T4–T7 mock/live） |
 | Golden 夹具 | `examples/golden/` | ✅ |

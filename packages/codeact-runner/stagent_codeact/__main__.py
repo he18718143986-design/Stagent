@@ -4,8 +4,15 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 from .runner import run_codeact
+
+
+def _read_fix_prompt(args: argparse.Namespace) -> str | None:
+    if args.fix_prompt_file:
+        return Path(args.fix_prompt_file).read_text(encoding="utf-8")
+    return args.fix_prompt
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -29,7 +36,12 @@ def main(argv: list[str] | None = None) -> int:
     run_p.add_argument(
         "--fix-prompt",
         default=None,
-        help="Optional Gate failure text for retry pass",
+        help="Optional Gate failure text for retry pass (prefer --fix-prompt-file)",
+    )
+    run_p.add_argument(
+        "--fix-prompt-file",
+        default=None,
+        help="Path to Gate failure text file (safe for long reports)",
     )
     run_p.add_argument(
         "--events",
@@ -41,10 +53,13 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "run":
+        if args.fix_prompt and args.fix_prompt_file:
+            print("error: use only one of --fix-prompt or --fix-prompt-file", file=sys.stderr)
+            return 2
         return run_codeact(
             args.bundle,
             args.workspace,
-            fix_prompt=args.fix_prompt,
+            fix_prompt=_read_fix_prompt(args),
         )
 
     parser.print_help()
