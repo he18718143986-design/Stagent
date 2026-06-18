@@ -13,3 +13,6 @@ test-results/
 e2e-report/
 *.tsbuildinfo
 packages/codeact-runner/.venv/
+**/__pycache__/
+*.py[cod]
+artifacts/

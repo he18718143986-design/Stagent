@@ -18,12 +18,24 @@ packages/codeact-runner/.venv/bin/pip install -e vendors/software-agent-sdk/open
   -e packages/codeact-runner
 ```
 
-## 冒烟
+## 冒烟 / 单测
 
 ```bash
 npm run codeact:smoke          # import 检查
+npm run codeact:test           # L0 unittest（bundle / protocol / forbidden）
 npm run codeact:run -- --help  # CLI 帮助
 ```
+
+## task.json → Runner 行为
+
+| 字段 | 作用 |
+|------|------|
+| `codeact.maxSteps` | 传给 `Conversation(max_iteration_per_run=…)` |
+| `codeact.timeoutMs` | 会话 wall-clock 超时（`runner_done: timeout`） |
+| `codeact.forbiddenPatterns` | 跑完后扫描 workspace 文本文件 |
+| `codeact.enableBrowser` | 暂未接线（默认 terminal + file_editor） |
+
+stdout 输出 NDJSON：`step_start/end`、`file_edited`、`terminal`、`llm_usage`、`runner_done`。
 
 ## 运行任务
 
