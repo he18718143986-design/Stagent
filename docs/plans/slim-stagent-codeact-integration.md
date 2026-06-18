@@ -31,6 +31,9 @@
 | 安装脚本 | `npm run codeact:install` → `scripts/codeact/install-venv.sh` | ✅（需 **Python ≥3.12**） |
 | 冒烟 | `npm run codeact:smoke` | ✅ 脚本就绪 |
 | Spawn | `npm run codeact:run` → `scripts/hybrid/spawn-codeact.mjs` | ✅ |
+| Runner 配置接线 | `maxSteps` / `timeoutMs` / `enableBrowser` → SDK `Conversation` | ✅ |
+| SDK 事件回调 | `callbacks` → NDJSON `terminal` / `file_edited` / `runner_warning` | ✅ |
+| `--fix-prompt-file` | 长 Gate 报告经文件传递，避免 ARG_MAX | ✅ |
 | Gate / Export / Hybrid 一键 | `scripts/gate/`、`scripts/export/` | ⏳ Phase 0 余下 |
 
 ---

@@ -11,6 +11,20 @@ export const REPO_ROOT = path.resolve(__dirname, '../../..')
 export const VENV_CLI = path.join(REPO_ROOT, 'packages/codeact-runner/.venv/bin/stagent-codeact')
 
 /**
+ * @param {{ bundle: string, workspace: string, fixPromptPath?: string|null }} opts
+ * @returns {string[]}
+ */
+export function buildSpawnArgs(opts) {
+  const bundle = path.resolve(opts.bundle)
+  const workspace = path.resolve(opts.workspace)
+  const args = ['run', '--bundle', bundle, '--workspace', workspace]
+  if (opts.fixPromptPath) {
+    args.push('--fix-prompt-file', path.resolve(opts.fixPromptPath))
+  }
+  return args
+}
+
+/**
  * @param {{
  *   bundle: string,
  *   workspace: string,
@@ -27,11 +41,7 @@ export function spawnCodeAct(opts) {
     return { exitCode: 1, error: 'CodeAct venv missing. Run: npm run codeact:install' }
   }
 
-  const args = ['run', '--bundle', bundle, '--workspace', workspace]
-  if (opts.fixPromptPath) {
-    const text = fs.readFileSync(opts.fixPromptPath, 'utf8')
-    args.push('--fix-prompt', text)
-  }
+  const args = buildSpawnArgs(opts)
 
   const captureEvents = Boolean(opts.eventsOut)
   const env = {
