@@ -32,14 +32,19 @@
 | 冒烟 | `npm run codeact:smoke` | ✅ |
 | L0 单测 | `npm run codeact:test` | ✅ |
 | Spawn | `npm run codeact:run` → `scripts/hybrid/spawn-codeact.mjs` | ✅ |
+| Runner 配置接线 | `maxSteps` / `timeoutMs` / `enableBrowser` → SDK `Conversation` | ✅ |
+| SDK 事件回调 | `callbacks` → NDJSON `terminal` / `file_edited` / `runner_warning` | ✅ |
+| `--fix-prompt-file` | 长 Gate 报告经文件传递，避免 ARG_MAX | ✅ |
 | Gate | `scripts/gate/strict.mjs` + G-* | ✅ |
 | Export | `scripts/export/task-bundle.mjs` | ✅ |
 | Hybrid 一键 | `scripts/hybrid/run-hybrid.mjs` | ✅（含 mock E2E + 回流） |
-| Hybrid 批量 | `npm run hybrid:t4:batch` | ✅ |
+| T4 一键交付 | `npm run deliver:t4` | ✅ |
+| Hybrid 批量 | `npm run hybrid:t4:batch` / `deliver:t4:batch` | ✅ |
 | Headless 接线 | `scripts/headless/run.mjs --runner hybrid` | ✅（T4–T7 mock/live） |
 | Golden 夹具 | `examples/golden/` | ✅ |
 | CI | `.github/workflows/verify-hybrid.yml` | ✅（install + L0/L1/L2 mock） |
 | **T7 live PoC** | `npm run hybrid:t7` + DeepSeek | ✅ **2026-06-18 第 1 轮 Gate pass**（见 §10.A） |
+| **T4 live batch** | `npm run deliver:t4:batch` N=3 | ✅ **2/3 strict-pass（67%）**（见 §10.C） |
 
 ---
 

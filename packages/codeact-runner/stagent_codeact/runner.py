@@ -2,29 +2,24 @@
 
 from __future__ import annotations
 
-import concurrent.futures
 import os
+import threading
 from pathlib import Path
 from typing import Any
 
-from openhands.sdk import LLM, Agent, Conversation, Tool
-from openhands.tools.file_editor import FileEditorTool
-from openhands.tools.task_tracker import TaskTrackerTool
-from openhands.tools.terminal import TerminalTool
+from openhands.sdk import LLM, Agent, Conversation
+from openhands.tools.preset.default import get_default_tools
 
 from .bundle import TaskBundle, load_bundle, resolve_llm_from_bundle
-from .events import emit_llm_usage, make_event_callback, scan_forbidden_patterns
+from .config import require_tmux, resolve_codeact_config
+from .events import SdkEventBridge, emit_llm_usage, make_sdk_callback, scan_forbidden_patterns
 from .protocol import emit, emit_runner_done, emit_runner_failed
 
 
-def _build_agent(llm_kwargs: dict) -> Agent:
+def _build_agent(llm_kwargs: dict[str, Any], *, enable_browser: bool) -> Agent:
     return Agent(
         llm=LLM(**llm_kwargs),
-        tools=[
-            Tool(name=TerminalTool.name),
-            Tool(name=FileEditorTool.name),
-            Tool(name=TaskTrackerTool.name),
-        ],
+        tools=get_default_tools(enable_browser=enable_browser),
     )
 
 
@@ -42,17 +37,44 @@ def _compose_user_message(bundle: TaskBundle, fix_prompt: str | None) -> str:
         "- 不得自判交付完成；Stagent Gate 为唯一裁判\n"
         "- fixture CSV 须落盘并在 config 默认路径可运行\n"
     )
-    forbidden = bundle.codeact_config.get("forbiddenPatterns") or []
-    if forbidden:
-        parts.append(
-            "\n- 禁止在代码/requirements 中出现："
-            + ", ".join(str(p) for p in forbidden)
-        )
+    cfg = resolve_codeact_config(bundle)
+    if cfg.forbidden_patterns:
+        joined = "、".join(cfg.forbidden_patterns)
+        parts.append(f"- 禁止在实现中引入或使用：{joined}\n")
     return "\n".join(parts)
 
 
-def _run_conversation(conversation: Conversation) -> None:
-    conversation.run()
+def _run_conversation(
+    conversation: Conversation,
+    user_message: str,
+    timeout_sec: float,
+    bridge: SdkEventBridge,
+) -> str:
+    """Run conversation.run() with optional wall-clock timeout. Returns done reason."""
+    result: dict[str, Any] = {"exc": None}
+
+    def target() -> None:
+        try:
+            conversation.send_message(user_message)
+            conversation.run()
+        except Exception as exc:  # noqa: BLE001 — surfaced to caller
+            result["exc"] = exc
+
+    if timeout_sec <= 0:
+        target()
+    else:
+        thread = threading.Thread(target=target, daemon=True)
+        thread.start()
+        thread.join(timeout=timeout_sec)
+        if thread.is_alive():
+            return "timeout"
+
+    if result["exc"] is not None:
+        raise result["exc"]
+
+    if bridge.max_iterations_reached:
+        return "max_steps"
+    return "completed"
 
 
 def run_codeact(
@@ -68,20 +90,23 @@ def run_codeact(
         emit_runner_failed(f"Workspace not found: {ws}", retryable=False)
         return 1
 
-    codeact_cfg = bundle.codeact_config
-    max_steps = int(codeact_cfg.get("maxSteps") or 80)
-    timeout_ms = int(codeact_cfg.get("timeoutMs") or 0)
-    timeout_sec = timeout_ms / 1000.0 if timeout_ms > 0 else None
+    try:
+        runtime = resolve_codeact_config(bundle)
+    except ValueError as e:
+        emit_runner_failed(str(e), retryable=False)
+        return 1
 
     emit(
         "runner_start",
         taskId=bundle.task_id,
         workspace=str(ws),
-        maxSteps=max_steps,
-        timeoutMs=timeout_ms or None,
+        maxSteps=runtime.max_steps,
+        timeoutMs=runtime.timeout_ms,
+        enableBrowser=runtime.enable_browser,
     )
 
     try:
+        require_tmux()
         llm_kwargs = resolve_llm_from_bundle(bundle)
     except EnvironmentError as e:
         emit_runner_failed(str(e), retryable=False)
@@ -93,50 +118,36 @@ def run_codeact(
         emit_runner_failed(str(e), retryable=False)
         return 1
 
-    enable_browser = bool(codeact_cfg.get("enableBrowser", False))
-    if enable_browser:
-        emit(
-            "runner_warning",
-            message="enableBrowser=true not yet wired; using terminal+file_editor only",
-        )
-
-    run_state: dict[str, Any] = {"exit_reason": None}
     os.chdir(ws)
-    agent = _build_agent(llm_kwargs)
+    bridge = make_sdk_callback()
+    agent = _build_agent(llm_kwargs, enable_browser=runtime.enable_browser)
     conversation = Conversation(
         agent=agent,
         workspace=str(ws),
-        callbacks=[make_event_callback(run_state)],
-        max_iteration_per_run=max_steps,
+        max_iteration_per_run=runtime.max_steps,
+        callbacks=[bridge],
+        visualizer=None,
     )
 
-    emit("step_start", phase="conversation")
+    timeout_sec = runtime.timeout_ms / 1000.0
+    emit("step_start", phase="conversation", maxSteps=runtime.max_steps, timeoutMs=runtime.timeout_ms)
     try:
-        conversation.send_message(user_message)
-        if timeout_sec:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                fut = pool.submit(_run_conversation, conversation)
-                try:
-                    fut.result(timeout=timeout_sec)
-                except concurrent.futures.TimeoutError:
-                    run_state["exit_reason"] = "timeout"
-                    emit_runner_done("timeout", taskId=bundle.task_id)
-                    emit_llm_usage(conversation)
-                    return 1
-        else:
-            _run_conversation(conversation)
+        reason = _run_conversation(conversation, user_message, timeout_sec, bridge)
     except Exception as e:
         emit_runner_failed(str(e), retryable=True)
         emit_llm_usage(conversation)
         return 1
     finally:
-        emit("step_end", phase="conversation")
+        emit(
+            "step_end",
+            phase="conversation",
+            actions=bridge.action_count,
+            observations=bridge.observation_count,
+        )
 
     emit_llm_usage(conversation)
 
-    forbidden_hits = scan_forbidden_patterns(
-        ws, list(codeact_cfg.get("forbiddenPatterns") or [])
-    )
+    forbidden_hits = scan_forbidden_patterns(ws, list(runtime.forbidden_patterns))
     if forbidden_hits:
         emit("runner_warning", forbiddenPatterns=forbidden_hits[:20])
         emit_runner_failed(
@@ -145,10 +156,15 @@ def run_codeact(
         )
         return 1
 
-    reason = run_state.get("exit_reason") or "completed"
+    emit_runner_done(
+        reason,
+        taskId=bundle.task_id,
+        actions=bridge.action_count,
+        observations=bridge.observation_count,
+        maxSteps=runtime.max_steps,
+    )
+    if reason == "timeout":
+        return 2
     if reason == "max_steps":
-        emit_runner_done("max_steps", taskId=bundle.task_id)
-        return 0
-
-    emit_runner_done(reason if reason in {"completed", "timeout", "error"} else "completed", taskId=bundle.task_id)
+        return 3
     return 0

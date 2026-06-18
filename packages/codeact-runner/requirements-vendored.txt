@@ -1,0 +1,4 @@
+# Scheme A vendored OpenHands SDK (editable). Installed by npm run codeact:install.
+# Paths are relative to packages/codeact-runner/.
+-e ../../vendors/software-agent-sdk/openhands-sdk
+-e ../../vendors/software-agent-sdk/openhands-tools
