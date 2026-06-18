@@ -40,7 +40,7 @@
 | 1e | **decide 契约欠声明修复**（3b 新发现，确定性 bug）：statemachine 漏声明导出 → impl 正确导出反被 **export-extra 门**拦 | P0 | 方案 A（重 live） | `cursor/decide-under-declaration-dac2` | ✅ **目标 bug 已根治 + 已合并 main**（PR #25，commit 4f6a832）：statemachine 欠声明 + DictReader 占位 5 次未复现；`sanitizeCrossSliceContamination` 增 slice⊊global 回退/global 兜底/export-noise 内建符号过滤。**strict-pass 1d 2/5 → 1e 1/5（方差内，非回归）**。核心 1090/9 零新增、headless 30/30、vitest 243 | #25 |
 | 1f | **decide/test-gen 长尾确定性净化**（1e 后残留）：sdk-path test-import、fixture 漏列 | P0 | 方案 A（重 live） | `cursor/t6-longtail-purify-91b1` | ✅ **目标模式消除**（PR #27）：sdk-path / fixture 漏列在 live 有效 run 中未复现；batch 0/5 因 API 402 无效。核心 +5 测、9 零新增 | #27 |
 | 4 | 对抗式审查（异族/更强模型独立挑错回喂；**加分项，不替代确定性门**） | P2 | 方案 A | `cursor/adversarial-review-3713` | 排后（依赖 #1/#3） | — |
-| **5** | **瘦身 Stagent + 内嵌 CodeAct + 重 Gate（商业化 hybrid）** | **P0** | 方案 A+B | `cursor/hybrid-codeact-phase1-170f` | 🚧 **Phase 1 已落地**（Runner 增强 + CI mock + headless `--runner hybrid` + golden）；余：**live PoC**、引擎 `tool:codeact`、Electron | PR #30（import fix）+ 进行中 |
+| **5** | **瘦身 Stagent + 内嵌 CodeAct + 重 Gate（商业化 hybrid）** | **P0** | 方案 A+B | `cursor/hybrid-codeact-phase1-170f` | ✅ **Phase 0 退出 + T7 live strict pass**（2026-06-18，`npm run hybrid:t7` attempt 1/1）；余：回流 live、T4 live batch、引擎 `tool:codeact`、Electron | PR #31 |
 
 > 优先级依据见 `docs/live-findings-2026-06-15.md` 与 ADR-0006/0007/0008/0009：**门的强度比模型档位更决定产物质量**；无外部验证器的自我批判会"假性收敛"（业界自我纠正研究一致结论），故评审循环必须绑定可执行验证器。
 
