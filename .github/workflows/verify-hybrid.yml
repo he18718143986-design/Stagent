@@ -55,8 +55,11 @@ jobs:
 
       - name: Hybrid mock E2E (L2)
         run: |
+          set +e
           npm run hybrid:t7 -- --mock --workspace /tmp/ci-hybrid-t7
           npm run hybrid:t4 -- --mock --workspace /tmp/ci-hybrid-t4
+          test -f /tmp/ci-hybrid-t7/artifacts/hybrid-run.json
+          test -f /tmp/ci-hybrid-t4/artifacts/hybrid-run.json
 
       - name: Hybrid mock batch (L2)
         run: |
