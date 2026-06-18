@@ -5,9 +5,19 @@ Stagent 内嵌 CodeAct 执行器（Scheme A）：依赖仓库内 vendored 的 `o
 ## 安装
 
 ```bash
-# 从仓库根目录（需 Python >=3.12，TerminalTool 需 tmux）
+# 从仓库根目录（需 Python >=3.12、tmux）
 npm run codeact:install
 ```
+
+依赖来源为 **vendored 源码**（`requirements-vendored.txt`），**不会**从 PyPI 安装 `openhands-sdk`。`pyproject.toml` 中 `dependencies = []`，避免与 editable vendoring 混用。
+
+| 文件 | 作用 |
+|------|------|
+| `requirements-vendored.txt` | 安装 SSOT：`-e ../../vendors/.../openhands-{sdk,tools}` |
+| `pyproject.toml` `[tool.stagent-codeact-runner]` | 文档化 vendored 路径与版本 |
+| `scripts/codeact/install-venv.sh` | 创建 venv、装 vendored、再 `pip install -e . --no-deps` |
+
+无 tmux 时安装失败（可用 `STAGENT_ALLOW_NO_TMUX=1` 跳过，仅适合无 terminal 的 CI）。
 
 ## 冒烟与单测
 
