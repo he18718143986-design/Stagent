@@ -24,6 +24,7 @@ npm run codeact:install
 ```bash
 npm run codeact:smoke
 npm run codeact:test
+npm run codeact:run -- --help
 ```
 
 ## 运行任务
@@ -51,14 +52,14 @@ stagent-codeact run --bundle ... --workspace ... --fix-prompt-file ./artifacts/f
 | `codeact.maxSteps` | `Conversation(max_iteration_per_run=…)`，默认 80 |
 | `codeact.timeoutMs` | 会话墙钟超时（毫秒），默认 2400000 |
 | `codeact.enableBrowser` | `get_default_tools(enable_browser=…)` |
-| `codeact.forbiddenPatterns` | 追加到用户 Prompt 纪律段 |
+| `codeact.forbiddenPatterns` | 追加到 Prompt 纪律段；跑完后扫描 workspace 文本 |
 
 ## 进程退出码
 
 | code | 含义 |
 |------|------|
 | 0 | CodeAct 会话正常结束（**不等于** Gate 通过） |
-| 1 | 配置/环境/运行时错误 |
+| 1 | 配置/环境/运行时错误 / forbidden 命中 |
 | 2 | 墙钟超时 `runner_done.reason=timeout` |
 | 3 | 达到 `maxSteps` `runner_done.reason=max_steps` |
 
@@ -70,6 +71,7 @@ stagent-codeact run --bundle ... --workspace ... --fix-prompt-file ./artifacts/f
 | `step_start` / `step_end` | 工具动作与观察 |
 | `terminal` | 命令与 `exitCode` |
 | `file_edited` | 路径与操作 |
+| `llm_usage` | `promptTokens` / `completionTokens` / `cost` |
 | `runner_warning` | SDK `ConversationErrorEvent`（含 MaxIterationsReached） |
 | `runner_done` | `reason`: completed \| max_steps \| timeout |
 

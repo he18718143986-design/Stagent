@@ -15,3 +15,6 @@ e2e-report/
 __pycache__/
 *.py[cod]
 packages/codeact-runner/.venv/
+**/__pycache__/
+*.py[cod]
+artifacts/

@@ -17,6 +17,7 @@
  *   --with-unit     also run @stagent/core unit tests
  *   --repeat N      批量跑批：同一套 scenario 连跑 N 次，输出成功率汇总
  *                   （artifacts/headless-batch.json + artifacts/batch/run-<i>.json）
+ *   --runner engine|hybrid   execute 场景跑法（hybrid = spec:export + codeact + gate，T4–T7）
  *   --pass-threshold M   批量判定阈值：通过次数 ≥ M 则 exit 0（默认 ceil(0.6*N)，
  *                        对齐 §6.1 成功率口径 N=5 ≥3）
  *
@@ -63,6 +64,7 @@ import { checkDemoDelivery } from './lib/demo-delivery-acceptance.mjs'
 import { promoteIterToT4Root } from './lib/promote-workspace.mjs'
 import { createLlmUsageMeter, formatUsageLine } from './lib/llm-usage.mjs'
 import { buildLlmConfig, buildRoleModelRouting } from './lib/llm-config.mjs'
+import { runHybridPipeline } from '../hybrid/run-hybrid.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(__dirname, '../..')
@@ -120,6 +122,7 @@ function parseArgs(argv) {
     resume: false,
     repeat: 1,
     passThreshold: undefined,
+    runner: process.env.STAGENT_RUNNER === 'hybrid' ? 'hybrid' : 'engine',
   }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
@@ -131,6 +134,7 @@ function parseArgs(argv) {
     else if (a === '--scenario') opts.scenario = argv[++i] ?? 'all'
     else if (a === '--live-tier') opts.liveTier = argv[++i] ?? '1'
     else if (a === '--workspace') opts.workspace = argv[++i]
+    else if (a === '--runner' && argv[i + 1]) opts.runner = argv[++i]
     else if (a === '--repeat') opts.repeat = Math.max(1, Number(argv[++i]) || 1)
     else if (a === '--pass-threshold') opts.passThreshold = Math.max(1, Number(argv[++i]) || 1)
   }
@@ -1171,10 +1175,113 @@ function printBatch(batch) {
   console.log('')
 }
 
+async function runHybridLiveTier(ctx, tier) {
+  const spec = LIVE_TASK_TIERS[tier]
+  if (!spec) throw new Error(`未知 tier ${tier}`)
+  const ws =
+    ctx.workspace ??
+    (isT4FamilyTier(tier)
+      ? defaultT4Workspace(REPO_ROOT)
+      : fs.mkdtempSync(path.join(os.tmpdir(), `hybrid-t${tier}-`)))
+  fs.mkdirSync(ws, { recursive: true })
+  const started = Date.now()
+  const report = runHybridPipeline({
+    tier,
+    workspace: ws,
+    mock: !ctx.live,
+    maxRetries: 3,
+    runId: `headless-hybrid-t${tier}`,
+  })
+  if (!report.pass) {
+    const err = new Error(`hybrid tier ${tier} gate failed (${report.finalCategory ?? 'unknown'})`)
+    err.workspace = ws
+    throw err
+  }
+  return {
+    id: spec.id,
+    label: spec.label,
+    status: 'pass',
+    elapsedMs: Date.now() - started,
+    workspace: ws,
+    hybrid: report,
+    strictMvp: true,
+  }
+}
+
+async function runHybridSuite(opts) {
+  const tiers = resolveLiveTiers(opts.liveTier).filter((t) => t >= 4 && t <= 7)
+  if (tiers.length === 0) {
+    throw new Error('--runner hybrid 需要 --live-tier 4|5|6|7|all（T1–T3 仍走引擎）')
+  }
+  const ctx = {
+    live: opts.live,
+    keep: opts.keep,
+    workspace: opts.workspace,
+  }
+  const report = {
+    timestamp: new Date().toISOString(),
+    commit: gitShortCommit(),
+    mode: opts.live ? 'live-hybrid' : 'mock-hybrid',
+    runner: 'hybrid',
+    scenarios: [],
+    summary: { passed: 0, failed: 0, total: 0 },
+  }
+  let exitCode = 0
+  for (const tier of tiers) {
+    try {
+      report.scenarios.push(await runHybridLiveTier(ctx, tier))
+      report.summary.passed++
+    } catch (err) {
+      exitCode = 1
+      const e = err
+      report.scenarios.push({
+        id: LIVE_TASK_TIERS[tier]?.id ?? `tier-${tier}`,
+        label: LIVE_TASK_TIERS[tier]?.label,
+        status: 'fail',
+        error: e instanceof Error ? e.message : String(e),
+        workspace: e.workspace ?? opts.workspace,
+      })
+      report.summary.failed++
+      if (opts.liveTier !== 'all') break
+    }
+  }
+  report.summary.total = report.scenarios.length
+  fs.writeFileSync(REPORT_PATH, JSON.stringify(report, null, 2), 'utf8')
+  return { report, exitCode }
+}
+
 async function main() {
   loadEnvLocal()
   const opts = parseArgs(process.argv.slice(2))
   fs.mkdirSync(ARTIFACTS_DIR, { recursive: true })
+
+  if (opts.runner === 'hybrid') {
+    if (opts.scenario !== 'all' && opts.scenario !== 'execute') {
+      throw new Error('--runner hybrid 仅支持 --scenario execute（或默认 all 中的 execute 段）')
+    }
+    opts.scenario = 'execute'
+    if (opts.repeat <= 1) {
+      const { report, exitCode } = await runHybridSuite(opts)
+      if (opts.json) console.log(JSON.stringify(report, null, 2))
+      else printHuman(report)
+      process.exit(exitCode)
+    }
+    // batch hybrid — reuse batch dir layout
+    fs.rmSync(BATCH_DIR, { recursive: true, force: true })
+    fs.mkdirSync(BATCH_DIR, { recursive: true })
+    const runs = []
+    for (let i = 1; i <= opts.repeat; i++) {
+      if (i > 1 && opts.live) await sleep(12_000)
+      const { report } = await runHybridSuite({ ...opts, workspace: undefined })
+      fs.copyFileSync(REPORT_PATH, path.join(BATCH_DIR, `run-${i}.json`))
+      runs.push(report)
+    }
+    const batch = aggregateBatch(runs, opts)
+    fs.writeFileSync(BATCH_REPORT_PATH, JSON.stringify(batch, null, 2), 'utf8')
+    if (opts.json) console.log(JSON.stringify(batch, null, 2))
+    else printBatch(batch)
+    process.exit(batch.verdict.pass ? 0 : 1)
+  }
 
   if (opts.withUnit) {
     const unit = spawnSync('npm', ['test'], {

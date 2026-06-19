@@ -184,6 +184,14 @@ export function buildOpenhandsPrompt(tier, specTitle) {
       '- 输入：`data/bars_3m.csv`、`data/bars_1m.csv`、`data/index_sh.csv`、`data/index_sz.csv`',
       '- 输出：`signals.csv`、`backtest_summary.json`（`open_long+open_short >= 1`）',
       '- 无参 `python main.py` 必须 exit 0',
+      '- **`DELIVERY.md` 非空**（运行说明，Gate 检查）',
+      '',
+      '## 完成前自检',
+      '',
+      '```bash',
+      'pytest -q && python main.py',
+      '# signals.csv 须含 OPEN_LONG/OPEN_SHORT；DELIVERY.md 非空',
+      '```',
       '',
     )
   } else if (tier === 6) {

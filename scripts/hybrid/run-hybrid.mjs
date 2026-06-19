@@ -16,11 +16,14 @@ import { exportTaskBundle } from '../export/task-bundle.mjs'
 import { resolveStrictGateOpts } from '../gate/gate-profiles.mjs'
 import { runStrictGate } from '../headless/lib/mvp-acceptance.mjs'
 import { loadEnvLocal } from '../lib/load-env-local.mjs'
+import { applyDeepSeekDefaults } from './lib/deepseek-env.mjs'
 import {
+  buildEmptyImplFixPrompt,
   buildFixPrompt,
   classifyGateFailure,
   writeFixPromptFile,
 } from './lib/gate-failure.mjs'
+import { checkImplNonEmpty, resolveEmptyImplRetries } from './lib/impl-check.mjs'
 import { spawnCodeAct } from './lib/spawn-codeact-core.mjs'
 
 function usage() {
@@ -29,7 +32,7 @@ function usage() {
 Options:
   --tier t4|t5|t6|t7     任务档位（必填）
   --workspace PATH       工作区根目录（必填）
-  --max-retries N        Gate 失败后 CodeAct 回流次数（默认 2）
+  --max-retries N        Gate 失败后 CodeAct 回流次数（默认 3）
   --mock                 跳过 CodeAct（只 export + gate，不烧 API）
   --skip-export          跳过 spec:export（bundle 须已存在）
   --skip-codeact         只跑 gate（不调用 CodeAct）
@@ -45,7 +48,7 @@ function parseArgs(argv) {
   const out = {
     tier: null,
     workspace: null,
-    maxRetries: 2,
+    maxRetries: 3,
     mock: false,
     skipExport: false,
     skipCodeact: false,
@@ -98,7 +101,7 @@ export function runHybridPipeline(ctx) {
   const {
     tier,
     workspace,
-    maxRetries = 2,
+    maxRetries = 3,
     mock = false,
     skipExport = false,
     skipCodeact = false,
@@ -123,11 +126,20 @@ export function runHybridPipeline(ctx) {
     throw new Error(`缺少 bundle：${bundleDir}（去掉 --skip-export 或先 spec:export）`)
   }
 
-  let fixPromptPath = null
-  const gateIterations = skipCodeact || mock ? 1 : 1 + Math.max(0, maxRetries)
+  const bundle = loadBundle(bundleDir)
 
-  for (let i = 0; i < gateIterations; i++) {
-    const attemptNo = i + 1
+  let fixPromptPath = null
+  let gateRetriesLeft = skipCodeact || mock ? 0 : Math.max(0, maxRetries)
+  let emptyImplRetriesLeft =
+    skipCodeact || mock ? 0 : resolveEmptyImplRetries(tier, bundle)
+  let attemptNo = 0
+  let emptyImplRound = 0
+  const emptyImplBudget = resolveEmptyImplRetries(tier, bundle)
+  const maxTotalAttempts =
+    skipCodeact || mock ? 1 : 1 + maxRetries + emptyImplBudget + 2
+
+  while (attemptNo < maxTotalAttempts) {
+    attemptNo++
     /** @type {object} */
     const attempt = { attempt: attemptNo, codeact: null, gate: null, category: null }
 
@@ -156,6 +168,21 @@ export function runHybridPipeline(ctx) {
           finalCategory: 'gate_infra',
         })
       }
+
+      const implCheck = checkImplNonEmpty(ws, { bundle, tier })
+      attempt.implCheck = implCheck
+
+      if (!implCheck.pass && emptyImplRetriesLeft > 0) {
+        emptyImplRound++
+        emptyImplRetriesLeft--
+        attempt.category = 'empty_impl'
+        attempt.gate = { skipped: true, reason: 'empty_impl_pre_check' }
+        const fixText = buildEmptyImplFixPrompt(implCheck, emptyImplRound)
+        fixPromptPath = writeFixPromptFile(ws, fixText)
+        attempt.fixPromptPath = fixPromptPath
+        attempts.push(attempt)
+        continue
+      }
     } else if (mock) {
       attempt.codeact = { skipped: true, reason: 'mock' }
     } else {
@@ -171,11 +198,16 @@ export function runHybridPipeline(ctx) {
       return buildHybridReport({ pass: true, tier, workspace: ws, runId, attempts })
     }
 
-    if (attempt.category !== 'implementation' || i >= maxRetries || skipCodeact || mock) {
+    if (skipCodeact || mock) {
       break
     }
 
-    const fixText = buildFixPrompt(report, i + 1)
+    if (attempt.category !== 'implementation' || gateRetriesLeft <= 0) {
+      break
+    }
+
+    gateRetriesLeft--
+    const fixText = buildFixPrompt(report, maxRetries - gateRetriesLeft)
     fixPromptPath = writeFixPromptFile(ws, fixText)
     attempt.fixPromptPath = fixPromptPath
   }
@@ -217,9 +249,7 @@ function printHumanSummary(report, reportPath) {
 
 async function main() {
   loadEnvLocal()
-  if (!process.env.OPENHANDS_SUPPRESS_BANNER) {
-    process.env.OPENHANDS_SUPPRESS_BANNER = '1'
-  }
+  applyDeepSeekDefaults({ requireKey: false })
 
   const args = parseArgs(process.argv)
   if (args.help) {
@@ -237,7 +267,7 @@ async function main() {
   const report = runHybridPipeline({
     tier,
     workspace: args.workspace,
-    maxRetries: typeof args.maxRetries === 'number' ? args.maxRetries : 2,
+    maxRetries: typeof args.maxRetries === 'number' ? args.maxRetries : 3,
     mock: args.mock,
     skipExport: args.skipExport,
     skipCodeact: args.skipCodeact,
