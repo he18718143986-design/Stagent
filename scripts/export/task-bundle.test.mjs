@@ -55,6 +55,11 @@ test('exportTaskBundle: T4 写出 bundle 结构与 seed', () => {
   assert.ok(fs.existsSync(path.join(bundleDir, 'config.contract.yaml')))
   assert.ok(fs.existsSync(path.join(ws, 'tests/test_e2e_signal.py')))
   assert.ok(fs.existsSync(path.join(ws, 'scripts/acceptance.sh')))
+  assert.ok(fs.existsSync(path.join(ws, 'data/bars_3m.csv')))
+  assert.ok(fs.existsSync(path.join(ws, 'config.yaml')))
+
+  const bars = fs.readFileSync(path.join(ws, 'data/bars_3m.csv'), 'utf8').trim().split('\n')
+  assert.ok(bars.length >= 121, 'bars_3m should have ≥120 data rows')
 
   const task = JSON.parse(fs.readFileSync(path.join(bundleDir, 'task.json'), 'utf8'))
   assert.ok(task.specRefs.includes('期货策略-可验收回测规格.md'))

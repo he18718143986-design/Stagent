@@ -6,6 +6,8 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { applyDeepSeekDefaults } from './deepseek-env.mjs'
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 export const REPO_ROOT = path.resolve(__dirname, '../../..')
 export const VENV_CLI = path.join(REPO_ROOT, 'packages/codeact-runner/.venv/bin/stagent-codeact')
@@ -43,10 +45,13 @@ export function spawnCodeAct(opts) {
 
   const args = buildSpawnArgs(opts)
 
+  applyDeepSeekDefaults({ requireKey: false })
+
   const captureEvents = Boolean(opts.eventsOut)
   const env = {
     ...process.env,
     OPENHANDS_SUPPRESS_BANNER: process.env.OPENHANDS_SUPPRESS_BANNER ?? '1',
+    LLM_API_KEY: process.env.LLM_API_KEY ?? process.env.DEEPSEEK_API_KEY ?? '',
   }
 
   const r = spawnSync(VENV_CLI, args, {

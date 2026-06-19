@@ -1,0 +1,65 @@
+name: verify-hybrid
+
+on:
+  push:
+    paths:
+      - 'packages/codeact-runner/**'
+      - 'scripts/codeact/**'
+      - 'scripts/gate/**'
+      - 'scripts/export/**'
+      - 'scripts/hybrid/**'
+      - 'examples/golden/**'
+      - 'examples/bundles/**'
+      - 'vendors/software-agent-sdk/**'
+      - '.github/workflows/verify-hybrid.yml'
+  pull_request:
+    paths:
+      - 'packages/codeact-runner/**'
+      - 'scripts/codeact/**'
+      - 'scripts/gate/**'
+      - 'scripts/export/**'
+      - 'scripts/hybrid/**'
+      - 'examples/golden/**'
+      - 'examples/bundles/**'
+      - 'vendors/software-agent-sdk/**'
+      - '.github/workflows/verify-hybrid.yml'
+  workflow_dispatch:
+
+jobs:
+  hybrid-stack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install Node deps
+        run: npm ci
+
+      - name: Install Python 3.12 venv support
+        run: sudo apt-get update && sudo apt-get install -y python3.12-venv
+
+      - name: CodeAct install + smoke
+        run: |
+          npm run codeact:install
+          npm run codeact:smoke
+
+      - name: CodeAct runner unit tests (L0)
+        run: npm run codeact:test
+
+      - name: Headless hybrid/gate/export tests (L1)
+        run: npm run test:headless
+
+      - name: Hybrid mock E2E (L2)
+        run: |
+          npm run hybrid:t7 -- --mock --workspace /tmp/ci-hybrid-t7
+          npm run hybrid:t4 -- --mock --workspace /tmp/ci-hybrid-t4
+
+      - name: Hybrid mock batch (L2)
+        run: |
+          set +e
+          npm run hybrid:t4:batch -- --mock --repeat 2 --workspace /tmp/ci-hybrid-batch
+          find /tmp/ci-hybrid-batch/artifacts -name batch-summary.json | grep -q .

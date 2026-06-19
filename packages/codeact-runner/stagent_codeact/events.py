@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from openhands.sdk.event import Event
@@ -101,3 +102,68 @@ class SdkEventBridge:
 
 def make_sdk_callback() -> SdkEventBridge:
     return SdkEventBridge()
+
+
+def emit_llm_usage(conversation: Any) -> None:
+    """Emit aggregated token/cost metrics after a run."""
+    try:
+        stats = conversation.conversation_stats.get_combined_metrics()
+        snapshot = stats.get_snapshot()
+        usage = snapshot.accumulated_token_usage
+        prompt = int(usage.prompt_tokens or 0) if usage else 0
+        completion = int(usage.completion_tokens or 0) if usage else 0
+        emit(
+            "llm_usage",
+            promptTokens=prompt,
+            completionTokens=completion,
+            cost=float(snapshot.accumulated_cost or 0.0),
+        )
+    except Exception as e:
+        emit("llm_usage", error=str(e))
+
+
+def scan_forbidden_patterns(workspace: Path, patterns: list[str]) -> list[str]:
+    """Scan workspace text files for forbidden substrings (case-insensitive)."""
+    if not patterns:
+        return []
+    hits: list[str] = []
+    lowered = [p.lower() for p in patterns if p]
+    skip_dirs = {
+        ".git",
+        ".venv",
+        "venv",
+        "__pycache__",
+        "node_modules",
+        ".stagent-bundle",
+        "artifacts",
+    }
+    text_suffixes = {
+        ".py",
+        ".txt",
+        ".md",
+        ".yaml",
+        ".yml",
+        ".json",
+        ".sh",
+        ".toml",
+        ".cfg",
+        ".ini",
+    }
+    for path in workspace.rglob("*"):
+        if not path.is_file():
+            continue
+        if any(part in skip_dirs for part in path.parts):
+            continue
+        if path.suffix.lower() not in text_suffixes and path.name not in {
+            "requirements.txt",
+            "main.py",
+        }:
+            continue
+        try:
+            content = path.read_text(encoding="utf-8", errors="ignore").lower()
+        except OSError:
+            continue
+        for raw, needle in zip(patterns, lowered, strict=False):
+            if needle and needle in content:
+                hits.append(f"{raw} in {path.relative_to(workspace)}")
+    return hits

@@ -2,6 +2,8 @@
 # Verify vendored CodeAct stack imports (no LLM call).
 set -euo pipefail
 
+export OPENHANDS_SUPPRESS_BANNER="${OPENHANDS_SUPPRESS_BANNER:-1}"
+
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 VENV="${STAGENT_CODEACT_VENV:-$ROOT/packages/codeact-runner/.venv}"
 

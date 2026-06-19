@@ -35,8 +35,8 @@
     "feedback:live:t4:resume": "node scripts/headless/run.mjs --live --scenario execute --live-tier 4 --keep --resume",
     "feedback:live:t2": "node scripts/headless/run.mjs --live --scenario execute --live-tier 2 --keep",
     "feedback:live:t3": "node scripts/headless/run.mjs --live --scenario execute --live-tier 3 --keep",
-    "feedback:live:t4": "node scripts/headless/run.mjs --live --scenario execute --live-tier 4 --keep",
-    "feedback:live:t4:batch": "node scripts/headless/run.mjs --live --scenario execute --live-tier 4 --keep --repeat 5",
+    "feedback:live:t4": "node scripts/headless/run.mjs --live --scenario execute --live-tier 4 --keep --runner hybrid",
+    "feedback:live:t4:batch": "node scripts/headless/run.mjs --live --scenario execute --live-tier 4 --keep --runner hybrid --repeat 3",
     "feedback:live:t5": "node scripts/headless/run.mjs --live --scenario execute --live-tier 5 --keep",
     "feedback:live:t6": "node scripts/headless/run.mjs --live --scenario execute --live-tier 6 --keep",
     "feedback:live:t6:batch": "node scripts/headless/run.mjs --live --scenario execute --live-tier 6 --keep --repeat 3",
@@ -58,6 +58,10 @@
     "gate:strict": "node scripts/gate/strict.mjs",
     "hybrid:t4": "node scripts/hybrid/run-hybrid.mjs --tier 4",
     "hybrid:t7": "node scripts/hybrid/run-hybrid.mjs --tier 7",
+    "hybrid:t4:batch": "node scripts/hybrid/run-hybrid-batch.mjs --tier 4 --repeat 3",
+    "deliver:t4": "node scripts/hybrid/deliver-t4.mjs",
+    "deliver:t4:batch": "node scripts/hybrid/run-hybrid-batch.mjs --tier 4 --repeat 5",
+    "codeact:test": "packages/codeact-runner/.venv/bin/python -m unittest discover -s packages/codeact-runner/tests -p 'test_*.py'",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {

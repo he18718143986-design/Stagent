@@ -11,8 +11,8 @@ from openhands.sdk import LLM, Agent, Conversation
 from openhands.tools.preset.default import get_default_tools
 
 from .bundle import TaskBundle, load_bundle, resolve_llm_from_bundle
-from .config import CodeActRuntimeConfig, require_tmux, resolve_codeact_config
-from .events import SdkEventBridge, make_sdk_callback
+from .config import require_tmux, resolve_codeact_config
+from .events import SdkEventBridge, emit_llm_usage, make_sdk_callback, scan_forbidden_patterns
 from .protocol import emit, emit_runner_done, emit_runner_failed
 
 
@@ -36,6 +36,8 @@ def _compose_user_message(bundle: TaskBundle, fix_prompt: str | None) -> str:
         "- 不得修改 tests/ 与 scripts/acceptance.sh 的断言语义\n"
         "- 不得自判交付完成；Stagent Gate 为唯一裁判\n"
         "- fixture CSV 须落盘并在 config 默认路径可运行\n"
+        "- 必须写入**非空** `DELIVERY.md`（含 python main.py / pytest / 数据路径说明）\n"
+        "- `signals.csv` 与 `backtest_summary.json` 须含 ≥1 条 OPEN_LONG/OPEN_SHORT 信号\n"
     )
     cfg = resolve_codeact_config(bundle)
     if cfg.forbidden_patterns:
@@ -135,6 +137,7 @@ def run_codeact(
         reason = _run_conversation(conversation, user_message, timeout_sec, bridge)
     except Exception as e:
         emit_runner_failed(str(e), retryable=True)
+        emit_llm_usage(conversation)
         return 1
     finally:
         emit(
@@ -143,6 +146,17 @@ def run_codeact(
             actions=bridge.action_count,
             observations=bridge.observation_count,
         )
+
+    emit_llm_usage(conversation)
+
+    forbidden_hits = scan_forbidden_patterns(ws, list(runtime.forbidden_patterns))
+    if forbidden_hits:
+        emit("runner_warning", forbiddenPatterns=forbidden_hits[:20])
+        emit_runner_failed(
+            "Forbidden patterns detected: " + "; ".join(forbidden_hits[:5]),
+            retryable=True,
+        )
+        return 1
 
     emit_runner_done(
         reason,
