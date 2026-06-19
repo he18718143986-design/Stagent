@@ -10,6 +10,7 @@ import {
   assertStrictMvpPass,
   isTrivialJsonValue,
   evaluateSmokeOutputFile,
+  assertSmoke,
   evaluateFixtureConsistency,
   evaluatePlaceholderExports,
   resolveWorkspaceArtifact,
@@ -151,10 +152,34 @@ test('evaluateSmokeOutputFile: missing / empty / non-JSON output fails', () => {
   assert.equal(evaluateSmokeOutputFile(ws, { outputFile: 'bad.json', jsonNotAllZero: true }).ok, false)
 })
 
-test('evaluateSmokeOutputFile: no smoke spec → ok (backward compatible)', () => {
+test('assertSmoke: command 模式执行自定义冒烟命令', () => {
   const ws = tmpWs()
-  assert.equal(evaluateSmokeOutputFile(ws, undefined).ok, true)
-  assert.equal(evaluateSmokeOutputFile(ws, {}).ok, true)
+  writeFile(ws, 'smoke_cmd.py', `import os, sys\nos.makedirs('output', exist_ok=True)\nif '--smoke' in sys.argv:\n    open('output/smoke_report.json','w').write('{"n":1}')\n`)
+  const errs = assertSmoke(ws, {
+    run: 'command',
+    command: ['python', 'smoke_cmd.py', '--smoke'],
+    outputFile: 'output/smoke_report.json',
+    jsonNotAllZero: true,
+  })
+  assert.deepEqual(errs, [])
+})
+
+test('assertStrictMvpPass: requiredFiles 检查', () => {
+  const ws = tmpWs()
+  writeFile(ws, 'config.yaml', 'x: 1\n')
+  writeFile(ws, 'DELIVERY.md', 'ok\n')
+  writeFile(ws, 'main.py', 'print(1)\n')
+  writeFile(ws, 'tests/test_x.py', 'def test_ok(): pass\n')
+  assert.throws(
+    () =>
+      assertStrictMvpPass(ws, {
+        moduleDirs: [],
+        requiredFiles: ['app.py', 'models.py'],
+        requireTraceability: false,
+        smoke: undefined,
+      }),
+    /missing or empty required file: app.py/,
+  )
 })
 
 // ADR-0008 决策3：fixture 一致性门
@@ -341,7 +366,7 @@ test('assertStrictMvpPass: 默认（不传 language）仍按 Python 报 missing 
   const msg = String(err.message)
   assert.match(msg, /missing non-empty store\/\*\.py/)
   // 仍走 Python 主入口/tests/config 文案，不得出现 Node 文案。
-  assert.match(msg, /missing main entry \(main\.py, cli\.py, or src\/main\.py\)/)
+  assert.match(msg, /missing main entry \(app\.py, main\.py, cli\.py, or src\/main\.py\)/)
   assert.match(msg, /missing tests\/test_\*\.py/)
   assert.doesNotMatch(msg, /\*\.ts|config\.json/)
 })

@@ -58,6 +58,7 @@
     "gate:strict": "node scripts/gate/strict.mjs",
     "hybrid:t4": "node scripts/hybrid/run-hybrid.mjs --tier 4",
     "hybrid:t7": "node scripts/hybrid/run-hybrid.mjs --tier 7",
+    "compare:t7:bundle": "node scripts/export/task-bundle.mjs --tier t7 --out examples/bundles/t7-finance --force",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {

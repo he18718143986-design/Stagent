@@ -57,6 +57,7 @@ export function resolveStrictGateOpts({ tier, bundle = null }) {
     fixtures: mvp.fixtures,
     smoke: mvp.smoke,
     architectureScan: mvp.architectureScan,
+    requiredFiles: mvp.requiredFiles,
   }
 
   if (tier === 4 || tier === 5) {

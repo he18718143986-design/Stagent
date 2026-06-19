@@ -1,20 +1,22 @@
-# T7 目录与模块契约
-moduleDirs:
-  - models
-  - store
-  - progress
-  - finance
-  - alerts
-  - report
+# T7 对齐对比契约（Flask + SQLite + Web）
+layout: flask-monolith
 
 requiredFiles:
+  - app.py
+  - models.py
+  - static/js/app.js
+  - templates/index.html
   - config.yaml
-  - main.py
-  - DELIVERY.md
   - requirements.txt
+  - DELIVERY.md
 
 outputs:
-  - output.json
+  - output/smoke_report.json
+
+smoke:
+  command: python app.py --smoke
+  output: output/smoke_report.json
 
 forbidden:
   - openctp
+  - np.random

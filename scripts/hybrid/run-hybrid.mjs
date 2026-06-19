@@ -16,7 +16,6 @@ import { exportTaskBundle } from '../export/task-bundle.mjs'
 import { resolveStrictGateOpts } from '../gate/gate-profiles.mjs'
 import { runStrictGate } from '../headless/lib/mvp-acceptance.mjs'
 import { loadEnvLocal } from '../lib/load-env-local.mjs'
-import { loadEnvLocal } from '../lib/load-env-local.mjs'
 import {
   buildFixPrompt,
   classifyGateFailure,
