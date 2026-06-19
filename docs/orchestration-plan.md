@@ -40,21 +40,35 @@
 | 1e | **decide 契约欠声明修复**（3b 新发现，确定性 bug）：statemachine 漏声明导出 → impl 正确导出反被 **export-extra 门**拦 | P0 | 方案 A（重 live） | `cursor/decide-under-declaration-dac2` | ✅ **目标 bug 已根治 + 已合并 main**（PR #25，commit 4f6a832）：statemachine 欠声明 + DictReader 占位 5 次未复现；`sanitizeCrossSliceContamination` 增 slice⊊global 回退/global 兜底/export-noise 内建符号过滤。**strict-pass 1d 2/5 → 1e 1/5（方差内，非回归）**。核心 1090/9 零新增、headless 30/30、vitest 243 | #25 |
 | 1f | **decide/test-gen 长尾确定性净化**（1e 后残留）：sdk-path test-import、fixture 漏列 | P0 | 方案 A（重 live） | `cursor/t6-longtail-purify-91b1` | ✅ **目标模式消除**（PR #27）：sdk-path / fixture 漏列在 live 有效 run 中未复现；batch 0/5 因 API 402 无效。核心 +5 测、9 零新增 | #27 |
 | 4 | 对抗式审查（异族/更强模型独立挑错回喂；**加分项，不替代确定性门**） | P2 | 方案 A | `cursor/adversarial-review-3713` | 排后（依赖 #1/#3） | — |
-| **5** | **瘦身 Stagent + 内嵌 CodeAct + 重 Gate（商业化 hybrid）** | **P0** | 方案 A+B | `cursor/deliver-t4-mainland-170f` | ✅ **T4 一键交付 + live strict pass**（2026-06-18，`deliver:t4` attempt 3/3 含 Gate 回流）；T7 live ✅；余：T4 batch、引擎 `tool:codeact` | PR 待开 |
+| **5** | **瘦身 Stagent + 内嵌 CodeAct + 重 Gate（商业化 hybrid）** | **P0** | 方案 A+B | `cursor/t4-run3-fix-170f` | ✅ **T4 batch N=5 → 3/5（60%）** after run#3 fix（PR #35）；原 N=3 2/3；T7 live ✅ | [#35](https://github.com/he18718143986-design/Stagent/pull/35) |
 
 **#5 hybrid-codeact — T4 大陆一键交付（2026-06-18）**：
-- **命令**：`npm run deliver:t4 -- --workspace /tmp/deliver-t4-live-poc --force`
-- **结果**：fixture 种子 → CodeAct ×3（Gate 回流 2 次）→ **strict pass attempt 3/3**；pytest 3 files；G-signals-nonzero ✓
+- **单次 PoC**：`deliver:t4` → strict pass **attempt 3/3**（Gate 回流 2 次）；证据 `/tmp/deliver-t4-live-poc`
+- **Live batch N=3（fix 前）**：2/3 strict-pass（67%）；run#3 耗尽回流（G-signals + 空 DELIVERY.md）
+- **Live batch N=5（fix 后，PR #35）**：
+  ```bash
+  npm run deliver:t4:batch -- --json
+  # batch verdict: pass — 3/5 strict-pass（threshold ≥3）
+  ```
+  | run | strict-pass | attempts | 备注 |
+  |-----|-------------|----------|------|
+  | 1 | ✅ | 3 | 回流 2 次后 pass |
+  | 2 | ✅ | 1 | 首轮 pass |
+  | 3 | ✅ | 1 | **原 run#3 类问题已收敛**（fix_prompt + 清单） |
+  | 4 | ❌ | 4 | 模块未生成（impl 全空，方差） |
+  | 5 | ❌ | 4 | 同上 |
+  - **成功率**：**3/5（60%）**；batch 判定 pass（≥ ceil(0.6×5)=3）
+  - **耗时**：~72 min（13:56–15:08 UTC）
+  - **summary**：`/tmp/hybrid-batch-t4-CP0Q0i/artifacts/hybrid-batch-3fc3d5a8/batch-summary.json`
 - **Runbook**：`docs/comercial/交付-runbook-hybrid.md`
 - **npm**：`deliver:t4` / `deliver:t4:batch`；`feedback:live:t4` 默认 `--runner hybrid`
-- **T7 live**（已完成）：`npm run hybrid:t7` attempt 1/1 strict pass（§10.A）
-- **残留**：T4 live batch N≥3；引擎 `tool:codeact`；Electron bridge
+- **T7 live**：`hybrid:t7` attempt 1/1 strict pass（§10.A）
+- **残留**：引擎 `tool:codeact`；Electron bridge；T4 **全空 impl 方差**（batch run#4/#5）
 
 **#5 hybrid-codeact 后（2026-06-18）— T7 live PoC**：
-- **命令**：`npm run hybrid:t7 -- --workspace /tmp/hybrid-live-t7-poc --force`（DeepSeek，`LLM_BASE_URL=https://api.deepseek.com/v1`）
-- **结果**：export → CodeAct（~2min）→ `gate:strict` **pass**，attempt **1/1**，pytest **13 passed**，`output.json` 非全零
+- **命令**：`npm run hybrid:t7 -- --workspace /tmp/hybrid-live-t7-poc --force`（DeepSeek）
+- **结果**：export → CodeAct（~2min）→ `gate:strict` **pass**，attempt **1/1**，pytest **13 passed**
 - **证据**：`docs/plans/slim-stagent-codeact-integration.md` §10.A；PR #31
-- **残留**：`llm_usage` token 字段兼容；Gate 回流 live 未测；T4 live batch 未跑
 
 > 优先级依据见 `docs/live-findings-2026-06-15.md` 与 ADR-0006/0007/0008/0009：**门的强度比模型档位更决定产物质量**；无外部验证器的自我批判会"假性收敛"（业界自我纠正研究一致结论），故评审循环必须绑定可执行验证器。
 

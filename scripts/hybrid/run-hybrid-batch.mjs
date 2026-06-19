@@ -70,26 +70,30 @@ async function main() {
   }
 
   const tier = parseTierArg(args.tier)
-  const ws =
-    args.workspace ??
-    fs.mkdtempSync(path.join(os.tmpdir(), `hybrid-batch-t${tier}-`))
+  const batchRoot =
+    args.workspace ?? fs.mkdtempSync(path.join(os.tmpdir(), `hybrid-batch-t${tier}-`))
+  const isolatedRuns = !args.workspace && args.repeat > 1
   const batchId = crypto.randomBytes(4).toString('hex')
-  const batchDir = path.join(ws, 'artifacts', `hybrid-batch-${batchId}`)
+  const batchDir = path.join(batchRoot, 'artifacts', `hybrid-batch-${batchId}`)
   fs.mkdirSync(batchDir, { recursive: true })
 
   const runs = []
   for (let i = 1; i <= args.repeat; i++) {
+    const ws = isolatedRuns ? path.join(batchRoot, `run-${i}`) : batchRoot
     const runId = `batch-${batchId}-r${i}`
     const report = runHybridPipeline({
       tier,
       workspace: ws,
       mock: args.mock,
-      force: i > 1,
+      force: true,
       runId,
     })
     const runPath = path.join(batchDir, `run-${i}.json`)
     fs.writeFileSync(runPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8')
-    runs.push({ run: i, pass: report.pass, reportPath: runPath, report })
+    runs.push({ run: i, pass: report.pass, workspace: ws, reportPath: runPath, report })
+    if (!args.mock && i < args.repeat) {
+      await new Promise((r) => setTimeout(r, 12_000))
+    }
   }
 
   const passed = runs.filter((r) => r.pass).length
@@ -97,13 +101,21 @@ async function main() {
   const batchReport = {
     batchId,
     tier,
-    workspace: ws,
+    workspace: batchRoot,
+    isolatedRuns,
     repeat: args.repeat,
     mock: args.mock,
     passed,
     threshold,
     verdict: passed >= threshold ? 'pass' : 'fail',
-    runs: runs.map(({ run, pass, reportPath }) => ({ run, pass, reportPath })),
+    runs: runs.map(({ run, pass, workspace, reportPath, report }) => ({
+      run,
+      pass,
+      workspace,
+      reportPath,
+      attempts: report.attempts?.length ?? 0,
+      finalCategory: report.finalCategory ?? null,
+    })),
     timestamp: new Date().toISOString(),
   }
   const summaryPath = path.join(batchDir, 'batch-summary.json')
@@ -115,7 +127,8 @@ async function main() {
     console.log(
       `hybrid-batch:${batchReport.verdict.toUpperCase()} — tier ${tier} ${passed}/${args.repeat} (threshold ${threshold})`,
     )
-    console.log(`  workspace → ${ws}`)
+    console.log(`  batch root → ${batchRoot}`)
+    if (isolatedRuns) console.log(`  isolated: run-1 … run-${args.repeat} under batch root`)
     console.log(`  summary → ${summaryPath}`)
   }
 

@@ -10,7 +10,7 @@ const { detectMultiModuleLayout, countPathLikeTokens } = await import(
   path.join(HERE, '../../../packages/stagent-core/dist/path-router/multiModuleLayoutDetect.js')
 )
 
-test('resolveLiveTiers accepts tier 6/7 and excludes tier 6 from "all"', () => {
+test('resolveLiveTiers accepts tier 6/7 and excludes them from "all"', () => {
   assert.deepEqual(resolveLiveTiers(6), [6])
   assert.deepEqual(resolveLiveTiers('6'), [6])
   assert.deepEqual(resolveLiveTiers(7), [7])

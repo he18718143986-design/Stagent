@@ -27,17 +27,6 @@ npm run codeact:test
 npm run codeact:run -- --help
 ```
 
-## `task.json` → Runner 行为
-
-| 字段 | 作用 |
-|------|------|
-| `codeact.maxSteps` | `Conversation(max_iteration_per_run=…)`，默认 80 |
-| `codeact.timeoutMs` | 会话墙钟超时（毫秒），默认 2400000 |
-| `codeact.enableBrowser` | `get_default_tools(enable_browser=…)` |
-| `codeact.forbiddenPatterns` | Prompt 纪律 + 跑完后 workspace 文本扫描 |
-
-stdout NDJSON：`step_start/end`、`terminal`、`file_edited`、`llm_usage`、`runner_warning`、`runner_done`。
-
 ## 运行任务
 
 ```bash
@@ -56,13 +45,34 @@ Gate 回流（长报告用文件，避免命令行长度限制）：
 stagent-codeact run --bundle ... --workspace ... --fix-prompt-file ./artifacts/fix_prompt.md
 ```
 
-## 进程退出码（Runner 层，不等于 Gate 通过）
+## `task.json` → SDK 接线
+
+| Bundle 字段 | SDK / Runner 行为 |
+|-------------|-------------------|
+| `codeact.maxSteps` | `Conversation(max_iteration_per_run=…)`，默认 80 |
+| `codeact.timeoutMs` | 会话墙钟超时（毫秒），默认 2400000 |
+| `codeact.enableBrowser` | `get_default_tools(enable_browser=…)` |
+| `codeact.forbiddenPatterns` | 追加到 Prompt 纪律段；跑完后扫描 workspace 文本 |
+
+## 进程退出码
 
 | code | 含义 |
 |------|------|
-| 0 | `runner_done.reason=completed` |
-| 1 | 配置/环境/运行时错误或 forbidden 扫描命中 |
-| 2 | 墙钟超时 `timeout` |
-| 3 | 达到 `maxSteps` `max_steps` |
+| 0 | CodeAct 会话正常结束（**不等于** Gate 通过） |
+| 1 | 配置/环境/运行时错误 / forbidden 命中 |
+| 2 | 墙钟超时 `runner_done.reason=timeout` |
+| 3 | 达到 `maxSteps` `runner_done.reason=max_steps` |
+
+## NDJSON 事件（stdout）
+
+| event | 说明 |
+|-------|------|
+| `runner_start` | 含 `maxSteps`、`timeoutMs` |
+| `step_start` / `step_end` | 工具动作与观察 |
+| `terminal` | 命令与 `exitCode` |
+| `file_edited` | 路径与操作 |
+| `llm_usage` | `promptTokens` / `completionTokens` / `cost` |
+| `runner_warning` | SDK `ConversationErrorEvent`（含 MaxIterationsReached） |
+| `runner_done` | `reason`: completed \| max_steps \| timeout |
 
 交付判定由 Stagent `npm run gate:strict` 负责，Runner **不得**自判完成。
