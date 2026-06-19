@@ -125,9 +125,6 @@ class HookEventProcessor:
 
     def _handle_pre_tool_use(self, event: ActionEvent) -> None:
         """Handle PreToolUse hooks. Blocked actions are marked in conversation state."""
-        if not self.hook_manager.has_hooks(HookEventType.PRE_TOOL_USE):
-            return
-
         tool_name = event.tool_name
         tool_input: dict[str, Any] = {}
 
@@ -137,6 +134,14 @@ class HookEventProcessor:
                 tool_input = event.action.model_dump()
             except Exception as e:
                 logger.debug(f"Could not extract tool input: {e}")
+
+        # Built-in delivery gate for finish (even without project hooks)
+        if tool_name == "finish" and self._conversation_state is not None:
+            if self._maybe_block_finish(event):
+                return
+
+        if not self.hook_manager.has_hooks(HookEventType.PRE_TOOL_USE):
+            return
 
         # Get hooks to emit events with command info
         hooks = self.hook_manager.config.get_hooks_for_event(
@@ -321,6 +326,39 @@ class HookEventProcessor:
             return False
         return message_id in self._conversation_state.blocked_messages
 
+    def _maybe_block_finish(self, event: ActionEvent) -> bool:
+        """Run built-in delivery gate before finish executes."""
+        from pathlib import Path
+
+        from openhands.sdk.delivery.gate import check_delivery_gate, is_delivery_workspace
+
+        assert self._conversation_state is not None
+        working_dir = Path(self._conversation_state.workspace.working_dir)
+        if not is_delivery_workspace(working_dir):
+            return False
+
+        result = check_delivery_gate(working_dir)
+        if result.passed:
+            return False
+
+        reason = result.message
+        logger.warning("Delivery gate blocked finish: %s", reason)
+        self._conversation_state.block_action(event.id, reason)
+        self._emit_hook_execution_event(
+            hook_event_type=HookEventType.PRE_TOOL_USE,
+            hook_command="builtin:delivery_gate",
+            result=HookResult(
+                success=True,
+                blocked=True,
+                reason=reason,
+                additional_context=reason,
+            ),
+            tool_name="finish",
+            action_id=event.id,
+            hook_input={"tool_name": "finish", "builtin": "delivery_gate"},
+        )
+        return True
+
     def run_session_start(self) -> None:
         """Run SessionStart hooks. Call after conversation is created."""
         hooks = self.hook_manager.config.get_hooks_for_event(
@@ -353,6 +391,29 @@ class HookEventProcessor:
 
     def run_stop(self, reason: str | None = None) -> tuple[bool, str | None]:
         """Run Stop hooks. Returns (should_stop, feedback)."""
+        # Built-in delivery gate on agent finish (complements PreToolUse)
+        if reason == "agent_finished" and self._conversation_state is not None:
+            from pathlib import Path
+
+            from openhands.sdk.delivery.gate import check_delivery_gate, is_delivery_workspace
+
+            working_dir = Path(self._conversation_state.workspace.working_dir)
+            if is_delivery_workspace(working_dir):
+                gate = check_delivery_gate(working_dir)
+                if not gate.passed:
+                    self._emit_hook_execution_event(
+                        hook_event_type=HookEventType.STOP,
+                        hook_command="builtin:delivery_gate",
+                        result=HookResult(
+                            success=True,
+                            blocked=True,
+                            reason=gate.message,
+                            additional_context=gate.message,
+                        ),
+                        hook_input={"reason": reason, "builtin": "delivery_gate"},
+                    )
+                    return False, gate.message
+
         if not self.hook_manager.has_hooks(HookEventType.STOP):
             return True, None
 

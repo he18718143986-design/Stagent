@@ -26,16 +26,46 @@ from openhands.sdk.tool import (
 logger = get_logger(__name__)
 
 # Type alias for task tracker status
-TaskTrackerStatusType = Literal["todo", "in_progress", "done"]
+TaskTrackerStatusType = Literal[
+    "todo", "in_progress", "mock_done", "integration_done", "done"
+]
 
 
 class TaskItem(BaseModel):
+    id: str = Field(
+        "",
+        description="Stable task id (e.g. ACC-3.01). Auto-assigned when empty.",
+    )
     title: str = Field(..., description="A brief title for the task.")
     notes: str = Field("", description="Additional details or notes about the task.")
     status: TaskTrackerStatusType = Field(
         "todo",
-        description="The current status of the task. "
-        "One of 'todo', 'in_progress', or 'done'.",
+        description=(
+            "The current status of the task. Delivery mode requires "
+            "mock_done -> integration_done -> done; direct todo->done is forbidden."
+        ),
+    )
+    phase: str = Field("", description="Delivery phase (0-6).")
+    acceptance: list[str] = Field(
+        default_factory=list,
+        description="Given/When/Then acceptance criteria for this TK.",
+    )
+    depends_on: list[str] = Field(
+        default_factory=list,
+        description="Ids of TKs that must be done before this one.",
+    )
+    files: list[str] = Field(
+        default_factory=list,
+        description="Files touched while implementing this TK.",
+    )
+    review_rounds: int = Field(
+        0,
+        ge=0,
+        description="Code review rounds completed for this TK.",
+    )
+    parent_id: str | None = Field(
+        default=None,
+        description="Parent TK id when this is a leaf under a parent task.",
     )
 
 
@@ -96,6 +126,12 @@ class TaskTrackerObservation(Observation):
             in_progress_count = sum(
                 1 for task in self.task_list if task.status == "in_progress"
             )
+            mock_done_count = sum(
+                1 for task in self.task_list if task.status == "mock_done"
+            )
+            integration_done_count = sum(
+                1 for task in self.task_list if task.status == "integration_done"
+            )
             done_count = sum(1 for task in self.task_list if task.status == "done")
 
             # Show status summary
@@ -112,6 +148,10 @@ class TaskTrackerObservation(Observation):
                 status_parts.append(f"{todo_count} todo")
             if in_progress_count:
                 status_parts.append(f"{in_progress_count} in progress")
+            if mock_done_count:
+                status_parts.append(f"{mock_done_count} mock done")
+            if integration_done_count:
+                status_parts.append(f"{integration_done_count} integration done")
             if done_count:
                 status_parts.append(f"{done_count} done")
 
@@ -124,13 +164,17 @@ class TaskTrackerObservation(Observation):
                 # Status icon
                 if task.status == "done":
                     text.append("✅ ", style="green")
+                elif task.status == "integration_done":
+                    text.append("🧪 ", style="cyan")
+                elif task.status == "mock_done":
+                    text.append("🎭 ", style="magenta")
                 elif task.status == "in_progress":
                     text.append("🔄 ", style="yellow")
                 else:  # todo
                     text.append("⏳ ", style="blue")
 
-                # Task title
-                text.append(f"{i}. {task.title}", style="white")
+                label = task.id or str(i)
+                text.append(f"{i}. [{label}] {task.title}", style="white")
 
                 # NEW: show notes under the title if present
                 if task.notes:
@@ -149,21 +193,35 @@ class TaskTrackerExecutor(ToolExecutor[TaskTrackerAction, TaskTrackerObservation
     """Executor for the task tracker tool."""
 
     save_dir: Path | None
+    workspace_dir: Path | None
 
-    def __init__(self, save_dir: str | None = None):
+    def __init__(
+        self,
+        save_dir: str | None = None,
+        workspace_dir: str | None = None,
+    ):
         """Initialize TaskTrackerExecutor.
 
         Args:
             save_dir: Optional directory to save tasks to. If provided, tasks will be
-                     persisted to save_dir/TASKS.md
+                     persisted to save_dir/TASKS.json
+            workspace_dir: Project workspace; when ACCEPTANCE.md exists, TASKS.json
+                          and CURSOR.json are also written here.
         """
         self.save_dir = Path(save_dir) if save_dir else None
-        logger.info(f"TaskTrackerExecutor initialized with save_dir: {self.save_dir}")
+        self.workspace_dir = Path(workspace_dir) if workspace_dir else None
+        logger.info(
+            "TaskTrackerExecutor initialized with save_dir=%s workspace_dir=%s",
+            self.save_dir,
+            self.workspace_dir,
+        )
         self._task_list: list[TaskItem] = []
 
         # Load existing tasks if save_dir is provided and file exists
         if self.save_dir:
             self._load_tasks()
+        elif self.workspace_dir:
+            self._load_tasks_from(self.workspace_dir)
 
     def __call__(
         self,
@@ -172,10 +230,26 @@ class TaskTrackerExecutor(ToolExecutor[TaskTrackerAction, TaskTrackerObservation
     ) -> TaskTrackerObservation:
         """Execute the task tracker action."""
         if action.command == "plan":
-            # Update the task list
-            self._task_list = action.task_list
-            # Save to file if save_dir is provided
-            if self.save_dir:
+            from openhands.tools.task_tracker.cursor import is_delivery_workspace
+            from openhands.tools.task_tracker.validation import validate_task_plan
+
+            delivery_mode = bool(
+                self.workspace_dir and is_delivery_workspace(self.workspace_dir)
+            )
+            normalized, errors = validate_task_plan(
+                action.task_list,
+                delivery_mode=delivery_mode,
+                previous=self._task_list,
+            )
+            if errors:
+                return TaskTrackerObservation.from_text(
+                    text="Task plan rejected:\n- " + "\n- ".join(errors),
+                    is_error=True,
+                    command=action.command,
+                    task_list=self._task_list,
+                )
+            self._task_list = normalized
+            if self.save_dir or self.workspace_dir:
                 self._save_tasks()
             return TaskTrackerObservation.from_text(
                 text=(
@@ -216,14 +290,19 @@ class TaskTrackerExecutor(ToolExecutor[TaskTrackerAction, TaskTrackerObservation
 
         content = "# Task List\n\n"
         for i, task in enumerate(task_list, 1):
-            status_icon = {"todo": "⏳", "in_progress": "🔄", "done": "✅"}.get(
-                task.status, "⏳"
-            )
+            status_icon = {
+                "todo": "⏳",
+                "in_progress": "🔄",
+                "mock_done": "🎭",
+                "integration_done": "🧪",
+                "done": "✅",
+            }.get(task.status, "⏳")
 
+            label = task.id or str(i)
             title = task.title
             notes = task.notes
 
-            content += f"{i}. {status_icon} {title}\n"
+            content += f"{i}. {status_icon} [{label}] {title}\n"
             if notes:
                 content += f"   {notes}\n"
             content += "\n"
@@ -234,14 +313,21 @@ class TaskTrackerExecutor(ToolExecutor[TaskTrackerAction, TaskTrackerObservation
         """Load tasks from the TASKS.json file if it exists."""
         if not self.save_dir:
             return
+        self._load_tasks_from(self.save_dir)
 
-        tasks_file = self.save_dir / "TASKS.json"
+    def _load_tasks_from(self, directory: Path) -> None:
+        tasks_file = directory / "TASKS.json"
         if not tasks_file.exists():
             return
 
         try:
             with open(tasks_file, encoding="utf-8") as f:
-                self._task_list = [TaskItem.model_validate(d) for d in json.load(f)]
+                raw = json.load(f)
+            from openhands.tools.task_tracker.validation import normalize_task_list
+
+            self._task_list = normalize_task_list(
+                [TaskItem.model_validate(d) for d in raw]
+            )
         except (OSError, json.JSONDecodeError, TypeError, ValidationError) as e:
             logger.warning(
                 f"Failed to load tasks from {tasks_file}: {e}. Starting with "
@@ -250,20 +336,22 @@ class TaskTrackerExecutor(ToolExecutor[TaskTrackerAction, TaskTrackerObservation
             self._task_list = []
 
     def _save_tasks(self) -> None:
-        """Save tasks to the TASKS.json file."""
-        if not self.save_dir:
-            return
+        """Save tasks to TASKS.json in persistence and/or workspace dirs."""
+        payload = [task.model_dump() for task in self._task_list]
+        targets: list[Path] = []
+        if self.save_dir:
+            targets.append(self.save_dir)
+        if self.workspace_dir and self.workspace_dir not in targets:
+            targets.append(self.workspace_dir)
 
-        tasks_file = self.save_dir / "TASKS.json"
-        try:
-            # Create the directory if it doesn't exist
-            self.save_dir.mkdir(parents=True, exist_ok=True)
-
-            with open(tasks_file, "w", encoding="utf-8") as f:
-                json.dump([task.model_dump() for task in self._task_list], f, indent=2)
-        except OSError as e:
-            logger.warning(f"Failed to save tasks to {tasks_file}: {e}")
-            pass
+        for directory in targets:
+            tasks_file = directory / "TASKS.json"
+            try:
+                directory.mkdir(parents=True, exist_ok=True)
+                with open(tasks_file, "w", encoding="utf-8") as f:
+                    json.dump(payload, f, indent=2)
+            except OSError as e:
+                logger.warning(f"Failed to save tasks to {tasks_file}: {e}")
 
 
 # Tool definition with detailed description
@@ -372,9 +460,17 @@ Response approach: I'll add a docstring to explain the processPayment function.
 1. **Status Values**: Track work using these states:
    - todo: Not yet initiated
    - in_progress: Currently active (maintain single focus)
+   - mock_done: Skeleton/mock implementation complete (delivery mode)
+   - integration_done: Real integration verified (delivery mode)
    - done: Successfully completed
 
-2. **Workflow Practices**:
+2. **Delivery mode** (when ACCEPTANCE.md exists in the workspace):
+   - Never mark done directly from todo or in_progress
+   - Progress through mock_done -> integration_done -> done
+   - Only one leaf TK may be in_progress at a time
+   - All depends_on TKs must be done before marking done
+
+3. **Workflow Practices**:
    - Update status dynamically as work progresses
    - Mark completion immediately upon task finish
    - Limit active work to ONE task at any given time
@@ -412,7 +508,10 @@ class TaskTrackerTool(ToolDefinition[TaskTrackerAction, TaskTrackerObservation])
                          If provided, save_dir will be taken from
                          conv_state.persistence_dir
         """
-        executor = TaskTrackerExecutor(save_dir=conv_state.persistence_dir)
+        executor = TaskTrackerExecutor(
+            save_dir=conv_state.persistence_dir,
+            workspace_dir=str(conv_state.workspace.working_dir),
+        )
 
         # Initialize the parent Tool with the executor
         return [

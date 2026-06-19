@@ -9,6 +9,9 @@ from typing import Any
 
 from openhands.sdk import LLM, Agent, Conversation
 from openhands.tools.preset.default import get_default_tools
+from openhands.tools.preset.delivery import get_delivery_tools
+from openhands.sdk.critic.impl.acceptance import AcceptanceCritic
+from openhands.sdk.delivery.gate import is_delivery_workspace
 
 from .bundle import TaskBundle, load_bundle, resolve_llm_from_bundle
 from .config import require_tmux, resolve_codeact_config
@@ -16,11 +19,20 @@ from .events import SdkEventBridge, emit_llm_usage, make_sdk_callback, scan_forb
 from .protocol import emit, emit_runner_done, emit_runner_failed
 
 
-def _build_agent(llm_kwargs: dict[str, Any], *, enable_browser: bool) -> Agent:
-    return Agent(
-        llm=LLM(**llm_kwargs),
-        tools=get_default_tools(enable_browser=enable_browser),
-    )
+def _build_agent(
+    llm_kwargs: dict[str, Any],
+    *,
+    enable_browser: bool,
+    workspace: Path,
+) -> Agent:
+    delivery = is_delivery_workspace(workspace)
+    if delivery:
+        tools = get_delivery_tools(enable_browser=enable_browser, enable_sub_agents=True)
+        critic = AcceptanceCritic.for_workspace(workspace, run_e2e=False)
+    else:
+        tools = get_default_tools(enable_browser=enable_browser)
+        critic = None
+    return Agent(llm=LLM(**llm_kwargs), tools=tools, critic=critic)
 
 
 def _compose_user_message(bundle: TaskBundle, fix_prompt: str | None) -> str:
@@ -122,7 +134,7 @@ def run_codeact(
 
     os.chdir(ws)
     bridge = make_sdk_callback()
-    agent = _build_agent(llm_kwargs, enable_browser=runtime.enable_browser)
+    agent = _build_agent(llm_kwargs, enable_browser=runtime.enable_browser, workspace=ws)
     conversation = Conversation(
         agent=agent,
         workspace=str(ws),
