@@ -5,6 +5,7 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 
 import {
+  buildEmptyImplFixPrompt,
   buildFixPrompt,
   classifyGateFailure,
   writeFixPromptFile,
@@ -55,4 +56,21 @@ test('writeFixPromptFile: 写入 artifacts/fix_prompt.md', () => {
   const dest = writeFixPromptFile(ws, '# fix\n')
   assert.equal(dest, path.join(ws, 'artifacts', 'fix_prompt.md'))
   assert.ok(fs.existsSync(dest))
+})
+
+test('buildEmptyImplFixPrompt: 空 impl 清单 + skeleton 指令', () => {
+  const text = buildEmptyImplFixPrompt(
+    {
+      missing: ['main.py（无参可运行的入口，非空）', 'signals/（至少一个非空 .py 模块）'],
+      moduleDirs: ['indicators', 'signals', 'risk', 'broker'],
+      implPyCount: 0,
+    },
+    1,
+  )
+  assert.match(text, /空 impl 早退回流/)
+  assert.match(text, /main\.py/)
+  assert.match(text, /signals/)
+  assert.match(text, /skeleton/)
+  assert.match(text, /禁止只写 Markdown 计划/)
+  assert.match(text, /indicators/)
 })
