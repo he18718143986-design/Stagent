@@ -61,7 +61,6 @@
     "hybrid:t4:batch": "node scripts/hybrid/run-hybrid-batch.mjs --tier 4 --repeat 3",
     "deliver:t4": "node scripts/hybrid/deliver-t4.mjs",
     "deliver:t4:batch": "node scripts/hybrid/run-hybrid-batch.mjs --tier 4 --repeat 5",
-    "codeact:test": "packages/codeact-runner/.venv/bin/python -m unittest discover -s packages/codeact-runner/tests -p 'test_*.py'",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {

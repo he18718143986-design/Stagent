@@ -33,8 +33,9 @@
 | L0 单测 | `npm run codeact:test` | ✅ |
 | Spawn | `npm run codeact:run` → `scripts/hybrid/spawn-codeact.mjs` | ✅ |
 | Runner 配置接线 | `maxSteps` / `timeoutMs` / `enableBrowser` → SDK `Conversation` | ✅ |
-| SDK 事件回调 | `callbacks` → NDJSON `terminal` / `file_edited` / `runner_warning` | ✅ |
+| SDK 事件回调 | `callbacks` → NDJSON `terminal` / `file_edited` / `llm_usage` / `runner_warning` | ✅ |
 | `--fix-prompt-file` | 长 Gate 报告经文件传递，避免 ARG_MAX | ✅ |
+| vendored SSOT | `requirements-vendored.txt` + `install --no-deps` | ✅ |
 | Gate | `scripts/gate/strict.mjs` + G-* | ✅ |
 | Export | `scripts/export/task-bundle.mjs` | ✅ |
 | Hybrid 一键 | `scripts/hybrid/run-hybrid.mjs` | ✅（含 mock E2E + 回流） |

@@ -3,16 +3,28 @@
 from __future__ import annotations
 
 import json
+import sys
 import tempfile
 import unittest
 from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-from stagent_codeact.bundle import load_bundle, resolve_llm_from_bundle
-from stagent_codeact.events import emit_llm_usage, scan_forbidden_patterns
-from stagent_codeact.protocol import emit
 from openhands.sdk.llm.utils.metrics import MetricsSnapshot, TokenUsage
+
+from stagent_codeact.bundle import TaskBundle, load_bundle, resolve_llm_from_bundle
+from stagent_codeact.config import (
+    DEFAULT_MAX_STEPS,
+    DEFAULT_TIMEOUT_MS,
+    resolve_codeact_config,
+)
+from stagent_codeact.events import (
+    SdkEventBridge,
+    emit_llm_usage,
+    make_sdk_callback,
+    scan_forbidden_patterns,
+)
+from stagent_codeact.protocol import emit
 
 
 class ProtocolTests(unittest.TestCase):
@@ -20,8 +32,7 @@ class ProtocolTests(unittest.TestCase):
         buf = StringIO()
         with patch("stagent_codeact.protocol.sys.stdout", buf):
             emit("runner_start", taskId="t1")
-        line = buf.getvalue().strip()
-        data = json.loads(line)
+        data = json.loads(buf.getvalue().strip())
         self.assertEqual(data["event"], "runner_start")
         self.assertEqual(data["taskId"], "t1")
         self.assertIn("timestamp", data)
@@ -62,6 +73,108 @@ class BundleTests(unittest.TestCase):
                     resolve_llm_from_bundle(bundle)
 
 
+class ResolveCodeactConfigTests(unittest.TestCase):
+    def _bundle(self, codeact: dict | None = None) -> TaskBundle:
+        return TaskBundle(
+            root=Path("/tmp/bundle"),
+            task={"taskId": "t", "codeact": codeact or {}},
+            prompt_text="hello",
+        )
+
+    def test_defaults(self) -> None:
+        cfg = resolve_codeact_config(self._bundle())
+        self.assertEqual(cfg.max_steps, DEFAULT_MAX_STEPS)
+        self.assertEqual(cfg.timeout_ms, DEFAULT_TIMEOUT_MS)
+        self.assertFalse(cfg.enable_browser)
+
+    def test_reads_bundle_fields(self) -> None:
+        cfg = resolve_codeact_config(
+            self._bundle(
+                {
+                    "maxSteps": 12,
+                    "timeoutMs": 60000,
+                    "enableBrowser": True,
+                    "forbiddenPatterns": ["openctp", "np.random"],
+                }
+            )
+        )
+        self.assertEqual(cfg.max_steps, 12)
+        self.assertEqual(cfg.timeout_ms, 60000)
+        self.assertTrue(cfg.enable_browser)
+        self.assertEqual(cfg.forbidden_patterns, ("openctp", "np.random"))
+
+
+class SdkEventBridgeTests(unittest.TestCase):
+    def _capture(self) -> tuple[SdkEventBridge, list[dict]]:
+        lines: list[dict] = []
+
+        class Writer(StringIO):
+            def write(self, s: str) -> int:  # type: ignore[override]
+                for line in s.splitlines():
+                    if line.strip():
+                        lines.append(json.loads(line))
+                return len(s)
+
+        sys.stdout = Writer()
+        bridge = make_sdk_callback()
+        return bridge, lines
+
+    def test_terminal_action_and_observation(self) -> None:
+        from openhands.sdk.event.llm_convertible.action import ActionEvent
+        from openhands.sdk.event.llm_convertible.observation import ObservationEvent
+        from openhands.sdk.llm import MessageToolCall, TextContent
+        from openhands.tools.terminal.definition import TerminalAction, TerminalObservation
+
+        bridge, lines = self._capture()
+        bridge(
+            ActionEvent(
+                thought=[TextContent(text="run tests")],
+                tool_name="terminal",
+                tool_call_id="tc-1",
+                tool_call=MessageToolCall(
+                    id="tc-1",
+                    name="terminal",
+                    arguments="{}",
+                    origin="completion",
+                ),
+                llm_response_id="r1",
+                action=TerminalAction(command="pytest -q"),
+            )
+        )
+        bridge(
+            ObservationEvent(
+                tool_name="terminal",
+                tool_call_id="tc-1",
+                action_id="a1",
+                observation=TerminalObservation(
+                    command="pytest -q",
+                    exit_code=0,
+                    content=[TextContent(text="1 passed")],
+                ),
+            )
+        )
+        events = [row["event"] for row in lines]
+        self.assertIn("step_start", events)
+        self.assertIn("terminal", events)
+        self.assertIn("step_end", events)
+        terminal = next(row for row in lines if row["event"] == "terminal")
+        self.assertEqual(terminal["exitCode"], 0)
+
+    def test_max_iterations_flag(self) -> None:
+        from openhands.sdk.event.conversation_error import ConversationErrorEvent
+
+        bridge, lines = self._capture()
+        bridge(
+            ConversationErrorEvent(
+                source="environment",
+                code="MaxIterationsReached",
+                detail="limit",
+            )
+        )
+        self.assertTrue(bridge.max_iterations_reached)
+        self.assertEqual(lines[-1]["event"], "runner_warning")
+
+
 class ForbiddenPatternTests(unittest.TestCase):
     def test_scan_finds_pattern_in_py_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -96,10 +209,16 @@ class EmitLlmUsageTests(unittest.TestCase):
                 return snapshot
 
         class FakeConversation:
-            conversation_stats = type("CS", (), {"get_combined_metrics": lambda self: FakeStats()})()
+            conversation_stats = type(
+                "CS", (), {"get_combined_metrics": lambda self: FakeStats()}
+            )()
 
         buf = StringIO()
-        with patch("stagent_codeact.events.emit", lambda event, **kw: buf.write(json.dumps({"event": event, **kw}) + "\n")):
+
+        def capture(event: str, **kw: object) -> None:
+            buf.write(json.dumps({"event": event, **kw}) + "\n")
+
+        with patch("stagent_codeact.events.emit", capture):
             emit_llm_usage(FakeConversation())
         data = json.loads(buf.getvalue().strip())
         self.assertEqual(data["event"], "llm_usage")

@@ -10,13 +10,17 @@ from openhands.sdk.event.conversation_error import ConversationErrorEvent
 from openhands.sdk.event.llm_convertible.action import ActionEvent
 from openhands.sdk.event.llm_convertible.observation import ObservationEvent
 from openhands.sdk.llm import content_to_str
+from openhands.tools.file_editor.definition import FileEditorObservation
+from openhands.tools.terminal.definition import TerminalObservation
 
 from .protocol import emit
 
 _TRUNCATE = 4000
 
 
-def _truncate(text: str, limit: int = _TRUNCATE) -> str:
+def _truncate(text: str | None, limit: int = _TRUNCATE) -> str:
+    if not text:
+        return ""
     if len(text) <= limit:
         return text
     return text[:limit] + f"\n…[{len(text) - limit} chars truncated]"
@@ -25,8 +29,10 @@ def _truncate(text: str, limit: int = _TRUNCATE) -> str:
 def _action_payload(event: ActionEvent) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "tool": event.tool_name,
-        "toolCallId": event.tool_call_id,
+        "toolCallId": str(event.tool_call_id),
     }
+    if event.summary:
+        payload["summary"] = event.summary
     action = event.action
     if action is None:
         return payload
@@ -45,18 +51,37 @@ def _action_payload(event: ActionEvent) -> dict[str, Any]:
 
 def _observation_payload(event: ObservationEvent) -> dict[str, Any]:
     obs = event.observation
-    text = _truncate("".join(content_to_str(obs.to_llm_content)))
     payload: dict[str, Any] = {
         "tool": event.tool_name,
-        "toolCallId": event.tool_call_id,
-        "preview": text,
+        "toolCallId": str(event.tool_call_id),
     }
-    if event.tool_name == "terminal":
-        payload["exitCode"] = getattr(obs, "exit_code", None)
-        payload["command"] = getattr(obs, "command", None)
-    elif event.tool_name == "file_editor":
-        payload["path"] = getattr(obs, "path", None)
-        payload["op"] = getattr(obs, "command", None)
+
+    if isinstance(obs, FileEditorObservation):
+        payload["path"] = obs.path
+        payload["op"] = obs.command
+        payload["prevExist"] = obs.prev_exist
+        return payload
+
+    if isinstance(obs, TerminalObservation):
+        stdout = ""
+        try:
+            stdout = obs.content_to_str if hasattr(obs, "content_to_str") else ""
+        except Exception:
+            stdout = ""
+        if not stdout:
+            try:
+                stdout = "\n".join(
+                    getattr(p, "text", str(p)) for p in (obs.to_llm_content or [])
+                )
+            except Exception:
+                stdout = ""
+        payload["command"] = obs.command
+        payload["exitCode"] = obs.exit_code
+        payload["stdout"] = _truncate(stdout)
+        payload["timeout"] = obs.timeout
+        return payload
+
+    payload["preview"] = _truncate("".join(content_to_str(obs.to_llm_content)))
     return payload
 
 
