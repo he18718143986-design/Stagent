@@ -18,6 +18,8 @@ const SPEC_PATTERNS = [/spec_ambiguity/i, /待确认/i, /ambiguous/i]
 /** Default Gate 回流次数（T4 batch run#3 在 2 次内未收敛） */
 export const DEFAULT_GATE_RETRIES = 3
 
+/** @typedef {'implementation' | 'spec_ambiguity' | 'gate_infra' | 'empty_impl'} GateFailureCategory */
+
 /**
  * @param {{ errors?: string[], checks?: { id: string, pass: boolean, message: string }[] }} report
  * @returns {'implementation' | 'spec_ambiguity' | 'gate_infra'}
@@ -155,4 +157,67 @@ export function writeFixPromptFile(workspace, content) {
   fs.mkdirSync(path.dirname(dest), { recursive: true })
   fs.writeFileSync(dest, content.endsWith('\n') ? content : `${content}\n`, 'utf8')
   return dest
+}
+
+/**
+ * 空 impl 专用 fix_prompt（CodeAct 结束但模块未生成 → 跳过 Gate 早退回流）。
+ * @param {{ missing: string[], moduleDirs?: string[], implPyCount?: number }} implCheck
+ * @param {number} attempt
+ */
+export function buildEmptyImplFixPrompt(implCheck, attempt = 1) {
+  const dirs = implCheck.moduleDirs ?? []
+  const lines = [
+    `# 实现缺失修复（第 ${attempt} 轮 · 空 impl 早退回流）`,
+    '',
+    '上一轮 CodeAct 已结束，但工作区**缺少可运行实现**，未进入 `gate:strict`。',
+    '请**立即创建文件并写入可 import 的 Python 模块**，不要只输出计划或分析。',
+    '',
+    '## 缺失项',
+    '',
+  ]
+
+  for (const item of implCheck.missing ?? []) {
+    lines.push(`- ${item}`)
+  }
+
+  if ((implCheck.implPyCount ?? 0) === 0) {
+    lines.push('- （工作区除 tests/ 外无任何非空 .py 实现文件）')
+  }
+
+  lines.push(
+    '',
+    '## 第一步：先建 skeleton（10 分钟内应落盘）',
+    '',
+    '1. 创建 `main.py`：`if __name__ == "__main__":` 可调通，无参 `python main.py` exit 0',
+    '2. 创建 `config.yaml`：默认数据路径指向**已落盘** fixture CSV',
+    '3. 创建 `requirements.txt`：PyYAML、pandas、numpy、pytest',
+    '4. 创建 `DELIVERY.md` 草稿（非空，含运行命令）',
+    '',
+  )
+
+  if (dirs.length > 0) {
+    lines.push('5. 各模块目录至少一个非空 `.py`（可先 stub，再填逻辑）：', '')
+    for (const dir of dirs) {
+      lines.push(`   - \`${dir}/\``)
+    }
+    lines.push('')
+  }
+
+  lines.push(
+    '## 第二步：再跑通最小路径',
+    '',
+    '```bash',
+    'pytest -q',
+    'python main.py',
+    '```',
+    '',
+    '## 禁止',
+    '',
+    '- 禁止只写 Markdown 计划而不创建 `.py`',
+    '- 禁止修改 `tests/test_e2e_signal.py` 或 `scripts/acceptance.sh` 断言语义',
+    '- 禁止 openctp / CTP；禁止全局 mock 导致 signals 恒空',
+    '',
+  )
+
+  return lines.join('\n')
 }

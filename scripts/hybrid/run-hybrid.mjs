@@ -18,10 +18,12 @@ import { runStrictGate } from '../headless/lib/mvp-acceptance.mjs'
 import { loadEnvLocal } from '../lib/load-env-local.mjs'
 import { applyDeepSeekDefaults } from './lib/deepseek-env.mjs'
 import {
+  buildEmptyImplFixPrompt,
   buildFixPrompt,
   classifyGateFailure,
   writeFixPromptFile,
 } from './lib/gate-failure.mjs'
+import { checkImplNonEmpty, resolveEmptyImplRetries } from './lib/impl-check.mjs'
 import { spawnCodeAct } from './lib/spawn-codeact-core.mjs'
 
 function usage() {
@@ -124,11 +126,20 @@ export function runHybridPipeline(ctx) {
     throw new Error(`缺少 bundle：${bundleDir}（去掉 --skip-export 或先 spec:export）`)
   }
 
-  let fixPromptPath = null
-  const gateIterations = skipCodeact || mock ? 1 : 1 + Math.max(0, maxRetries)
+  const bundle = loadBundle(bundleDir)
 
-  for (let i = 0; i < gateIterations; i++) {
-    const attemptNo = i + 1
+  let fixPromptPath = null
+  let gateRetriesLeft = skipCodeact || mock ? 0 : Math.max(0, maxRetries)
+  let emptyImplRetriesLeft =
+    skipCodeact || mock ? 0 : resolveEmptyImplRetries(tier, bundle)
+  let attemptNo = 0
+  let emptyImplRound = 0
+  const emptyImplBudget = resolveEmptyImplRetries(tier, bundle)
+  const maxTotalAttempts =
+    skipCodeact || mock ? 1 : 1 + maxRetries + emptyImplBudget + 2
+
+  while (attemptNo < maxTotalAttempts) {
+    attemptNo++
     /** @type {object} */
     const attempt = { attempt: attemptNo, codeact: null, gate: null, category: null }
 
@@ -157,6 +168,21 @@ export function runHybridPipeline(ctx) {
           finalCategory: 'gate_infra',
         })
       }
+
+      const implCheck = checkImplNonEmpty(ws, { bundle, tier })
+      attempt.implCheck = implCheck
+
+      if (!implCheck.pass && emptyImplRetriesLeft > 0) {
+        emptyImplRound++
+        emptyImplRetriesLeft--
+        attempt.category = 'empty_impl'
+        attempt.gate = { skipped: true, reason: 'empty_impl_pre_check' }
+        const fixText = buildEmptyImplFixPrompt(implCheck, emptyImplRound)
+        fixPromptPath = writeFixPromptFile(ws, fixText)
+        attempt.fixPromptPath = fixPromptPath
+        attempts.push(attempt)
+        continue
+      }
     } else if (mock) {
       attempt.codeact = { skipped: true, reason: 'mock' }
     } else {
@@ -172,11 +198,16 @@ export function runHybridPipeline(ctx) {
       return buildHybridReport({ pass: true, tier, workspace: ws, runId, attempts })
     }
 
-    if (attempt.category !== 'implementation' || i >= maxRetries || skipCodeact || mock) {
+    if (skipCodeact || mock) {
       break
     }
 
-    const fixText = buildFixPrompt(report, i + 1)
+    if (attempt.category !== 'implementation' || gateRetriesLeft <= 0) {
+      break
+    }
+
+    gateRetriesLeft--
+    const fixText = buildFixPrompt(report, maxRetries - gateRetriesLeft)
     fixPromptPath = writeFixPromptFile(ws, fixText)
     attempt.fixPromptPath = fixPromptPath
   }
