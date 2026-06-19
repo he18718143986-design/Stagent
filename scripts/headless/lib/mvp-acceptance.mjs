@@ -139,7 +139,7 @@ function readWorkspaceText(ws, subdirs) {
 }
 
 function findMainEntry(ws) {
-  const candidates = ['main.py', 'cli.py', path.join('src', 'main.py')]
+  const candidates = ['app.py', 'main.py', 'cli.py', path.join('src', 'main.py')]
   for (const rel of candidates) {
     const p = path.join(ws, rel)
     if (fs.existsSync(p) && fs.statSync(p).size > 0) return rel
@@ -304,6 +304,29 @@ export function evaluateSmokeOutputFile(ws, smoke, readFileSync = fs.readFileSyn
   return { ok: true }
 }
 
+/** 运行冒烟命令（优先 .venv）。 */
+function runSmokeCommand(ws, smoke) {
+  const venvPy = path.join(ws, '.venv', 'bin', 'python')
+  const defaultPy = fs.existsSync(venvPy) ? venvPy : 'python3'
+  const cmd = smoke.command
+  if (!Array.isArray(cmd) || cmd.length === 0) {
+    return { exitCode: 1, error: 'empty smoke command', cmd: '' }
+  }
+  const exe = cmd[0] === 'python' ? defaultPy : cmd[0]
+  const args = cmd.slice(1)
+  const r = spawnSync(exe, args, {
+    cwd: ws,
+    encoding: 'utf8',
+    env: { ...process.env, ...(smoke.env ?? {}), PYTHONPATH: ws },
+  })
+  return {
+    exitCode: r.status ?? 1,
+    cmd: `${exe} ${args.join(' ')}`,
+    stdout: r.stdout ?? '',
+    stderr: r.stderr ?? '',
+  }
+}
+
 /** 运行 main 入口（优先 .venv），供真实集成冒烟使用。 */
 export function runMainEntryInWorkspace(ws) {
   const entry = findMainEntry(ws)
@@ -406,6 +429,14 @@ export function assertSmoke(ws, smoke) {
     if (r.exitCode !== 0) {
       errors.push(`smoke 主入口运行失败（exit ${r.exitCode}）：${(r.stderr || r.error || '').slice(0, 400)}`)
       return errors // 入口没跑起来，产出断言无意义
+    }
+  } else if (smoke.run === 'command' && smoke.command) {
+    const r = runSmokeCommand(ws, smoke)
+    if (r.exitCode !== 0) {
+      errors.push(
+        `smoke 命令失败（exit ${r.exitCode}）：${(r.stderr || r.error || '').slice(0, 400)}`,
+      )
+      return errors
     }
   }
   const out = evaluateSmokeOutputFile(ws, smoke)
@@ -619,15 +650,25 @@ export function assertStrictMvpPass(ws, opts = {}) {
   const errors = []
   const warnings = []
   const isNode = opts.language === 'node'
-  const moduleDirs = Array.isArray(opts.moduleDirs) && opts.moduleDirs.length > 0
-    ? opts.moduleDirs
-    : MVP_MODULE_DIRS
+  const moduleDirs =
+    opts.moduleDirs !== undefined && opts.moduleDirs !== null
+      ? opts.moduleDirs
+      : MVP_MODULE_DIRS
   const traceabilityRules = Array.isArray(opts.traceabilityRules)
     ? opts.traceabilityRules
     : TRACEABILITY_RULES
 
   if (opts.outcome && opts.outcome !== 'workflowCompleted') {
     errors.push(`strict requires workflowCompleted (got: ${opts.outcome})`)
+  }
+
+  if (Array.isArray(opts.requiredFiles)) {
+    for (const rel of opts.requiredFiles) {
+      const p = path.join(ws, rel)
+      if (!fs.existsSync(p) || fs.statSync(p).size === 0) {
+        errors.push(`missing or empty required file: ${rel}`)
+      }
+    }
   }
 
   if (isNode) {
@@ -658,7 +699,7 @@ export function assertStrictMvpPass(ws, opts = {}) {
       errors.push('missing main entry (src/main.ts, main.ts, cli.ts, or src/index.ts)')
     }
   } else if (!findMainEntry(ws)) {
-    errors.push('missing main entry (main.py, cli.py, or src/main.py)')
+    errors.push('missing main entry (app.py, main.py, cli.py, or src/main.py)')
   }
 
   const tests = isNode ? findTestFilesTs(ws) : findTestFiles(ws)

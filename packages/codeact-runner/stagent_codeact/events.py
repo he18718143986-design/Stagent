@@ -157,6 +157,7 @@ def scan_forbidden_patterns(workspace: Path, patterns: list[str]) -> list[str]:
         if path.suffix.lower() not in text_suffixes and path.name not in {
             "requirements.txt",
             "main.py",
+            "app.py",
         }:
             continue
         try:

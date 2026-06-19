@@ -7,62 +7,87 @@
   "workspace": ".",
   "specRefs": [],
   "mvp": {
-    "moduleDirs": [
-      "models",
-      "store",
-      "progress",
-      "finance",
-      "alerts",
-      "report"
-    ],
+    "moduleDirs": [],
     "traceability": [
       {
         "id": "progress-calc",
         "dirs": [
-          "progress",
+          ".",
           "tests"
         ],
-        "requireDirPy": "progress",
-        "pattern": {},
-        "hint": "progress/ 含 project_progress（里程碑权重加权进度）"
+        "hint": "含 weight 加权进度计算（project_progress 或等价）",
+        "pattern": {
+          "source": "project_progress|weighted|weight",
+          "flags": "i"
+        }
       },
       {
         "id": "finance-match",
         "dirs": [
-          "finance",
+          ".",
           "tests"
         ],
-        "requireDirPy": "finance",
-        "pattern": {},
-        "hint": "finance/ 含 match_records_to_budget（财务↔预算匹配）"
+        "hint": "含 match_records_to_budget / exec_rate（财务↔预算匹配）",
+        "pattern": {
+          "source": "match_records_to_budget|exec_rate",
+          "flags": "i"
+        }
       },
       {
         "id": "alerts",
         "dirs": [
-          "alerts",
+          ".",
           "tests"
         ],
-        "requireDirPy": "alerts",
-        "pattern": {},
-        "hint": "alerts/ 含 progress_alerts / budget_alerts（进度+预算预警）"
+        "hint": "含 progress_alerts / budget_alerts（进度+预算预警）",
+        "pattern": {
+          "source": "progress_alerts|budget_alerts",
+          "flags": "i"
+        }
       },
       {
         "id": "monthly-report",
         "dirs": [
-          "report",
+          ".",
           "tests"
         ],
-        "requireDirPy": "report",
-        "pattern": {},
-        "hint": "report/ 含 monthly_report（月度报表聚合）"
+        "hint": "含 monthly_report（月度报表聚合）",
+        "pattern": {
+          "source": "monthly_report",
+          "flags": "i"
+        }
+      },
+      {
+        "id": "flask-stack",
+        "dirs": [
+          "."
+        ],
+        "hint": "app.py 含 Flask REST 路由",
+        "pattern": {
+          "source": "Flask|@app\\.(route|get|post|put|delete)",
+          "flags": "i"
+        }
       }
     ],
     "smoke": {
-      "run": "main",
-      "outputFile": "output.json",
+      "run": "command",
+      "command": [
+        "python",
+        "app.py",
+        "--smoke"
+      ],
+      "outputFile": "output/smoke_report.json",
       "jsonNotAllZero": true
     },
-    "architectureScan": true
+    "architectureScan": true,
+    "requiredFiles": [
+      "app.py",
+      "models.py",
+      "static/js/app.js",
+      "templates/index.html",
+      "requirements.txt",
+      "config.yaml"
+    ]
   },
   "codeact": {
     "maxSteps": 60,

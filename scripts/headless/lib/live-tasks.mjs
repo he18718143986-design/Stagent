@@ -53,40 +53,40 @@ const T6_USER_INPUT = `用 Python 开发一个「任务清单（Todo）批处理
 6. 交付：config.yaml、models/、store/、statemachine/、pipeline/、main.py、tests/（pytest 覆盖每个切片的契约与边界）、DELIVERY.md。
 7. 依赖：仅 PyYAML 用于读取 config.yaml；其余一律使用 Python 标准库（csv、json、dataclasses、enum）。不接任何外部服务；CSV 样例可自带 fixture。`
 
-// T7 = 工程进度与财务管控系统（对比 OpenHands/AI Studio 的同一清晰业务任务）。
-// 确定性业务 CRUD：进度管控 + 财务匹配 + 进度预警 + 预算预警 + 月度报表。
-// 与 T6 同属"可规约"靶子，但更贴近真实小软件；用于三方横向对比（同 DeepSeek 模型 vs OpenHands）。
-const T7_USER_INPUT = `用 Python 开发一个「工程进度与财务管控系统」MVP（命令行 / 后端，电脑本地使用，不做 GUI）。这是一个**确定性业务系统**：所有计算都有精确、可逐例断言的契约，不涉及任何统计/预测类模糊语义。
+// T7 = 工程进度与财务管控系统（与 OpenHands 案例二同形态：Flask + SQLite + 简单 Web UI）。
+// 用于 Stagent hybrid vs OpenHands 同 TaskBundle 公平对比（见 docs/comercial/T7-对齐对比-runbook.md）。
+const T7_USER_INPUT = `需要开发一个小软件，在电脑上使用，包含工程进度管控、财务数据匹配、进度预警、财务预算预警、月度报表。
 
-按 software 多切片组织，先做架构决策，再实现并验证以下垂直切片，最后用 main.py 串联：
+请用 **Python + Flask + SQLite + 简单 Web 前端** 实现（与 OpenHands 案例二同赛道：本地浏览器访问，非纯 CLI）。这是**确定性业务系统**：所有计算可逐例断言，禁止用随机数伪造指标。
 
-1. models/（数据模型 + 校验，标准库 dataclasses）
-   - \`Project\`(id:int, name:str, budget:float, start_date:str, end_date:str, status:str)
-   - \`Milestone\`(id:int, project_id:int, name:str, weight:float, planned_end:str, status:str)  # status ∈ {"pending","in_progress","done"}
-   - \`FinanceRecord\`(id:int, project_id:int|None, category:str, amount:float, record_type:str, record_date:str)  # record_type ∈ {"income","expense"}
-   - \`Budget\`(id:int, project_id:int, category:str, planned_amount:float, fiscal_month:str)  # fiscal_month 形如 "2026-06"
-   - 每个模型提供 validate(data:dict) -> list[str]，返回错误信息列表（空表示合法）。
+## 架构（必须）
 
-2. store/（CRUD 仓储 + JSON 持久化，标准库）
-   - 对 Project/Milestone/FinanceRecord/Budget 提供 add/get/update/delete/list 方法，内存自增 id。
-   - save_json(path)/load_json(path) 覆盖式持久化，恢复后 next_id 取最大 id+1。
+- \`app.py\` — Flask 入口：REST API + 提供 \`static/\` / \`templates/\`；支持 \`python app.py --smoke\` 初始化 DB、跑通主路径、写出 \`output/smoke_report.json\` 后 **exit 0**（不得阻塞挂起）。
+- \`models.py\` — SQLite 模型 + 业务逻辑（可拆分辅助模块，但核心契约须在 models.py 或同文件可见）。
+- \`static/js/app.js\` — 原生 JS，\`fetch\` 调用 Flask REST（真 CRUD，非假按钮）。
+- \`templates/index.html\` — 单页壳（项目/里程碑/财务/预警/月报入口）。
+- \`data.db\` — SQLite 持久化（路径可在 config.yaml 配置，默认 \`data.db\`）。
+- \`config.yaml\` — \`db_path\`、\`fiscal_month\`（如 "2026-06"）、\`today\`（预警基准日，可配置）。
+- \`tests/test_*.py\` — pytest + Flask test client，覆盖 API 与核心计算。
+- \`requirements.txt\`、\`DELIVERY.md\`
 
-3. progress/（进度管控）
-   - \`project_progress(store, project_id) -> dict\`：按里程碑 weight 加权计算完成百分比 = sum(done.weight)/sum(all.weight)*100；返回 {"percent":x, "total_weight":w}。total_weight 为 0 时 percent=0。
+## 业务能力（须在 models.py / app.py 可追踪）
 
-4. finance/（财务数据匹配）
-   - \`match_records_to_budget(store, project_id, fiscal_month) -> dict\`：把该项目该月的 expense 财务记录按 category 汇总，与对应 Budget.planned_amount 配对；返回 {category: {"planned":p, "actual":a, "exec_rate": a/p*100}}（p 为 0 时 exec_rate=0）。
+1. **工程进度管控**：里程碑 **weight 加权** 自动算进度（禁止仅手填 percent）；\`project_progress(project_id)\` 返回 percent。
+2. **财务数据匹配**：\`match_records_to_budget(project_id, fiscal_month)\` — expense 按 category 汇总并与 Budget 配对，含 exec_rate。
+3. **进度预警**：\`progress_alerts(today)\` — 时间应完成比例 vs 实际进度，滞后>20% danger，>10% warning。
+4. **财务预算预警**：\`budget_alerts(fiscal_month)\` — exec_rate≥100% danger，≥80% warning。
+5. **月度报表**：\`monthly_report(fiscal_month)\` — 收支合计、项目费用、预算执行、预警计数等非平凡聚合。
 
-5. alerts/（进度预警 + 财务预算预警）
-   - \`progress_alerts(store, today:str) -> list[dict]\`：按时间应完成比例（elapsed/total_days）对比实际 percent，滞后>20% 记 level="danger"，>10% 记 level="warning"。
-   - \`budget_alerts(store, fiscal_month) -> list[dict]\`：exec_rate>=100 记 level="danger"，>=80 记 level="warning"。
+## 冒烟契约
 
-6. report/（月度报表）
-   - \`monthly_report(store, fiscal_month) -> dict\`：返回 {"fiscal_month":fm, "income_total":x, "expense_total":y, "balance":x-y, "project_costs":[{project_id,name,cost}], "budget_execution":[...] }。
+\`python app.py --smoke\` 须：创建/迁移 DB、写入种子数据、调用上述能力、生成 \`output/smoke_report.json\`（含 income_total/expense_total/alert_counts 等，**不得全 0**）。
 
-7. main.py / cli：读取 config.yaml（含 data_json 路径、当前 fiscal_month），加载/初始化 store，输出当月 monthly_report 到 output_json，并打印 progress_alerts + budget_alerts 数量。
-8. 交付：config.yaml、models/、store/、progress/、finance/、alerts/、report/、main.py、tests/（pytest 覆盖每个切片的契约与边界，含一份自带 fixture 数据）、DELIVERY.md。
-9. 依赖：仅 PyYAML 读取 config.yaml；其余用 Python 标准库（csv、json、dataclasses、datetime、enum）。不接任何外部服务/数据库驱动；样例数据自带 fixture（可用 JSON 种子）。`
+## 禁止
+
+- \`np.random\` / 假数据管道 / 占位 alert 按钮
+- 修改 \`tests/\` 与 \`scripts/acceptance.sh\` 断言语义
+- 自判交付；唯一裁判是 Stagent \`gate:strict\``
 
 export const LIVE_TASK_TIERS = {
   1: {
@@ -223,45 +223,60 @@ export const LIVE_TASK_TIERS = {
   },
   7: {
     id: 'live-t7-project-finance-mgmt',
-    label: 'T7 三方对比：工程进度与财务管控系统（CRUD+匹配+预警+月报）',
+    label: 'T7 对齐对比：工程财务 Flask+SQLite+Web（同 OpenHands 案例二形态）',
     taskType: 'software',
     userInput: T7_USER_INPUT,
     polish: true,
     timeoutMs: 2_400_000,
     generationAttempts: 2,
     mvp: {
-      moduleDirs: ['models', 'store', 'progress', 'finance', 'alerts', 'report'],
-      // 真实集成冒烟：跑 main 入口，断言月报产出非「全 0/空」（捕获空心绿）。
-      smoke: { run: 'main', outputFile: 'output.json', jsonNotAllZero: true },
+      // Flask 单体：不按多切片目录验收，改 requiredFiles + traceability
+      moduleDirs: [],
+      requiredFiles: [
+        'app.py',
+        'models.py',
+        'static/js/app.js',
+        'templates/index.html',
+        'requirements.txt',
+        'config.yaml',
+      ],
+      smoke: {
+        run: 'command',
+        command: ['python', 'app.py', '--smoke'],
+        outputFile: 'output/smoke_report.json',
+        jsonNotAllZero: true,
+      },
       architectureScan: true,
       traceability: [
         {
           id: 'progress-calc',
-          dirs: ['progress', 'tests'],
-          requireDirPy: 'progress',
-          pattern: /project_progress|weight/,
-          hint: 'progress/ 含 project_progress（里程碑权重加权进度）',
+          dirs: ['.', 'tests'],
+          pattern: /project_progress|weighted|weight/i,
+          hint: '含 weight 加权进度计算（project_progress 或等价）',
         },
         {
           id: 'finance-match',
-          dirs: ['finance', 'tests'],
-          requireDirPy: 'finance',
-          pattern: /match_records_to_budget|exec_rate/,
-          hint: 'finance/ 含 match_records_to_budget（财务↔预算匹配）',
+          dirs: ['.', 'tests'],
+          pattern: /match_records_to_budget|exec_rate/i,
+          hint: '含 match_records_to_budget / exec_rate（财务↔预算匹配）',
         },
         {
           id: 'alerts',
-          dirs: ['alerts', 'tests'],
-          requireDirPy: 'alerts',
-          pattern: /progress_alerts|budget_alerts/,
-          hint: 'alerts/ 含 progress_alerts / budget_alerts（进度+预算预警）',
+          dirs: ['.', 'tests'],
+          pattern: /progress_alerts|budget_alerts/i,
+          hint: '含 progress_alerts / budget_alerts（进度+预算预警）',
         },
         {
           id: 'monthly-report',
-          dirs: ['report', 'tests'],
-          requireDirPy: 'report',
-          pattern: /monthly_report/,
-          hint: 'report/ 含 monthly_report（月度报表聚合）',
+          dirs: ['.', 'tests'],
+          pattern: /monthly_report/i,
+          hint: '含 monthly_report（月度报表聚合）',
+        },
+        {
+          id: 'flask-stack',
+          dirs: ['.'],
+          pattern: /Flask|@app\.(route|get|post|put|delete)/i,
+          hint: 'app.py 含 Flask REST 路由',
         },
       ],
     },

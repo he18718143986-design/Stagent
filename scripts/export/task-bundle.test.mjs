@@ -29,11 +29,14 @@ test('buildTaskJson: T4 含 traceability 与 codeact', () => {
   assert.equal(task.codeact.forbiddenPatterns.includes('openctp'), true)
 })
 
-test('buildTaskJson: T7 继承 live-tasks mvp', () => {
+test('buildTaskJson: T7 Flask 对齐 mvp（空 moduleDirs + requiredFiles）', () => {
   const { spec } = resolveBundleProfile(7)
   const task = buildTaskJson({ tier: 7, spec })
-  assert.deepEqual(task.mvp.moduleDirs, spec.mvp.moduleDirs)
-  assert.ok(task.mvp.traceability?.length > 0)
+  assert.deepEqual(task.mvp.moduleDirs, [])
+  assert.ok(Array.isArray(task.mvp.requiredFiles))
+  assert.equal(task.mvp.requiredFiles.includes('app.py'), true)
+  assert.equal(task.mvp.smoke?.run, 'command')
+  assert.ok(task.mvp.traceability?.length >= 4)
 })
 
 test('exportTaskBundle: T4 写出 bundle 结构与 seed', () => {

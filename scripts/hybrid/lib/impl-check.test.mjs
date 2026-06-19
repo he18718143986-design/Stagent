@@ -31,13 +31,14 @@ test('resolveModuleDirs: T4 bundle / tier fallback', () => {
   const dirs = resolveModuleDirs({ mvp: { moduleDirs: ['a', 'b'] } }, 4)
   assert.deepEqual(dirs, ['a', 'b'])
   assert.deepEqual(resolveModuleDirs(null, 4), ['indicators', 'signals', 'risk', 'broker'])
-  assert.ok(resolveModuleDirs(null, 7).includes('finance'))
+  assert.deepEqual(resolveModuleDirs(null, 7), [])
 })
 
 test('resolveEmptyImplRetries: T4=2, T7=1', () => {
   assert.equal(resolveEmptyImplRetries(4, { mvp: { moduleDirs: ['x'] } }), 2)
   assert.equal(resolveEmptyImplRetries(7, { mvp: { moduleDirs: ['x'] } }), 1)
   assert.equal(resolveEmptyImplRetries(7, null), 1)
+  assert.equal(resolveEmptyImplRetries(7, { mvp: { moduleDirs: [] } }), 1)
 })
 
 test('checkImplNonEmpty: 空工作区 → missing main + modules', () => {

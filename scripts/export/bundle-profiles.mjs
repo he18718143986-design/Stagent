@@ -117,12 +117,13 @@ export function buildTaskJson({ tier, spec, workspaceRel = '.' }) {
     mvpBlock.moduleDirs = MVP_MODULE_DIRS
     mvpBlock.traceability = serializeTraceabilityRules(TRACEABILITY_RULES)
     mvpBlock.smoke = { run: 'main', minSignals: 1 }
-  } else if (mvp.moduleDirs) {
-    mvpBlock.moduleDirs = mvp.moduleDirs
+  } else if (Array.isArray(mvp.moduleDirs) || mvp.traceability || mvp.requiredFiles) {
+    if (Array.isArray(mvp.moduleDirs)) mvpBlock.moduleDirs = mvp.moduleDirs
     if (mvp.traceability) mvpBlock.traceability = serializeTraceabilityRules(mvp.traceability)
     if (mvp.fixtures) mvpBlock.fixtures = mvp.fixtures
     if (mvp.smoke) mvpBlock.smoke = mvp.smoke
     if (mvp.architectureScan) mvpBlock.architectureScan = mvp.architectureScan
+    if (mvp.requiredFiles) mvpBlock.requiredFiles = mvp.requiredFiles
   }
 
   return {
@@ -165,7 +166,7 @@ export function buildOpenhandsPrompt(tier, specTitle) {
     '- **禁止** openctp / CTP / 任何实盘券商 SDK',
     '- **禁止**用 `np.random` 或全局 mock 绕过指标/数据管道',
     '- fixture CSV **必须落盘**到 `fixtures/` 或 `data/`，并在 `config.yaml` 默认路径引用',
-    '- 交付须含：`config.yaml`、模块目录、`main.py`、`tests/`、`DELIVERY.md`、`requirements.txt`',
+    '- 交付须含：`DELIVERY.md`、`requirements.txt`',
     '',
   ]
 
@@ -203,10 +204,13 @@ export function buildOpenhandsPrompt(tier, specTitle) {
     )
   } else if (tier === 7) {
     lines.push(
-      '## T7 模块契约',
+      '## T7 对齐对比契约（Flask + SQLite + Web，同 OpenHands 案例二）',
       '',
-      '- `models/`、`store/`、`progress/`、`finance/`、`alerts/`、`report/` + `main.py`',
-      '- 工程进度加权、财务匹配、预警、月度报表；`output.json` 不得全 0',
+      '- `app.py` — Flask REST + `python app.py --smoke` 写 `output/smoke_report.json` 后 exit 0',
+      '- `models.py` — SQLite 模型 + 进度/匹配/预警/月报业务逻辑',
+      '- `static/js/app.js` + `templates/index.html` — 浏览器本地使用',
+      '- `data.db`（或 config 指定路径）、`config.yaml`、`tests/`',
+      '- 进度须 **weight 加权自动计算**；禁止 `np.random` 伪造指标',
       '',
     )
   }

@@ -44,6 +44,7 @@
 | Golden 夹具 | `examples/golden/` | ✅ |
 | CI | `.github/workflows/verify-hybrid.yml` | ✅（install + L0/L1/L2 mock） |
 | **T7 live PoC** | `npm run hybrid:t7` + DeepSeek | ✅ **2026-06-18 第 1 轮 Gate pass**（见 §10.A） |
+| **T7 Flask 对齐** | `compare:t7:bundle` + Flask+SQLite+Web 规格 | ✅ PR #37 |
 | **T4 live batch** | `npm run deliver:t4:batch` N=5 | ✅ **3/5 strict-pass（60%）** post run#3 fix（§10.D） |
 
 ---

@@ -53,11 +53,24 @@ export function dirHasNonEmptyPy(dir) {
  */
 export function resolveModuleDirs(bundle, tier) {
   const fromBundle = bundle?.mvp?.moduleDirs
-  if (Array.isArray(fromBundle) && fromBundle.length > 0) return fromBundle
+  if (Array.isArray(fromBundle)) return fromBundle
   if (tier === 4 || tier === 5) return [...MVP_MODULE_DIRS]
   const spec = LIVE_TASK_TIERS[tier]
-  if (spec?.mvp?.moduleDirs?.length) return spec.mvp.moduleDirs
+  if (Array.isArray(spec?.mvp?.moduleDirs)) return spec.mvp.moduleDirs
   return []
+}
+
+/**
+ * @param {object|null|undefined} bundle
+ * @param {number} tier
+ * @returns {string[]}
+ */
+function resolveEntryPyFiles(bundle, tier) {
+  const required = bundle?.mvp?.requiredFiles ?? LIVE_TASK_TIERS[tier]?.mvp?.requiredFiles
+  if (Array.isArray(required) && required.includes('app.py')) {
+    return ['app.py']
+  }
+  return ['main.py']
 }
 
 /**
@@ -65,9 +78,10 @@ export function resolveModuleDirs(bundle, tier) {
  * @param {object|null|undefined} bundle
  */
 export function resolveEmptyImplRetries(tier, bundle) {
+  if (tier === 4 || tier === 5) return DEFAULT_EMPTY_IMPL_RETRIES
+  if (tier === 6 || tier === 7) return 1
   const dirs = resolveModuleDirs(bundle, tier)
   if (dirs.length === 0) return 0
-  if (tier === 4 || tier === 5) return DEFAULT_EMPTY_IMPL_RETRIES
   return 1
 }
 
@@ -111,17 +125,30 @@ export function checkImplNonEmpty(workspace, ctx = {}) {
   const tier = ctx.tier ?? 4
   const bundle = ctx.bundle ?? null
   const moduleDirs = resolveModuleDirs(bundle, tier)
+  const entryFiles = resolveEntryPyFiles(bundle, tier)
   /** @type {string[]} */
   const missing = []
 
-  if (!fileNonEmpty(path.join(ws, 'main.py'))) {
-    missing.push('main.py（无参可运行的入口，非空）')
+  const hasEntry = entryFiles.some((rel) => fileNonEmpty(path.join(ws, rel)))
+  if (!hasEntry) {
+    missing.push(`${entryFiles.join(' 或 ')}（非空入口）`)
   }
 
-  for (const dir of moduleDirs) {
-    const abs = path.join(ws, dir)
-    if (!dirHasNonEmptyPy(abs)) {
-      missing.push(`${dir}/（至少一个非空 .py 模块）`)
+  const requiredFiles =
+    bundle?.mvp?.requiredFiles ?? LIVE_TASK_TIERS[tier]?.mvp?.requiredFiles
+  if (Array.isArray(requiredFiles) && requiredFiles.length > 0) {
+    for (const rel of requiredFiles) {
+      if (!rel.endsWith('.py') || entryFiles.includes(rel)) continue
+      if (!fileNonEmpty(path.join(ws, rel))) {
+        missing.push(`${rel}（非空）`)
+      }
+    }
+  } else {
+    for (const dir of moduleDirs) {
+      const abs = path.join(ws, dir)
+      if (!dirHasNonEmptyPy(abs)) {
+        missing.push(`${dir}/（至少一个非空 .py 模块）`)
+      }
     }
   }
 
