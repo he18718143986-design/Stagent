@@ -2,7 +2,7 @@
  * stagent init 安装的守卫钩子（规格 §6）：
  *
  * - .claude/settings.json 的 PreToolUse hook（见 hookCommand）。合并进已有文件，不动其他键和别的 hook；
- *   已经装过（任一 hook 命令包含 `stagent hook pre-tool-use`）就不再重复添加；旧版写的裸 `npx stagent …` 会被升级。
+ *   已经装过（任一 hook 命令包含 `stagent hook pre-tool-use`）就不再重复添加；旧版 npx/dlx 变体以及过期绝对路径都会升级为当前 fail-closed 命令。
  * - .git/hooks/pre-merge-commit 提醒脚本：只提醒"请通过 Stagent 合并"，永远 exit 0、不阻止合并。
  *   用 `# stagent` 标记识别自己的脚本；已有别人的同名钩子则跳过并警告；config.guard.preMergeReminder=false 时不装并删除自己的。
  */
@@ -70,12 +70,13 @@ export async function installClaudeHook(projectRoot: string): Promise<ClaudeHook
 
   const hooks = isObject(settings.hooks) ? settings.hooks : {};
   const pre = Array.isArray(hooks.PreToolUse) ? (hooks.PreToolUse as unknown[]) : [];
-  // 升级旧版写的裸 npx 命令（它在没装依赖的项目里会让守卫静默失效）。
+  // 升级任何仍不是当前 fail-closed 绝对路径的 Stagent hook（裸 npx、带 flag 的 npx、
+  // yarn/pnpm/bunx dlx、以及另一台机器留下的旧绝对路径）。只认一字不差的 LEGACY 会漏掉变体。
   let upgraded = false;
   for (const entry of pre) {
     if (!isObject(entry) || !Array.isArray(entry.hooks)) continue;
     for (const h of entry.hooks) {
-      if (isObject(h) && h.command === LEGACY_HOOK_COMMAND) {
+      if (isObject(h) && needsHookCommandUpgrade(h.command)) {
         h.command = HOOK_COMMAND;
         upgraded = true;
       }
@@ -104,6 +105,25 @@ function hasStagentHook(entry: unknown): boolean {
 /** 是不是 Stagent 的守卫命令（旧版 `npx stagent hook …`、新版 `node <stagent cli> hook …` 都算）。 */
 export function isStagentHookCommand(command: unknown): command is string {
   return typeof command === 'string' && command.includes('hook pre-tool-use') && /stagent/i.test(command);
+}
+
+/**
+ * 这条 hook 命令是否应在 init 时升级为当前 `hookCommand()`。
+ * 覆盖：一字不差的 LEGACY、`npx --yes`/`--no-install`/`-y` 等变体、`npm exec`/`yarn dlx`/`pnpm dlx`/`bunx`，
+ * 以及非当前绝对路径的旧安装（换机器 / 清缓存后路径失效）。
+ */
+export function needsHookCommandUpgrade(command: unknown): boolean {
+  if (!isStagentHookCommand(command)) return false;
+  if (command === HOOK_COMMAND) return false;
+  return true;
+}
+
+/** @deprecated 仅兼容测试与文档；请用 needsHookCommandUpgrade / isStagentHookCommand。 */
+export function isLegacyNpxHookCommand(command: unknown): boolean {
+  return (
+    isStagentHookCommand(command) &&
+    /\b(npx|npm\s+exec|yarn\s+dlx|pnpm\s+dlx|bunx)\b/i.test(command)
+  );
 }
 
 export type PreMergeReminderStatus = 'installed' | 'unchanged' | 'skipped' | 'removed' | 'disabled' | 'no-git';

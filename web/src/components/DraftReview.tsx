@@ -31,6 +31,8 @@ export function DraftReview({ change, featureName, disabled, act }: Props) {
     if (next.has(id)) next.delete(id);
     else next.add(id);
     setAck(next);
+    // 同步到服务端：结论卡与直调 API 也走同一道「读过」门
+    void api.acknowledgeDrafts(change.changeId, [...next]).catch(() => undefined);
   };
   const needRed = drafts.filter((d) => !d.waiver && !d.redCheck);
   const bad = drafts.filter((d) => !d.waiver && d.redCheck && d.redCheck.status !== 'failed');
@@ -58,7 +60,8 @@ export function DraftReview({ change, featureName, disabled, act }: Props) {
               disabled={disabled || !allAck}
               onClick={() => {
                 reviewed();
-                void act(() => api.redCheck(change.changeId));
+                const ids = drafts.map((d) => d.exampleId);
+                void act(() => api.redCheck(change.changeId, undefined, ids));
               }}
             >
               确认这些例子，跑先失败检查
@@ -73,7 +76,8 @@ export function DraftReview({ change, featureName, disabled, act }: Props) {
               disabled={disabled || !allAck}
               onClick={() => {
                 reviewed();
-                void act(() => api.lockExamples(change.changeId));
+                const ids = drafts.map((d) => d.exampleId);
+                void act(() => api.lockExamples(change.changeId, ids));
               }}
             >
               确认并锁定 {ok.length} 个例子

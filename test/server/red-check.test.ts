@@ -67,16 +67,16 @@ describe('M3-2 起草例子与先失败检查', () => {
     });
     expect(deny.body.decision).toBe('deny');
     const o = (await p.call<OverviewResponse>('GET', '/api/overview')).body;
-    expect(o.actions[0]).toMatchObject({ id: 'run_red_check' });
+    expect(o.actions[0]).toMatchObject({ id: 'run_red_check', enabled: false });
   });
 
   it('#20 空检查在先失败检查里通过 → 不能锁定，决策卡出现「没测到新行为」；豁免必须填原因，原因进交付报告', async () => {
     const { p, change } = await draftedChange();
     const [real, empty] = change.pendingDrafts;
     // 还没跑先失败检查：不能锁定。
-    expect((await p.call('POST', `/api/changes/${change.changeId}/examples/lock`, {})).status).toBe(422);
+    expect((await p.call('POST', `/api/changes/${change.changeId}/examples/lock`, { acknowledgedExampleIds: change.pendingDraftIds })).status).toBe(422);
 
-    const red = await p.call<{ results: { exampleId: string; status: string; qualified: boolean }[] }>('POST', `/api/changes/${change.changeId}/red-check`);
+    const red = await p.call<{ results: { exampleId: string; status: string; qualified: boolean }[] }>('POST', `/api/changes/${change.changeId}/red-check`, { acknowledgedExampleIds: change.pendingDraftIds });
     expect(red.status).toBe(200);
     expect(red.body.results.find((r) => r.exampleId === real!.exampleId)).toMatchObject({ status: 'failed', qualified: true });
     expect(red.body.results.find((r) => r.exampleId === empty!.exampleId)).toMatchObject({ status: 'passed', qualified: false });
@@ -84,7 +84,7 @@ describe('M3-2 起草例子与先失败检查', () => {
     const after = (await p.call<ChangeView>('GET', `/api/changes/${change.changeId}`)).body;
     expect(after.phase).toBe('red_check');
     expect(after.blockers[0]).toMatch(/没测到新行为/);
-    const lock = await p.call<{ error: string }>('POST', `/api/changes/${change.changeId}/examples/lock`, {});
+    const lock = await p.call<{ error: string }>('POST', `/api/changes/${change.changeId}/examples/lock`, { acknowledgedExampleIds: change.pendingDraftIds });
     expect(lock.status).toBe(422);
     expect(lock.body.error).toMatch(/没有失败/);
     // 先失败检查的 run 不让任何功能变成被破坏，也不产生证据。
@@ -93,7 +93,7 @@ describe('M3-2 起草例子与先失败检查', () => {
 
     expect((await p.call('POST', `/api/changes/${change.changeId}/examples/${empty!.exampleId}/red-waive`, { reason: '短' })).status).toBe(400);
     expect((await p.call('POST', `/api/changes/${change.changeId}/examples/${empty!.exampleId}/red-waive`, { reason: '正常登录本来就没有验证码' })).status).toBe(200);
-    const locked = await p.call<ChangeView>('POST', `/api/changes/${change.changeId}/examples/lock`, {});
+    const locked = await p.call<ChangeView>('POST', `/api/changes/${change.changeId}/examples/lock`, { acknowledgedExampleIds: change.pendingDraftIds });
     expect(locked.status).toBe(200);
     expect(locked.body.phase).toBe('implementing');
 
@@ -111,18 +111,18 @@ describe('M3-2 起草例子与先失败检查', () => {
 
   it('先失败检查之后检查内容又被改过：checkHash 不一致，拒绝锁定（422）', async () => {
     const { p, change } = await draftedChange();
-    await p.call('POST', `/api/changes/${change.changeId}/red-check`);
+    await p.call('POST', `/api/changes/${change.changeId}/red-check`, { acknowledgedExampleIds: change.pendingDraftIds });
     const real = change.pendingDrafts[0]!;
     await writeProjectFile(p.root, real.checkPath!, REAL_CHECK + '// 改了一行\n');
     await p.call('POST', `/api/changes/${change.changeId}/examples/${change.pendingDrafts[1]!.exampleId}/discard`, {});
-    const lock = await p.call<{ error: string }>('POST', `/api/changes/${change.changeId}/examples/lock`, {});
+    const lock = await p.call<{ error: string }>('POST', `/api/changes/${change.changeId}/examples/lock`, { acknowledgedExampleIds: change.pendingDraftIds });
     expect(lock.status).toBe(422);
     expect(lock.body.error).toMatch(/之后被改过/);
   });
 
   it('不合格 → 让 AI 重写 → 自动对新内容再跑先失败检查 → 合格后锁定 → 实现 → 可合并', async () => {
     const { p, change, agent } = await draftedChange();
-    await p.call('POST', `/api/changes/${change.changeId}/red-check`);
+    await p.call('POST', `/api/changes/${change.changeId}/red-check`, { acknowledgedExampleIds: change.pendingDraftIds });
     const empty = change.pendingDrafts[1]!;
     expect((await p.call('POST', `/api/changes/${change.changeId}/examples/${empty.exampleId}/rewrite`)).status).toBe(202);
     await waitAgent(p.service);
@@ -130,7 +130,7 @@ describe('M3-2 起草例子与先失败检查', () => {
     expect((rewriteCall.input as { rewrite: { log: string } }).rewrite.log).toContain('$ node');
     const after = (await p.call<ChangeView>('GET', `/api/changes/${change.changeId}`)).body;
     expect(after.pendingDrafts.find((d) => d.exampleId === empty.exampleId)?.redCheck?.status).toBe('failed');
-    expect((await p.call('POST', `/api/changes/${change.changeId}/examples/lock`, {})).status).toBe(200);
+    expect((await p.call('POST', `/api/changes/${change.changeId}/examples/lock`, { acknowledgedExampleIds: change.pendingDraftIds })).status).toBe(200);
     expect((await p.call('POST', `/api/changes/${change.changeId}/implement`)).status).toBe(202);
     await waitAgent(p.service);
     const done = (await p.call<ChangeView>('GET', `/api/changes/${change.changeId}`)).body;
@@ -148,4 +148,20 @@ describe('M3-2 起草例子与先失败检查', () => {
     });
     expect(a.body.answer).toContain('豁免会有什么风险');
   });
+
+
+  it('§14：未勾选「读过」时先失败检查与锁定均返回 400；勾选后结论卡动作可启用', async () => {
+    const { p, change } = await draftedChange();
+    const denied = await p.call<{ error: string }>('POST', `/api/changes/${change.changeId}/red-check`, {});
+    expect(denied.status).toBe(400);
+    expect(denied.body.error).toMatch(/读过/);
+    expect((await p.call('POST', `/api/changes/${change.changeId}/examples/lock`, {})).status).toBe(400);
+    const o1 = (await p.call<OverviewResponse>('GET', '/api/overview')).body;
+    expect(o1.actions.find((a) => a.id === 'run_red_check')).toMatchObject({ enabled: false, disabledReason: expect.stringMatching(/读过/) });
+    await p.call('POST', `/api/changes/${change.changeId}/examples/acknowledge`, { exampleIds: change.pendingDraftIds });
+    const o2 = (await p.call<OverviewResponse>('GET', '/api/overview')).body;
+    expect(o2.actions.find((a) => a.id === 'run_red_check')).toMatchObject({ enabled: true });
+    expect((await p.call('POST', `/api/changes/${change.changeId}/red-check`, {})).status).toBe(200);
+  });
+
 });

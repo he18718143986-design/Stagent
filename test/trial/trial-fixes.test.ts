@@ -73,6 +73,28 @@ describe('守卫 hook 在没装 stagent 依赖的项目里也能运行', () => {
     expect(o.reasons[0]!.text).toMatch(/守卫 hook 跑不起来/);
     expect(o.actions.find((a) => a.id === 'scan')).toMatchObject({ enabled: false, disabledReason: '守卫 hook 跑不起来' });
   });
+
+  it('重新 init 升级 npx 变体（--yes / --no-install）与 yarn dlx，不重复添加', async () => {
+    const root = await tmpProject();
+    gitIn(root, 'init', '-q');
+    await mkdir(join(root, '.claude'), { recursive: true });
+    const variants = [
+      'npx --yes stagent hook pre-tool-use',
+      'npx --no-install stagent hook pre-tool-use',
+      'yarn dlx stagent hook pre-tool-use',
+      'pnpm dlx stagent hook pre-tool-use',
+    ];
+    for (const command of variants) {
+      await writeFile(join(root, '.claude/settings.json'), JSON.stringify({ hooks: { PreToolUse: [{ matcher: 'Write', hooks: [{ type: 'command', command }] }] } }));
+      const r = await installClaudeHook(root);
+      expect(r.installed).toBe(true);
+      const settings = JSON.parse(await readFile(join(root, '.claude/settings.json'), 'utf8')) as { hooks: { PreToolUse: { hooks: { command: string }[] }[] } };
+      expect(settings.hooks.PreToolUse).toHaveLength(1);
+      expect(settings.hooks.PreToolUse[0]!.hooks[0]!.command).toBe(hookCommand());
+      expect(settings.hooks.PreToolUse[0]!.hooks[0]!.command).not.toMatch(/\bnpx\b|\bdlx\b/);
+    }
+  });
+
 });
 
 describe('init 生成能找到检查的测试配置', () => {
@@ -160,8 +182,9 @@ describe('§14 防盖章', () => {
     const last = (await Ledger.open(p.root)).events().filter((e) => e.type === 'example.drafted').at(-1);
     expect(last).toMatchObject({ by: 'user', then: '我改过的期望' });
     // 现在不改另一个改动的例子直接确认：用健康指标接口验证（这里只确认接口可用、修改率被计入）
-    await p.call('POST', `/api/changes/${c.changeId}/red-check`);
-    await p.call('POST', `/api/changes/${c.changeId}/examples/lock`, {});
+    const ids = view.pendingDrafts.map((d) => d.exampleId);
+    await p.call('POST', `/api/changes/${c.changeId}/red-check`, { acknowledgedExampleIds: ids });
+    await p.call('POST', `/api/changes/${c.changeId}/examples/lock`, { acknowledgedExampleIds: ids });
     const health = (await p.call<ReturnType<typeof computeHealth>>('GET', '/api/health')).body;
     expect(health.confirmations).toMatchObject({ aiDrafted: 3, edited: 1 });
     expect(health.rubberStamp.suspected).toBe(false);

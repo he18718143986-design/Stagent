@@ -110,7 +110,8 @@ export async function detectStack(projectRoot: string): Promise<DetectedStack> {
 /**
  * 检查从快照还原到 .stagent/runs/<runId>/checks/ 下执行，项目自己的测试配置（include / testDir）通常不覆盖这个目录，
  * 测试框架会报"找不到测试"然后 exit 1——检查永远失败。真实试用（docs/trial.md）发现这一点后，
- * init 为 vitest / playwright 各生成一份只覆盖这个目录的检查配置，checkCommand 指向它。
+ * init **只**为 vitest / playwright 各生成一份只覆盖这个目录的检查配置，checkCommand 指向它。
+ * jest / pytest / unknown 不会生成：请在 .stagent/config.json 手写 checkCommand（见 docs/guard.md）。
  */
 export const CHECK_CONFIGS: Partial<Record<DetectedStack['testRunner'], { path: string; content: string; command: string }>> = {
   vitest: {

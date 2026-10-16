@@ -151,6 +151,8 @@ export interface OverviewInput {
   guardProblem?: string;
   /** §14 防盖章：AI 起草的例子一条都没改、几秒就确认。 */
   healthWarning?: string;
+  /** §14：待锁定草稿是否已全部勾选「读过」。未勾选时结论卡不能跑先失败检查 / 锁定。 */
+  draftsAcknowledged?: boolean;
 }
 
 const DANGLING_LABELS: Record<string, string> = {
@@ -234,6 +236,7 @@ function buildCardInner({
   recordDraftCount = 0,
   rulesDrift = [],
   scan = null,
+  draftsAcknowledged = true,
 }: OverviewInput): Overview {
   const features = projection.features;
   const examples = features.flatMap((f) => f.examples);
@@ -373,7 +376,7 @@ function buildCardInner({
     };
   }
 
-  if (change) return changeCard(change, { common, reasons, merge, runAction, agent });
+  if (change) return changeCard(change, { common, reasons, merge, runAction, agent, draftsAcknowledged });
 
   const closePlan: CardAction[] = planLine?.allDone ? [{ id: 'close_plan', label: '关闭计划', enabled: true, primary: true }] : [];
 
@@ -437,6 +440,7 @@ function changeCard(
     merge: CardAction;
     runAction: (primary: boolean) => CardAction;
     agent?: OverviewInput['agent'];
+    draftsAcknowledged?: boolean;
   },
 ): Overview {
   const { common, merge } = ctx;
@@ -477,6 +481,8 @@ function changeCard(
     case 'confirm_examples': {
       const drafts = change.pendingDrafts;
       const needRed = drafts.filter((d) => !d.waiver && !d.redCheck);
+      const ackOk = ctx.draftsAcknowledged !== false;
+      const ackReason = '请先在下方验收例子逐条勾选「读过」';
       return {
         ...common,
         status: 'needs_you',
@@ -487,9 +493,30 @@ function changeCard(
           drafts.length === 0
             ? { id: 'draft_examples', label: '让 Claude Code 起草例子', enabled: true, primary: true }
             : needRed.length > 0
-              ? { id: 'run_red_check', label: `确认例子，跑先失败检查（${needRed.length} 条）`, enabled: true, primary: true }
-              : { id: 'lock_examples', label: `确认并锁定 ${drafts.length} 个例子`, enabled: true, primary: true },
-          ...(drafts.length > 0 ? [{ id: 'lock_examples' as const, label: '确认并锁定', enabled: false, disabledReason: needRed.length ? '新例子要先跑一次先失败检查（实现前必须失败）' : '' }].filter((a) => a.disabledReason) : []),
+              ? {
+                  id: 'run_red_check',
+                  label: `确认例子，跑先失败检查（${needRed.length} 条）`,
+                  enabled: ackOk,
+                  primary: true,
+                  ...(ackOk ? {} : { disabledReason: ackReason }),
+                }
+              : {
+                  id: 'lock_examples',
+                  label: `确认并锁定 ${drafts.length} 个例子`,
+                  enabled: ackOk,
+                  primary: true,
+                  ...(ackOk ? {} : { disabledReason: ackReason }),
+                },
+          ...(drafts.length > 0
+            ? [
+                {
+                  id: 'lock_examples' as const,
+                  label: '确认并锁定',
+                  enabled: false,
+                  disabledReason: needRed.length ? '新例子要先跑一次先失败检查（实现前必须失败）' : '',
+                },
+              ].filter((a) => a.disabledReason)
+            : []),
           abandonAction(),
           merge,
         ],
@@ -497,6 +524,8 @@ function changeCard(
     }
     case 'red_check': {
       const bad = change.pendingDrafts.filter((d) => !d.waiver && d.redCheck?.status !== 'failed');
+      const ackOk = ctx.draftsAcknowledged !== false;
+      const ackReason = '请先在下方验收例子逐条勾选「读过」';
       return {
         ...common,
         status: 'needs_you',
@@ -505,9 +534,26 @@ function changeCard(
         reasons: top3(head),
         actions: [
           bad.length === 0
-            ? { id: 'lock_examples', label: `确认并锁定 ${change.pendingDraftIds.length} 个例子`, enabled: true, primary: true }
-            : { id: 'lock_examples', label: '确认并锁定例子', enabled: false, disabledReason: `${bad.length} 条检查没测到新行为：在改动面板里重写、豁免或删除`, primary: true },
-          { id: 'run_red_check', label: '重跑先失败检查', enabled: true },
+            ? {
+                id: 'lock_examples',
+                label: `确认并锁定 ${change.pendingDraftIds.length} 个例子`,
+                enabled: ackOk,
+                primary: true,
+                ...(ackOk ? {} : { disabledReason: ackReason }),
+              }
+            : {
+                id: 'lock_examples',
+                label: '确认并锁定例子',
+                enabled: false,
+                disabledReason: `${bad.length} 条检查没测到新行为：在改动面板里重写、豁免或删除`,
+                primary: true,
+              },
+          {
+            id: 'run_red_check',
+            label: '重跑先失败检查',
+            enabled: ackOk,
+            ...(ackOk ? {} : { disabledReason: ackReason }),
+          },
           abandonAction(),
           merge,
         ],

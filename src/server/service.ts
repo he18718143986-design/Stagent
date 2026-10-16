@@ -110,6 +110,12 @@ export class StagentService {
   port: number | null = null;
   /** 守卫 hook 自检结果（startService 启动时检查；null = 没检查过）。不通过时不驱动 Claude Code 改代码。 */
   hookHealth: import('../guard/install.js').HookHealth | null = null;
+  /**
+   * §14 防盖章：本进程内「读过」勾选（changeId → exampleId）。
+   * 只存在服务内存里——刷新页面要重新勾；草稿被改/丢弃会清掉对应勾选。
+   * 结论卡与直调 API 都必须过这道门，不能只靠 DraftReview 面板禁用按钮。
+   */
+  private readonly draftAcks = new Map<string, Set<string>>();
   private availabilityCache: { at: number; value: AgentAvailability } | null = null;
   private readonly background = new Set<Promise<unknown>>();
   private docsTimer: NodeJS.Timeout | null = null;
@@ -223,6 +229,7 @@ export class StagentService {
       ledger: { state: this.ledger.state, brokenLinks: this.ledger.report.brokenLinks, anchor: this.ledger.anchorStatus },
       run: this.run ? publicRun(this.run) : null,
       change: changes.active,
+      draftsAcknowledged: changes.active ? this.draftsFullyAcknowledged(changes.active) : true,
       auth,
       agent: { available: availability.available, reason: availability.reason, busy: this.agentTask !== null, kind: this.agentTask?.kind ?? null },
       ...(this.hookHealth && !this.hookHealth.ok ? { guardProblem: this.hookHealth.reason ?? '守卫 hook 跑不起来' } : {}),
@@ -425,23 +432,82 @@ export class StagentService {
     return { exampleId, featureId };
   }
 
+  /** 当前改动已勾选「读过」的草稿 id（供 overview / 测试）。 */
+  acknowledgedDraftIds(changeId: string): string[] {
+    return [...(this.draftAcks.get(changeId) ?? [])];
+  }
+
+  /** 待锁定草稿是否已全部勾选「读过」。无待锁定草稿时视为 true。 */
+  draftsFullyAcknowledged(change: Pick<ChangeView, 'changeId' | 'pendingDraftIds'>): boolean {
+    if (change.pendingDraftIds.length === 0) return true;
+    const acked = this.draftAcks.get(change.changeId);
+    return change.pendingDraftIds.every((id) => acked?.has(id));
+  }
+
+  /**
+   * POST /api/changes/:id/examples/acknowledge：记录「读过」勾选。
+   * 传空数组可清空；只会保留仍属于本改动待锁定草稿的 id。
+   */
+  async acknowledgeDrafts(changeId: string, input: { exampleIds?: unknown }): Promise<{ acknowledgedExampleIds: string[] }> {
+    const c = await this.activeChange(changeId);
+    if (!Array.isArray(input.exampleIds)) throw new HttpError(400, 'exampleIds 必须是数组');
+    const wanted = input.exampleIds.filter((x): x is string => typeof x === 'string');
+    const pending = new Set(c.pendingDraftIds);
+    const unknown = wanted.filter((id) => !pending.has(id));
+    if (unknown.length) throw new HttpError(409, `这些例子不是本改动的待锁定草稿：${unknown.join('、')}`);
+    this.draftAcks.set(changeId, new Set(wanted));
+    return { acknowledgedExampleIds: this.acknowledgedDraftIds(changeId) };
+  }
+
+  /** 草稿被改写或丢弃后，清掉对应「读过」勾选（改过必须重新确认）。 */
+  clearDraftAcks(changeId: string, exampleIds?: readonly string[]): void {
+    if (!exampleIds) {
+      this.draftAcks.delete(changeId);
+      return;
+    }
+    const set = this.draftAcks.get(changeId);
+    if (!set) return;
+    for (const id of exampleIds) set.delete(id);
+    if (set.size === 0) this.draftAcks.delete(changeId);
+  }
+
+  /**
+   * red-check / lock 共用：可用 body.acknowledgedExampleIds 一次性勾选，再校验目标草稿都已读过。
+   */
+  ensureDraftsAcknowledged(changeId: string, exampleIds: readonly string[], body: { acknowledgedExampleIds?: unknown } = {}): void {
+    if (Array.isArray(body.acknowledgedExampleIds)) {
+      const extra = body.acknowledgedExampleIds.filter((x): x is string => typeof x === 'string');
+      const set = this.draftAcks.get(changeId) ?? new Set<string>();
+      for (const id of extra) set.add(id);
+      this.draftAcks.set(changeId, set);
+    }
+    const acked = this.draftAcks.get(changeId);
+    const missing = exampleIds.filter((id) => !acked?.has(id));
+    if (missing.length) {
+      throw new HttpError(400, `请先逐条勾选「读过」再继续（还有 ${missing.length} 条未确认）`);
+    }
+  }
+
   /**
    * 确认并锁定例子（POST /api/changes/:id/examples/lock）：写检查快照与 example.locked。
    * 新功能档要求每条例子已有合格的先失败检查或豁免，且内容哈希一致，否则 422（Invariant 7，§5.1）。
    * 不传 exampleIds 时锁定本改动全部草稿。
+   * §14：必须先对目标草稿勾选「读过」（面板、结论卡、直调 API 同一道门）。
    */
-  async lockExamples(changeId: string, input: { exampleIds?: unknown }): Promise<ChangeView> {
+  async lockExamples(changeId: string, input: { exampleIds?: unknown; acknowledgedExampleIds?: unknown }): Promise<ChangeView> {
     const c = await this.activeChange(changeId);
     const ids = Array.isArray(input.exampleIds) ? input.exampleIds.filter((x): x is string => typeof x === 'string') : c.pendingDraftIds;
     if (ids.length === 0) throw new HttpError(400, '没有待锁定的例子草稿');
     const unknown = ids.filter((id) => !c.pendingDraftIds.includes(id));
     if (unknown.length) throw new HttpError(409, `这些例子不是本改动的待锁定草稿：${unknown.join('、')}`);
+    this.ensureDraftsAcknowledged(changeId, ids, input);
     const { lockDrafts } = await import('./flows/examples-flow.js');
     await lockDrafts(
       this,
       c.pendingDrafts.filter((d) => ids.includes(d.exampleId)),
       { changeId, requireRed: c.track === 'feature' },
     );
+    this.clearDraftAcks(changeId, ids);
     return this.change(changeId);
   }
 

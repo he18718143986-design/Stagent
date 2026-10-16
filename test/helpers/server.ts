@@ -57,7 +57,10 @@ export async function serverProject(
     // 新功能档锁定前必须有合格的先失败检查或豁免（Invariant 7）。这里的检查是手写的已知行为，按「确认行为已存在」豁免。
     const w = await call('POST', `/api/changes/${change.changeId}/examples/${d.body.exampleId}/red-waive`, { reason: '测试：手写检查，行为已知' });
     if (w.status !== 200) throw new Error(JSON.stringify(w.body));
-    const l = await call('POST', `/api/changes/${change.changeId}/examples/lock`, { exampleIds: [d.body.exampleId] });
+    const l = await call('POST', `/api/changes/${change.changeId}/examples/lock`, {
+      exampleIds: [d.body.exampleId],
+      acknowledgedExampleIds: [d.body.exampleId],
+    });
     if (l.status !== 200) throw new Error(JSON.stringify(l.body));
     return { featureId: d.body.featureId, exampleId: d.body.exampleId, changeId: change.changeId };
   };

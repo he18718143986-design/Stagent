@@ -90,8 +90,12 @@ export async function buildServer(service: StagentService, opts: BuildServerOpti
   app.post<{ Params: { id: string }; Body: Record<string, unknown> }>('/api/changes/:id/examples', async (req, reply) =>
     reply.status(201).send(await service.draftExample(req.params.id, req.body ?? {})),
   );
-  app.post<{ Params: { id: string }; Body: { exampleIds?: unknown } }>('/api/changes/:id/examples/lock', (req) =>
-    service.lockExamples(req.params.id, req.body ?? {}),
+  app.post<{ Params: { id: string }; Body: { exampleIds?: unknown; acknowledgedExampleIds?: unknown } }>(
+    '/api/changes/:id/examples/lock',
+    (req) => service.lockExamples(req.params.id, req.body ?? {}),
+  );
+  app.post<{ Params: { id: string }; Body: { exampleIds?: unknown } }>('/api/changes/:id/examples/acknowledge', (req) =>
+    service.acknowledgeDrafts(req.params.id, req.body ?? {}),
   );
   app.post<{ Params: { id: string } }>('/api/changes/:id/check', async (req, reply) =>
     reply.status(202).send(await service.startCheck(req.params.id)),
@@ -116,8 +120,9 @@ export async function buildServer(service: StagentService, opts: BuildServerOpti
   });
 
   // 先失败检查（§5.1）
-  app.post<{ Params: { id: string }; Body: { exampleIds?: unknown } }>('/api/changes/:id/red-check', (req) =>
-    examplesFlow.runRedCheck(service, req.params.id, req.body ?? {}),
+  app.post<{ Params: { id: string }; Body: { exampleIds?: unknown; acknowledgedExampleIds?: unknown } }>(
+    '/api/changes/:id/red-check',
+    (req) => examplesFlow.runRedCheck(service, req.params.id, req.body ?? {}),
   );
   app.post<{ Params: { id: string; exampleId: string }; Body: { reason?: unknown } }>('/api/changes/:id/examples/:exampleId/red-waive', (req) =>
     examplesFlow.redWaive(service, req.params.id, req.params.exampleId, req.body ?? {}),

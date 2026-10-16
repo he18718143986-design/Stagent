@@ -109,7 +109,7 @@ describe('M4-2 外观确认与「改了什么」', () => {
       checkPath: '.stagent/checks/home/look.mjs',
     });
     await p.call('POST', `/api/changes/${c.changeId}/examples/${d.body.exampleId}/red-waive`, { reason: '截图检查只截图' });
-    await p.call('POST', `/api/changes/${c.changeId}/examples/lock`, {});
+    await p.call('POST', `/api/changes/${c.changeId}/examples/lock`, { acknowledgedExampleIds: [d.body.exampleId] });
     await writeProjectFile(p.root, 'src/home.css', 'h1 { color: red; }\n');
     await p.call('POST', `/api/changes/${c.changeId}/check`);
     await p.service.waitForRun();

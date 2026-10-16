@@ -116,12 +116,21 @@ export interface RedCheckResult {
 }
 
 /** POST /api/changes/:id/red-check：对已确认的草稿例子跑先失败检查（只有 failed 合格）。 */
-export async function runRedCheck(svc: StagentService, changeId: string, body: { exampleIds?: unknown } = {}): Promise<RedCheckResult> {
+export async function runRedCheck(
+  svc: StagentService,
+  changeId: string,
+  body: { exampleIds?: unknown; acknowledgedExampleIds?: unknown } = {},
+): Promise<RedCheckResult> {
   const change = await svc.activeChange(changeId);
   if (change.track !== 'feature') throw new HttpError(409, '先失败检查只用于新功能档的新例子');
   const wanted = Array.isArray(body.exampleIds) ? new Set(body.exampleIds.filter((x): x is string => typeof x === 'string')) : null;
   const drafts = change.pendingDrafts.filter((d) => d.checkPath && (!wanted || wanted.has(d.exampleId)));
   if (drafts.length === 0) throw new HttpError(400, '没有待检查的例子草稿');
+  svc.ensureDraftsAcknowledged(
+    changeId,
+    drafts.map((d) => d.exampleId),
+    body,
+  );
   for (const d of drafts) if (!(await exists(svc.root, d.checkPath!))) throw new HttpError(400, `检查文件 ${d.checkPath} 不存在`);
   const checks: CheckSpec[] = drafts.map((d) => ({ exampleId: d.exampleId, checkPath: d.checkPath!, source: { kind: 'draft', path: d.checkPath! } }));
   await svc.startRun({ purpose: 'red_check', checks, names: new Map(drafts.map((d) => [d.exampleId, `先失败检查：${d.then}`])), changeId });
@@ -201,7 +210,7 @@ export async function rewriteExample(svc: StagentService, changeId: string, exam
       );
     },
     { background: true },
-  ).then(({ promise }) => promise.then(() => runRedCheck(svc, changeId, { exampleIds: [exampleId] }).catch(() => undefined)));
+  ).then(({ promise }) => promise.then(() => runRedCheck(svc, changeId, { exampleIds: [exampleId], acknowledgedExampleIds: [exampleId] }).catch(() => undefined)));
   return { started: true };
 }
 
@@ -212,6 +221,7 @@ export async function discardExample(svc: StagentService, changeId: string, exam
   const reason = typeof body.reason === 'string' && body.reason.trim() ? body.reason.trim() : '删掉这条例子';
   await svc.write(() => svc.ledger.append({ type: 'example.discarded', exampleId, reason, by: 'user' }));
   if (d.checkPath?.startsWith(`${DRAFT_DIR}/`)) await rm(join(svc.root, d.checkPath), { force: true });
+  svc.clearDraftAcks(changeId, [exampleId]);
   return { ok: true };
 }
 
@@ -509,6 +519,9 @@ export async function editDraft(svc: StagentService, exampleId: string, body: Re
   const text = (k: 'given' | 'when' | 'then') => (typeof body[k] === 'string' && (body[k] as string).trim() ? (body[k] as string).trim() : d[k]);
   if (typeof body.checkContent === 'string' && d.checkPath) await writeFile(join(svc.root, d.checkPath), body.checkContent);
   await svc.write(() => svc.ledger.append({ ...d, given: text('given'), when: text('when'), then: text('then'), by: 'user' }));
+  // 改过文字必须重新勾选「读过」
+  const active = (await svc.changes()).active;
+  if (active?.pendingDraftIds.includes(exampleId)) svc.clearDraftAcks(active.changeId, [exampleId]);
   return { ok: true };
 }
 

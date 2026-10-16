@@ -77,7 +77,12 @@ export const api = {
     request<ChangeView>('POST', `/api/changes/${encodeURIComponent(changeId)}/track`, { track }),
   draftExample: (changeId: string, body: Record<string, string>) =>
     request<{ exampleId: string; featureId: string }>('POST', `/api/changes/${encodeURIComponent(changeId)}/examples`, body),
-  lockExamples: (changeId: string) => request<ChangeView>('POST', `/api/changes/${encodeURIComponent(changeId)}/examples/lock`, {}),
+  acknowledgeDrafts: (changeId: string, exampleIds: string[]) =>
+    request<{ acknowledgedExampleIds: string[] }>('POST', `/api/changes/${encodeURIComponent(changeId)}/examples/acknowledge`, { exampleIds }),
+  lockExamples: (changeId: string, acknowledgedExampleIds?: string[]) =>
+    request<ChangeView>('POST', `/api/changes/${encodeURIComponent(changeId)}/examples/lock`, {
+      ...(acknowledgedExampleIds ? { acknowledgedExampleIds } : {}),
+    }),
   startCheck: (changeId: string) => request<{ total: number }>('POST', `/api/changes/${encodeURIComponent(changeId)}/check`),
   merge: (changeId: string) => request<AuthResult>('POST', `/api/changes/${encodeURIComponent(changeId)}/merge`),
   authorize: (body: { action: string; reason: string } & Record<string, unknown>) => request<AuthResult>('POST', '/api/auth', body),
@@ -96,11 +101,14 @@ export const api = {
   fix: (changeId: string) => request<{ started: true }>('POST', `/api/changes/${encodeURIComponent(changeId)}/fix`),
   resume: (changeId: string) => request<{ started: true }>('POST', `/api/changes/${encodeURIComponent(changeId)}/resume`),
   cancelAgent: () => request<{ ok: true }>('POST', '/api/agent/cancel'),
-  redCheck: (changeId: string, exampleIds?: string[]) =>
+  redCheck: (changeId: string, exampleIds?: string[], acknowledgedExampleIds?: string[]) =>
     request<{ runId: string; results: { exampleId: string; status: string; qualified: boolean }[] }>(
       'POST',
       `/api/changes/${encodeURIComponent(changeId)}/red-check`,
-      exampleIds ? { exampleIds } : {},
+      {
+        ...(exampleIds ? { exampleIds } : {}),
+        ...(acknowledgedExampleIds ? { acknowledgedExampleIds } : {}),
+      },
     ),
   redWaive: (changeId: string, exampleId: string, reason: string) =>
     request<{ ok: true }>('POST', `/api/changes/${encodeURIComponent(changeId)}/examples/${encodeURIComponent(exampleId)}/red-waive`, { reason }),
