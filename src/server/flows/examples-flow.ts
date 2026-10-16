@@ -36,8 +36,10 @@ export async function startDraftExamples(svc: StagentService, changeId: string):
     async (ctx) => {
       const snap = await svc.state();
       const map = liveMap(snap.lines, snap.projection.features);
-      // 属于计划步骤、且步骤指定了已有功能时，例子挂到该功能；否则新建一个以需求命名的功能。
-      const existing = change.planId ? snap.projection.features.find((f) => change.targetFeatureIds.includes(f.featureId)) : undefined;
+      // 例子挂到哪个功能：计划步骤指定了已有功能，或档位判断只指向一个已有功能（真实试用里"给 verify 加一行输出"
+      // 被建成了一个新功能）→ 挂到它；否则新建一个以需求命名的功能。
+      const targets = snap.projection.features.filter((f) => change.targetFeatureIds.includes(f.featureId));
+      const existing = change.planId || targets.length === 1 ? targets[0] : undefined;
       const featureName = existing?.name ?? featureNameOf(change.description);
       const drafted = await callAgent(svc, changeId, 'draft', ctx, (c) =>
         svc.agent!.draftExamples(
@@ -45,9 +47,11 @@ export async function startDraftExamples(svc: StagentService, changeId: string):
           c,
         ),
       );
-      const usable: typeof drafted = [];
-      for (const d of drafted) if (d.checkPath.startsWith(`${draftDir}/`) && (await exists(svc.root, d.checkPath))) usable.push(d);
+      const existing2: typeof drafted = [];
+      for (const d of drafted) if (d.checkPath.startsWith(`${draftDir}/`) && (await exists(svc.root, d.checkPath))) existing2.push(d);
+      const { kept: usable, dropped } = onePerFile(existing2);
       if (usable.length === 0) throw new HttpError(502, 'Claude Code 没有写出可用的检查文件');
+      if (dropped.length) svc.agentError = droppedNote(dropped);
       const featureId = existing?.featureId ?? newId('f');
       await svc.write(() =>
         svc.ledger.transaction(async (tx) => {
@@ -64,6 +68,7 @@ export async function startDraftExamples(svc: StagentService, changeId: string):
               checkPath: d.checkPath,
               summary: d.summary,
               changeId,
+              by: 'ai',
             });
           }
         }),
@@ -72,6 +77,30 @@ export async function startDraftExamples(svc: StagentService, changeId: string):
     { background: true },
   );
   return { started: true };
+}
+
+/**
+ * 真实试用发现 Claude 会把几条例子写进同一个检查文件：那样它们同进同退，「已验证（N 个例子）」会虚高。
+ * 同一个检查文件只保留第一条例子，其余丢弃并给出说明。
+ */
+export function onePerFile<T extends { checkPath: string; then: string }>(drafts: T[]): { kept: T[]; dropped: T[] } {
+  const seen = new Set<string>();
+  const kept: T[] = [];
+  const dropped: T[] = [];
+  for (const d of drafts) {
+    if (seen.has(d.checkPath)) dropped.push(d);
+    else {
+      seen.add(d.checkPath);
+      kept.push(d);
+    }
+  }
+  return { kept, dropped };
+}
+
+function droppedNote(dropped: { then: string }[]): string {
+  return `Claude Code 把 ${dropped.length} 条例子和别的例子写进了同一个检查文件，已丢弃（同一文件只算一条例子）：${dropped
+    .map((d) => d.then.slice(0, 30))
+    .join('；')}。需要的话手写或让它重新起草`;
 }
 
 function featureNameOf(description: string): string {
@@ -167,6 +196,7 @@ export async function rewriteExample(svc: StagentService, changeId: string, exam
           checkPath: first.checkPath,
           summary: first.summary,
           changeId,
+          by: 'ai',
         }),
       );
     },
@@ -432,13 +462,15 @@ export async function startBaselineDraft(svc: StagentService, featureId: string)
           c,
         ),
       );
-      const usable: typeof drafted = [];
-      for (const d of drafted) if (await exists(svc.root, d.checkPath)) usable.push(d);
+      const present: typeof drafted = [];
+      for (const d of drafted) if (await exists(svc.root, d.checkPath)) present.push(d);
+      const { kept: usable, dropped } = onePerFile(present);
       if (!usable.length) throw new HttpError(502, 'Claude Code 没有写出可用的检查文件');
+      if (dropped.length) svc.agentError = droppedNote(dropped);
       await svc.write(() =>
         svc.ledger.transaction(async (tx) => {
           for (const d of usable) {
-            await tx.append({ type: 'example.drafted', exampleId: newId('e'), featureId, given: d.given, when: d.when, then: d.then, kind: d.kind, checkPath: d.checkPath, summary: d.summary, baseline: true });
+            await tx.append({ type: 'example.drafted', exampleId: newId('e'), featureId, given: d.given, when: d.when, then: d.then, kind: d.kind, checkPath: d.checkPath, summary: d.summary, baseline: true, by: 'ai' });
           }
         }),
       );
@@ -460,20 +492,35 @@ export async function addBaselineDraft(svc: StagentService, featureId: string, b
   const exampleId = newId('e');
   const kind: ExampleKind = body.kind === 'visual' ? 'visual' : 'behavior';
   await svc.write(() =>
-    svc.ledger.append({ type: 'example.drafted', exampleId, featureId, given: text('given'), when: text('when'), then: text('then'), kind, checkPath, baseline: true }),
+    svc.ledger.append({ type: 'example.drafted', exampleId, featureId, given: text('given'), when: text('when'), then: text('then'), kind, checkPath, baseline: true, by: 'user' }),
   );
   return { exampleId };
 }
 
-/** PUT /api/examples/:id/draft：基线草稿在锁定前可以自由修改，不需要授权。 */
-export async function editBaselineDraft(svc: StagentService, exampleId: string, body: Record<string, unknown>): Promise<{ ok: true }> {
+/**
+ * PUT /api/examples/:id/draft：锁定前修改例子草稿（基线草稿，或进行中改动的待锁定草稿），不需要授权。
+ * 写一条 by:'user' 的 example.drafted——这就是 §14 的「例子确认时的修改率」的分子。
+ * 改了检查内容（checkContent）会让之前的先失败检查失效，需要重跑。
+ */
+export async function editDraft(svc: StagentService, exampleId: string, body: Record<string, unknown>): Promise<{ ok: true }> {
   svc.assertWritable();
-  const d = baselineDrafts(svc.ledger.lines()).get(exampleId);
-  if (!d) throw new HttpError(404, `例子 ${exampleId} 不是未锁定的基线草稿（已锁定的例子要走授权修改）`);
+  const d = baselineDrafts(svc.ledger.lines()).get(exampleId) ?? (await activeDraft(svc, exampleId));
+  if (!d) throw new HttpError(404, `例子 ${exampleId} 不是未锁定的草稿（已锁定的例子要走授权修改）`);
   const text = (k: 'given' | 'when' | 'then') => (typeof body[k] === 'string' && (body[k] as string).trim() ? (body[k] as string).trim() : d[k]);
   if (typeof body.checkContent === 'string' && d.checkPath) await writeFile(join(svc.root, d.checkPath), body.checkContent);
-  await svc.write(() => svc.ledger.append({ ...d, given: text('given'), when: text('when'), then: text('then') }));
+  await svc.write(() => svc.ledger.append({ ...d, given: text('given'), when: text('when'), then: text('then'), by: 'user' }));
   return { ok: true };
+}
+
+/** 兼容旧名。 */
+export const editBaselineDraft = editDraft;
+
+async function activeDraft(svc: StagentService, exampleId: string): Promise<EventOf<'example.drafted'> | undefined> {
+  const active = (await svc.changes()).active;
+  if (!active?.pendingDraftIds.includes(exampleId)) return undefined;
+  let found: EventOf<'example.drafted'> | undefined;
+  for (const { event: e } of svc.ledger.lines()) if (e.type === 'example.drafted' && e.exampleId === exampleId) found = e;
+  return found;
 }
 
 /** POST /api/baseline/lock：确认并锁定基线例子，跑一次基线（purpose:'baseline'，不做先失败检查）。 */

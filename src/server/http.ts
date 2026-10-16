@@ -167,7 +167,7 @@ export async function buildServer(service: StagentService, opts: BuildServerOpti
     reply.status(201).send(await examplesFlow.addBaselineDraft(service, req.params.id, req.body ?? {})),
   );
   app.put<{ Params: { id: string }; Body: Record<string, unknown> }>('/api/examples/:id/draft', (req) =>
-    examplesFlow.editBaselineDraft(service, req.params.id, req.body ?? {}),
+    examplesFlow.editDraft(service, req.params.id, req.body ?? {}),
   );
   app.post<{ Body: { exampleIds?: unknown } }>('/api/baseline/lock', async (req, reply) =>
     reply.status(202).send(await examplesFlow.lockBaseline(service, req.body ?? {})),
@@ -210,10 +210,16 @@ export async function buildServer(service: StagentService, opts: BuildServerOpti
   // 开发服务器起不来时「修改启动命令」（§11）
   app.post<{ Body: { command?: unknown; url?: unknown } }>('/api/config/dev-server', (req) => service.setDevServer(req.body ?? {}));
 
+  // 产品健康指标（§14）：只在本机，不进交付报告
+  app.get('/api/health', () => service.health());
+
   // 界面埋点（§14）
   app.post<{ Body: { name?: unknown; data?: unknown } }>('/api/metrics', async (req) => {
     const name = typeof req.body?.name === 'string' && /^[a-z_.]{1,60}$/.test(req.body.name) ? req.body.name : null;
-    if (name) await recordMetric(service.ledger.projectId, `ui.${name}`, typeof req.body?.data === 'object' && req.body.data ? (req.body.data as Record<string, unknown>) : {});
+    // 只收数字与短字符串字段，防止界面把任意内容塞进埋点文件。
+    const raw = typeof req.body?.data === 'object' && req.body.data ? (req.body.data as Record<string, unknown>) : {};
+    const data = Object.fromEntries(Object.entries(raw).filter(([k, v]) => /^[a-zA-Z]{1,30}$/.test(k) && (typeof v === 'number' || (typeof v === 'string' && v.length <= 80))));
+    if (name) await recordMetric(service.ledger.projectId, `ui.${name}`, data);
     return { ok: true };
   });
 

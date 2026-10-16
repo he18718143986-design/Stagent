@@ -23,7 +23,7 @@ npm run build   # 编译到 dist/
 - [x] M2-1 守卫：PreToolUse 拦截与危险命令规则 —— 见 [docs/guard.md](docs/guard.md)
 - [x] M2-2 改动流程：两档、互斥、外部改动识别与状态机 —— 见 [docs/changes.md](docs/changes.md)
 - [x] M2-3 授权三段式事务与服务端合并门 —— 见 [docs/auth.md](docs/auth.md)
-- [ ] ★ MVP 试用检查点（tasks.md 第 4 节，不写代码，需要你在真实项目上试用）
+- [~] ★ MVP 试用检查点：已用真实的 Claude Code 在 stagent 自身上试用并修复发现的问题，见 [docs/trial.md](docs/trial.md)；你在自己项目上的试用（看健康指标里的修改率与停留时间）还没做
 - [x] SDK 调研 + M3-1 Claude Code 适配器 + M3-2 起草例子与先失败检查 —— 见 [docs/agent.md](docs/agent.md)
 - [x] M4-1 扫描接入与基线例子 + M4-2 外观确认与「改了什么」—— 见 [docs/onboarding.md](docs/onboarding.md)
 - [x] M4-3 功能文件映射与系统地图 —— 见 [docs/map.md](docs/map.md)

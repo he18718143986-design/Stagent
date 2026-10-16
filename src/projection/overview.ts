@@ -147,6 +147,10 @@ export interface OverviewInput {
   recordDraftCount?: number;
   rulesDrift?: Overview['rulesDrift'];
   scan?: Overview['scan'];
+  /** 守卫 hook 自检不通过：Claude Code 的写入不会被拦截。 */
+  guardProblem?: string;
+  /** §14 防盖章：AI 起草的例子一条都没改、几秒就确认。 */
+  healthWarning?: string;
 }
 
 const DANGLING_LABELS: Record<string, string> = {
@@ -161,6 +165,14 @@ const DANGLING_LABELS: Record<string, string> = {
 
 export function buildOverview(input: OverviewInput): Overview {
   let base = buildCard(input);
+  if (input.guardProblem && base.status !== 'ledger_modified') {
+    // 守卫失效是最严重的问题之一：放在原因第一条，并禁用所有需要 Claude Code 改代码的按钮。
+    base = {
+      ...base,
+      reasons: [{ severity: 0, text: input.guardProblem, featureIds: [] }, ...base.reasons].slice(0, 3),
+      actions: base.actions.map((a) => (AGENT_ACTIONS.has(a.id) && a.enabled ? { ...a, enabled: false, disabledReason: '守卫 hook 跑不起来' } : a)),
+    };
+  }
   const exceeded = input.budget?.exceeded;
   if (exceeded && base.status !== 'ledger_modified') {
     // 费用达到上限：暂停 AI 任务，显示授权卡「提高上限 / 停止」（budget_raise）。
@@ -178,6 +190,11 @@ export function buildOverview(input: OverviewInput): Overview {
         ),
       ],
     };
+  }
+  if (input.healthWarning && base.status !== 'ledger_modified') {
+    // 只提示，不阻止：排在失败与未验证之后、覆盖薄弱之前。
+    const r: CardReason = { severity: 8, text: input.healthWarning, featureIds: [] };
+    base = { ...base, reasons: [...base.reasons, r].sort((a, b) => a.severity - b.severity).slice(0, 3) };
   }
   const dangling = input.auth?.dangling ?? [];
   if (dangling.length === 0) return base;

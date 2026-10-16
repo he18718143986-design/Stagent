@@ -149,6 +149,7 @@ export const api = {
   importLibrary: (id: string) => request<{ ruleId: string }>('POST', `/api/library/${encodeURIComponent(id)}/import`),
   // 账本恢复（M6）
   recoverLedger: (mode: 'accept_current' | 'establish_trust' | 'from_git', reason = '') => request<{ ok: true }>('POST', '/api/ledger/recover', { mode, reason }),
+  health: () => request<import('../../src/metrics/health').HealthReport>('GET', '/api/health'),
   metric: (name: string, data: Record<string, unknown> = {}) => request<{ ok: true }>('POST', '/api/metrics', { name, data }).catch(() => undefined),
 };
 

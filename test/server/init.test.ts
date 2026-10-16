@@ -44,12 +44,12 @@ describe('stagent init', () => {
     });
     expect(await detectStack(next)).toEqual({ framework: 'next', testRunner: 'playwright' });
     expect((await initProject(next)).config).toMatchObject({
-      checkCommand: 'npx playwright test {path}',
+      checkCommand: 'npx playwright test --config .stagent/playwright.checks.config.mjs {path}',
       devServer: { command: 'npm run dev', url: 'http://localhost:3000' },
     });
     const vite = await repo({ 'package.json': JSON.stringify({ scripts: { dev: 'vite' }, devDependencies: { vite: '6', vitest: '3' } }) });
     expect((await initProject(vite)).config).toMatchObject({
-      checkCommand: 'npx vitest run {path}',
+      checkCommand: 'npx vitest run --config .stagent/vitest.checks.config.mjs {path}',
       devServer: { url: 'http://localhost:5173' },
     });
     const py = await repo({ 'pyproject.toml': '' });

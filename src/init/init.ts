@@ -60,6 +60,11 @@ export async function initProject(projectRoot: string): Promise<InitResult> {
     await writeFile(configPath, JSON.stringify(config, null, 2) + '\n');
     created.push(CONFIG_RELATIVE_PATH);
   }
+  const checkConfig = CHECK_CONFIGS[detected.testRunner];
+  if (checkConfig && config.checkCommand === checkConfig.command && !(await exists(join(projectRoot, checkConfig.path)))) {
+    await writeFile(join(projectRoot, checkConfig.path), checkConfig.content);
+    created.push(checkConfig.path);
+  }
 
   const gitignoreAdded = await ensureGitignore(projectRoot);
 
@@ -102,10 +107,46 @@ export async function detectStack(projectRoot: string): Promise<DetectedStack> {
   return { framework: 'unknown', testRunner: 'unknown' };
 }
 
+/**
+ * 检查从快照还原到 .stagent/runs/<runId>/checks/ 下执行，项目自己的测试配置（include / testDir）通常不覆盖这个目录，
+ * 测试框架会报"找不到测试"然后 exit 1——检查永远失败。真实试用（docs/trial.md）发现这一点后，
+ * init 为 vitest / playwright 各生成一份只覆盖这个目录的检查配置，checkCommand 指向它。
+ */
+export const CHECK_CONFIGS: Partial<Record<DetectedStack['testRunner'], { path: string; content: string; command: string }>> = {
+  vitest: {
+    path: '.stagent/vitest.checks.config.mjs',
+    command: 'npx vitest run --config .stagent/vitest.checks.config.mjs {path}',
+    content: `// Stagent 生成：锁定检查从快照还原到 .stagent/runs/<runId>/checks/ 下执行，只收集这个目录。
+import { fileURLToPath } from 'node:url';
+
+export default {
+  root: fileURLToPath(new URL('..', import.meta.url)),
+  test: {
+    include: ['.stagent/runs/*/checks/**/*.{ts,mts,cts,js,mjs,cjs,tsx,jsx}'],
+    environment: 'node',
+    testTimeout: 60_000,
+  },
+};
+`,
+  },
+  playwright: {
+    path: '.stagent/playwright.checks.config.mjs',
+    command: 'npx playwright test --config .stagent/playwright.checks.config.mjs {path}',
+    content: `// Stagent 生成：锁定检查从快照还原到 .stagent/runs/<runId>/checks/ 下执行，只收集这个目录。
+export default {
+  testDir: './runs',
+  testMatch: '**/checks/**/*.{ts,js,mjs}',
+  timeout: 60_000,
+  retries: 0,
+};
+`,
+  },
+};
+
 async function draftConfig(projectRoot: string, d: DetectedStack): Promise<Record<string, unknown>> {
   const checkCommand: Record<DetectedStack['testRunner'], string> = {
-    playwright: 'npx playwright test {path}',
-    vitest: 'npx vitest run {path}',
+    playwright: CHECK_CONFIGS.playwright!.command,
+    vitest: CHECK_CONFIGS.vitest!.command,
     jest: 'npx jest {path}',
     pytest: 'pytest {path}',
     unknown: DEFAULT_CONFIG.checkCommand,

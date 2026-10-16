@@ -40,6 +40,8 @@ export async function startService(opts: StartOptions): Promise<RunningService> 
   let service: StagentService | null = null;
   try {
     service = await StagentService.open(opts.root, opts.agent !== undefined ? { agent: opts.agent } : {});
+    // 启动时自检守卫 hook：跑不起来时 Claude Code 的写入不会被拦截（docs/trial.md 的发现）。
+    await service.refreshHookHealth();
     // 启动时补查：上次关闭后有没有在 Stagent 之外直接 git commit（§5.3）。
     await service.checkHead().catch(() => false);
     if (opts.watch !== false) await service.startWatching();

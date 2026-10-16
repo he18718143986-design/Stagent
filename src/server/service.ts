@@ -108,6 +108,8 @@ export class StagentService {
   rulesDriftAck = new Set<string>();
   /** 服务实际端口（顶栏显示）。 */
   port: number | null = null;
+  /** 守卫 hook 自检结果（startService 启动时检查；null = 没检查过）。不通过时不驱动 Claude Code 改代码。 */
+  hookHealth: import('../guard/install.js').HookHealth | null = null;
   private availabilityCache: { at: number; value: AgentAvailability } | null = null;
   private readonly background = new Set<Promise<unknown>>();
   private docsTimer: NodeJS.Timeout | null = null;
@@ -186,6 +188,25 @@ export class StagentService {
     return (await this.snapshot()).projection;
   }
 
+  /** §14 健康指标（防盖章等），GET /api/health。 */
+  async health(): Promise<import('../metrics/health.js').HealthReport> {
+    const { computeHealth } = await import('../metrics/health.js');
+    const { readMetrics } = await import('../metrics/metrics.js');
+    return computeHealth((await this.snapshot()).lines, await readMetrics(this.ledger.projectId ?? undefined));
+  }
+
+  private async rubberStampWarning(lines: readonly LedgerLine[]): Promise<{ healthWarning?: string }> {
+    const { computeHealth } = await import('../metrics/health.js');
+    const { readMetrics } = await import('../metrics/metrics.js');
+    const h = computeHealth(lines, await readMetrics(this.ledger.projectId ?? undefined));
+    return h.rubberStamp.text ? { healthWarning: h.rubberStamp.text } : {};
+  }
+
+  async refreshHookHealth(): Promise<void> {
+    const { checkHookHealth } = await import('../guard/install.js');
+    this.hookHealth = await checkHookHealth(this.root).catch((err: Error) => ({ ok: false, reason: err.message }));
+  }
+
   async overview(): Promise<OverviewResponse> {
     const { projection, changes, lines } = await this.snapshot();
     const config = await this.config();
@@ -204,6 +225,8 @@ export class StagentService {
       change: changes.active,
       auth,
       agent: { available: availability.available, reason: availability.reason, busy: this.agentTask !== null, kind: this.agentTask?.kind ?? null },
+      ...(this.hookHealth && !this.hookHealth.ok ? { guardProblem: this.hookHealth.reason ?? '守卫 hook 跑不起来' } : {}),
+      ...(await this.rubberStampWarning(lines)),
       budget,
       ...extras,
     });

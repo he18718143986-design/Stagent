@@ -40,6 +40,7 @@ async function assertCanStart(svc: StagentService, changeId: string | null): Pro
   const avail = await svc.agentAvailability();
   if (!avail.available) throw new HttpError(503, `${avail.reason ?? 'Claude Code 不可用'}${avail.hint ? `（${avail.hint}）` : ''}`);
   if (svc.agentTask) throw new HttpError(409, `Claude Code 正在${svc.agentTask.label}，结束后再试`);
+  if (svc.hookHealth && !svc.hookHealth.ok) throw new HttpError(503, svc.hookHealth.reason ?? '守卫 hook 跑不起来，不能驱动 Claude Code');
   const budget = await svc.budget(changeId);
   if (budget.exceeded) {
     throw new HttpError(402, `费用达到上限（$${budget.exceeded.spent.toFixed(2)} / $${budget.exceeded.limit.toFixed(2)}），请先授权提高上限`);

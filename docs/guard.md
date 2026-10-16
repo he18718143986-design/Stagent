@@ -4,7 +4,7 @@
 
 ## 做了什么
 
-- `stagent init` 在 `.claude/settings.json` 写入 PreToolUse hook：`npx stagent hook pre-tool-use`，匹配 `Write|Edit|MultiEdit|NotebookEdit|Bash`。合并进已有文件，不动其他键和别的 hook；已装过（任一 hook 命令含 `stagent hook pre-tool-use`）不再重复添加；文件不是合法 JSON 时不覆盖，只给警告。
+- `stagent init` 在 `.claude/settings.json` 写入 PreToolUse hook（`node <stagent 的 CLI 绝对路径> hook pre-tool-use`，路径不存在时 exit 2 拦下操作；见下方「hook 命令」），匹配 `Write|Edit|MultiEdit|NotebookEdit|Bash`。合并进已有文件，不动其他键和别的 hook；已装过（任一 hook 命令含 `stagent hook pre-tool-use`）不再重复添加；文件不是合法 JSON 时不覆盖，只给警告。
 - Claude Code 每次调用这些工具前把调用 JSON 写到 hook 的 stdin。命中规则 → 拒绝并说明原因，账本追加 `guard.blocked`，首页的拦截提醒（`GuardNotice`，读 `overview.lastGuardBlock`）显示最近一条。
 - `stagent init` 同时安装 `.git/hooks/pre-merge-commit` 提醒脚本：绕过 Stagent 直接 `git merge` 时在终端提示"请通过 Stagent 合并"，**永远 exit 0、不阻止合并**。
 
@@ -100,5 +100,5 @@
 - **附录 B 缺失**：规则表是推断的，规格补齐后以规格为准（规则 id 稳定，可增删）。
 - **SDK spike 未做**：Claude Code Agent SDK 下 hook 的实际行为（如 MultiEdit / NotebookEdit 字段、子代理是否触发）尚未实测，字段以官方文档为准，M3 适配器接入时验证。
 - Bash 规则是静态的尽力检查：变量展开、别名、脚本文件、`python -c` / `node -e` 里的写文件、`cd .stagent && echo > x` 这类先切目录再写的写法都看不到。`.stagent/` 的最终防线仍是账本哈希链与检查快照：改了锁定检查的文件也不会被当作证据（执行器只跑快照，Invariant 4）。
-- hook 命令是 `npx stagent …`，要求项目能解析到 stagent（本地依赖或全局安装）；`npx` 首次下载的输出走 stderr，不影响 stdout 的 JSON。
+- **hook 命令**：真实试用发现最初的 `npx stagent hook pre-tool-use` 在没把 stagent 装成依赖的项目里 exit 127，Claude Code 把它当作非阻塞错误**直接放行**——守卫等于没开。现在写入 stagent 自己 CLI 的绝对路径；路径不存在（npx 缓存被清、换了机器）时 fail closed（exit 2 拦下这次工具调用并提示重新 init），不会去下载同名 npm 包。重新运行 `stagent init` 会把旧命令升级。服务启动时自检 hook 真能跑、真会拒绝写 `.stagent/`（`STAGENT_HOOK_SELFCHECK=1` 时本地判定、不写账本），不通过时结论卡第一条写明，并禁止驱动 Claude Code 改代码。
 - `.stagent` 大小写不敏感比较在大小写敏感的文件系统上会多拦 `.Stagent/` 之类的路径，可接受。

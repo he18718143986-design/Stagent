@@ -58,6 +58,12 @@ export async function runPreToolUseHook(opts: HookOptions): Promise<HookResult> 
       process.cwd(),
   );
 
+  // 自检（服务启动时确认 hook 命令真的能跑）：本地判定，不联系服务、不写账本。
+  if (env.STAGENT_HOOK_SELFCHECK === '1') {
+    const d = decidePreToolUse(hook, { projectRoot: root, lockedCheckPaths: new Set(), draftAllowed: false, extraBashRules: [] });
+    return result('offline', d, '');
+  }
+
   try {
     const service = readServiceLock(root);
     if (service) {

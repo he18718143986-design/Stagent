@@ -649,7 +649,7 @@ Claude Code 是该接口的第一个实现；未来 Cursor/其他 Agent 实现�
 > | cost/usage | `result` 消息的 `total_cost_usd`（估算）、`usage.input_tokens/output_tokens`、`modelUsage` 的键为模型名；`options.maxBudgetUsd` 超出时 `subtype = 'error_max_budget_usd'` |
 > | 流式事件 | `system/init` → `assistant`（content 里有 `text` / `tool_use` 块）→ … → `result`；大多数消息带 `session_id` |
 >
-> 类型合同由 `spikes/agent-sdk/contract.ts` 固定（`npm run typecheck` 会编译它，SDK 升级后合同变化即编译失败）；真实调用验证脚本 `spikes/agent-sdk/live.mjs` 需要已登录的 Claude Code，未在 CI 中运行。
+> 类型合同由 `spikes/agent-sdk/contract.ts` 固定（`npm run typecheck` 会编译它，SDK 升级后合同变化即编译失败）；真实调用验证脚本 `spikes/agent-sdk/live.mjs` 已于 2026-10-16 真实运行通过（hook 收到的 `session_id` 与 SDK 一致、写 `.stagent/` 被拒、resume 续接成功、usage 字段齐全），不在 CI 中运行；完整试用记录见 `docs/trial.md`。
 
 起草计划时用的提示：需求原文、功能清单与系统地图摘要（`.stagent/docs/system-map.md`），要求输出 2–8 个步骤，每步满足"合并后系统可用、1–4 个例子能验收"，并说明拆分理由。
 

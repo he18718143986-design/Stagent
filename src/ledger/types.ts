@@ -115,6 +115,8 @@ export type Event =
       changeId?: string;
       /** 接入时的基线例子草稿（§9，不做先失败检查）。 */
       baseline?: boolean;
+      /** 谁写的这一版：ai 起草 / user 修改（§14「防盖章」：例子确认时的修改率）。缺省视为 user（M2 的手写例子）。 */
+      by?: 'ai' | 'user';
     }
   | {
       type: 'example.locked';

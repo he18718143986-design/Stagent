@@ -4,7 +4,7 @@
 
 ## SDK 合同（调研结论）
 
-见 [spec.md §8](spec.md) 的 spike 结论表。类型合同在 `spikes/agent-sdk/contract.ts`（`npm run typecheck` 会编译它），真实调用脚本 `spikes/agent-sdk/live.mjs` 需要已登录的 Claude Code，**本次没有真实运行**（不在沙箱里花费用户的额度）——hook 的 stdin / 拒绝格式沿用 M2-1 按官方文档实现的版本。
+见 [spec.md §8](spec.md) 的 spike 结论表。类型合同在 `spikes/agent-sdk/contract.ts`（`npm run typecheck` 会编译它），真实调用脚本 `spikes/agent-sdk/live.mjs` 需要已登录的 Claude Code；2026-10-16 已真实运行，并在 stagent 自身上做了一次完整试用（扫描、基线、新功能、守卫探测），结果见 [trial.md](trial.md)。
 
 ## 适配器 `AgentExecutor`
 
