@@ -9,7 +9,7 @@ import { readFile } from 'node:fs/promises';
 import { basename, isAbsolute, join, normalize, sep } from 'node:path';
 import { activeChangeIdFromLines, knownHead, projectChanges, type ChangeView, type ChangesProjection } from '../changes/changes.js';
 import { loadConfig, type StagentConfig } from '../config/config.js';
-import { cleanOrphanSnapshots, writeSnapshot } from '../evidence/snapshots.js';
+import { cleanOrphanSnapshots } from '../evidence/snapshots.js';
 import { computeWorkTreeHash, type WorkTreeHashResult } from '../evidence/worktree-hash.js';
 import { CHECKS_RELATIVE_DIR, runChecks, type CheckSpec } from '../executor/executor.js';
 import { git, headCommit, isAncestor, UNBORN_COMMIT } from '../git/git.js';
@@ -20,6 +20,11 @@ import { project, type FeatureView, type LedgerProjection } from '../projection/
 import { AuthError, Authorizer, restoreLockedCheck, snapshotForRelock, type AuthRequest, type AuthResult, type DanglingAuth, type TamperedCheck } from './auth.js';
 import { EventBus } from './event-bus.js';
 import { WorkspaceWatcher } from './watcher.js';
+import { ClaudeCodeExecutor } from '../agent/claude-code.js';
+import type { AgentAvailability, AgentExecutor } from '../agent/types.js';
+import { UsageStore, type BudgetStatus } from '../agent/usage.js';
+import type { CheckResult, RunPurpose } from '../ledger/types.js';
+import type { RecordDraft } from './flows/records-flow.js';
 
 export class HttpError extends Error {
   constructor(
@@ -39,6 +44,23 @@ export interface ServiceOptions {
   autoCheckExternal?: boolean;
   /** 测试用：模拟某个授权动作在消费后、副作用前崩溃。 */
   crashBefore?: AuthAction;
+  /** AI 执行器（§8）；默认 Claude Code。传 null 表示不接 AI（M2 的手动流程）。 */
+  agent?: AgentExecutor | null;
+  /** 建改动后自动开始 AI 任务（小改动 → 实现，新功能 → 起草例子），默认 true。 */
+  autoAgent?: boolean;
+  /** 文档生成防抖（毫秒），默认 500；0 表示关闭自动生成。 */
+  docsDebounceMs?: number;
+}
+
+/** 进行中的 AI 任务（同一时间最多一个）。 */
+export interface AgentTaskView {
+  kind: 'classify' | 'draft' | 'rewrite' | 'implement' | 'fix' | 'scan' | 'baseline' | 'plan' | 'records' | 'rule' | 'ask' | 'attribute';
+  label: string;
+  changeId: string | null;
+  line: string;
+  log: string[];
+  startedAt: string;
+  sessionId: string | null;
 }
 
 /** 一次读盘得到的完整状态。 */
@@ -51,8 +73,10 @@ interface Snapshot {
 
 export type OverviewResponse = Overview & {
   runError: string | null;
-  project: { name: string; branch: string | null };
+  project: { name: string; branch: string | null; port?: number };
   auth: { dangling: DanglingAuth[]; tamperedChecks: TamperedCheck[]; releaseConfigured: boolean };
+  agent: { name: string | null; availability: AgentAvailability; task: AgentTaskView | null; lastError: string | null };
+  budget: BudgetStatus;
 };
 
 export class StagentService {
@@ -68,12 +92,35 @@ export class StagentService {
   private activeIdCache: string | null = null;
 
   readonly authorizer: Authorizer;
+  readonly agent: AgentExecutor | null;
+  /** 进行中的 AI 任务（运行时状态）。 */
+  agentTask: (AgentTaskView & { controller: AbortController; promise: Promise<void> }) | null = null;
+  agentError: string | null = null;
+  /** 中断的实现会话（changeId → SDK session_id），供续接。 */
+  readonly interruptedSessions = new Map<string, string>();
+  /** 起草会话的 Claude Code session_id（守卫据此放行 .stagent/checks/draft/**）。 */
+  readonly draftingSessions = new Set<string>();
+  /** 合并后 AI 起草、等你保存的记录卡（不进账本，§10）。 */
+  recordDrafts: RecordDraft[] = [];
+  /** 扫描接入的运行时状态（§9）。 */
+  scan: { running: boolean; found: string[]; error: string | null; startedAt: string } | null = null;
+  /** 「保留现状」后不再提示的规则区块指纹。 */
+  rulesDriftAck = new Set<string>();
+  /** 服务实际端口（顶栏显示）。 */
+  port: number | null = null;
+  private availabilityCache: { at: number; value: AgentAvailability } | null = null;
+  private readonly background = new Set<Promise<unknown>>();
+  private docsTimer: NodeJS.Timeout | null = null;
 
   private constructor(
     readonly root: string,
     readonly ledger: Ledger,
-    private readonly options: ServiceOptions,
+    readonly options: ServiceOptions,
   ) {
+    this.agent = options.agent === undefined ? new ClaudeCodeExecutor() : options.agent;
+    this.bus.subscribe((e) => {
+      if (e.type === 'ledger.appended') this.scheduleDocs();
+    });
     this.authorizer = new Authorizer(
       {
         root,
@@ -104,14 +151,23 @@ export class StagentService {
   static async open(root: string, options: ServiceOptions = {}): Promise<StagentService> {
     const ledger = await Ledger.open(root);
     if (ledger.state === 'ok') await cleanOrphanSnapshots(root, ledger.events());
-    return new StagentService(root, ledger, options);
+    const svc = new StagentService(root, ledger, options);
+    const { loadRecordDrafts } = await import('./flows/records-flow.js');
+    await loadRecordDrafts(svc);
+    const { detectInterruption } = await import('./flows/agent-flow.js');
+    await detectInterruption(svc).catch(() => undefined);
+    return svc;
   }
 
   async config(): Promise<StagentConfig> {
     return this.options.config ?? loadConfig(this.root);
   }
 
-  /** 重新读盘校验账本，按当前工作区投影功能与改动。 */
+  /** 重新读盘校验账本，按当前工作区投影功能与改动（流程模块也用它取一致的状态）。 */
+  async state(): Promise<Snapshot> {
+    return this.snapshot();
+  }
+
   private async snapshot(): Promise<Snapshot> {
     const report = await this.ledger.verify();
     const config = await this.config();
@@ -132,24 +188,87 @@ export class StagentService {
 
   async overview(): Promise<OverviewResponse> {
     const { projection, changes, lines } = await this.snapshot();
+    const config = await this.config();
     const auth = {
       dangling: this.authorizer.dangling(lines),
       tamperedChecks: await this.authorizer.tamperedChecks(projection.features),
-      releaseConfigured: !!(await this.config()).releaseCommand,
+      releaseConfigured: !!config.releaseCommand,
     };
+    const availability = await this.agentAvailability();
+    const budget = await this.budget(changes.active?.changeId ?? null);
+    const extras = await (await import('./flows/overview-extras.js')).overviewExtras(this, { lines, changes: changes.changes });
     const overview = buildOverview({
       projection,
-      ledger: { state: this.ledger.state, brokenLinks: this.ledger.report.brokenLinks },
+      ledger: { state: this.ledger.state, brokenLinks: this.ledger.report.brokenLinks, anchor: this.ledger.anchorStatus },
       run: this.run ? publicRun(this.run) : null,
       change: changes.active,
       auth,
+      agent: { available: availability.available, reason: availability.reason, busy: this.agentTask !== null, kind: this.agentTask?.kind ?? null },
+      budget,
+      ...extras,
     });
     return {
       ...overview,
       runError: this.lastRunError,
-      project: { name: basename(this.root), branch: await currentBranch(this.root) },
+      project: { name: basename(this.root), branch: await currentBranch(this.root), ...(this.port ? { port: this.port } : {}) },
       auth,
+      agent: { name: this.agent?.name ?? null, availability, task: this.agentTask ? publicTask(this.agentTask) : null, lastError: this.agentError },
+      budget,
     };
+  }
+
+  /** AI 执行器是否可用（缓存 30 秒）。 */
+  async agentAvailability(): Promise<AgentAvailability> {
+    if (!this.agent) return { available: false, reason: '没有接入 AI 执行器', hint: '本项目以手动或 Cursor 方式使用 Stagent' };
+    if (this.availabilityCache && Date.now() - this.availabilityCache.at < 30_000) return this.availabilityCache.value;
+    const value = await this.agent.availability().catch((err: Error) => ({ available: false, reason: err.message }));
+    this.availabilityCache = { at: Date.now(), value };
+    return value;
+  }
+
+  usageStore(): UsageStore {
+    return new UsageStore(this.ledger.projectId ?? 'unknown');
+  }
+
+  async budget(changeId: string | null): Promise<BudgetStatus> {
+    return this.usageStore().status(await this.config(), this.ledger.lines(), changeId);
+  }
+
+  /** 相关事件之后重新生成 .stagent/docs/*.md（防抖）。 */
+  private scheduleDocs(): void {
+    const ms = this.options.docsDebounceMs ?? 500;
+    if (ms === 0) return;
+    if (this.docsTimer) clearTimeout(this.docsTimer);
+    this.docsTimer = setTimeout(() => {
+      this.docsTimer = null;
+      void this.regenerateDocs().catch(() => undefined);
+    }, ms);
+    this.docsTimer.unref?.();
+  }
+
+  async regenerateDocs(): Promise<string[]> {
+    const { writeDocs } = await import('./flows/docs-flow.js');
+    return writeDocs(this);
+  }
+
+  /** 记录不占用任务槽的后台工作（合并后起草记录卡等），dispose 与测试可以等它们结束。 */
+  trackBackground(p: Promise<unknown>): void {
+    this.background.add(p);
+    void p.finally(() => this.background.delete(p));
+  }
+
+  async waitForBackground(): Promise<void> {
+    while (this.background.size) await Promise.all([...this.background]);
+  }
+
+  async dispose(): Promise<void> {
+    await this.waitForBackground();
+    if (this.docsTimer) clearTimeout(this.docsTimer);
+    this.docsTimer = null;
+    this.agentTask?.controller.abort();
+    await this.agentTask?.promise.catch(() => undefined);
+    await this.stopWatching();
+    await this.waitForRun();
   }
 
   async features(): Promise<FeatureView[]> {
@@ -183,16 +302,22 @@ export class StagentService {
     return this.activeIdCache;
   }
 
-  /** 该 Claude Code 会话是否是「确认例子」阶段的起草会话（M3-2 提供；目前总是 false）。 */
-  isDraftingSession(_sessionId?: string): boolean {
-    return false;
+  /** 该 Claude Code 会话是否是「确认例子」阶段的起草会话：只有这时守卫放行 .stagent/checks/draft/**（§6）。 */
+  isDraftingSession(sessionId?: string): boolean {
+    return !!sessionId && this.draftingSessions.has(sessionId) && this.agentTask !== null && ['draft', 'rewrite', 'baseline'].includes(this.agentTask.kind);
   }
 
   /**
    * 创建改动（§5.0）：同一时间只能有一个进行中的改动，否则 409。
    * 由 Stagent 发起的改动将由 Claude Code 执行（M3），source 记为 claude-code。
    */
-  async createChange(input: { description?: unknown; track?: unknown }): Promise<ChangeView> {
+  async createChange(input: {
+    description?: unknown;
+    track?: unknown;
+    planId?: string;
+    stepId?: string;
+    targetFeatureIds?: string[];
+  }): Promise<ChangeView> {
     this.assertWritable();
     const description = typeof input.description === 'string' ? input.description.trim() : '';
     if (!description) throw new HttpError(400, '请描述这次改动');
@@ -203,11 +328,16 @@ export class StagentService {
     }
     const changeId = newId('c');
     const baseCommit = await headCommit(this.root);
+    const extra = {
+      ...(input.planId ? { planId: input.planId } : {}),
+      ...(input.stepId ? { stepId: input.stepId } : {}),
+      ...(input.targetFeatureIds?.length ? { targetFeatureIds: input.targetFeatureIds } : {}),
+    };
     // 在账本写锁内再查一次，两个并发请求只有一个能建成（另一个 409）。
     await this.write(() =>
       this.ledger.transaction(async (tx) => {
         if (activeChangeIdFromLines(tx.report.lines)) throw new HttpError(409, '已有进行中的改动，请先合并或放弃');
-        await tx.append({ type: 'change.started', changeId, track, baseCommit, source: 'claude-code', description });
+        await tx.append({ type: 'change.started', changeId, track, baseCommit, source: 'claude-code', description, ...extra });
       }),
     );
     return this.change(changeId);
@@ -274,7 +404,8 @@ export class StagentService {
 
   /**
    * 确认并锁定例子（POST /api/changes/:id/examples/lock）：写检查快照与 example.locked。
-   * 不传 exampleIds 时锁定本改动全部草稿。先失败检查的强制要求在 M3-2 加入。
+   * 新功能档要求每条例子已有合格的先失败检查或豁免，且内容哈希一致，否则 422（Invariant 7，§5.1）。
+   * 不传 exampleIds 时锁定本改动全部草稿。
    */
   async lockExamples(changeId: string, input: { exampleIds?: unknown }): Promise<ChangeView> {
     const c = await this.activeChange(changeId);
@@ -282,24 +413,11 @@ export class StagentService {
     if (ids.length === 0) throw new HttpError(400, '没有待锁定的例子草稿');
     const unknown = ids.filter((id) => !c.pendingDraftIds.includes(id));
     if (unknown.length) throw new HttpError(409, `这些例子不是本改动的待锁定草稿：${unknown.join('、')}`);
-
-    const drafts = new Map<string, string>();
-    for (const { event: e } of this.ledger.lines()) if (e.type === 'example.drafted' && e.checkPath) drafts.set(e.exampleId, e.checkPath);
-    const locks: { exampleId: string; checkPath: string; checkHash: string }[] = [];
-    for (const exampleId of ids) {
-      const checkPath = drafts.get(exampleId)!;
-      let content: Buffer;
-      try {
-        content = await readFile(join(this.root, checkPath));
-      } catch {
-        throw new HttpError(400, `检查文件 ${checkPath} 不存在`);
-      }
-      locks.push({ exampleId, checkPath, checkHash: await writeSnapshot(this.root, content) });
-    }
-    await this.write(() =>
-      this.ledger.transaction(async (tx) => {
-        for (const l of locks) await tx.append({ type: 'example.locked', ...l, by: 'user', changeId });
-      }),
+    const { lockDrafts } = await import('./flows/examples-flow.js');
+    await lockDrafts(
+      this,
+      c.pendingDrafts.filter((d) => ids.includes(d.exampleId)),
+      { changeId, requireRed: c.track === 'feature' },
     );
     return this.change(changeId);
   }
@@ -321,7 +439,6 @@ export class StagentService {
     this.assertWritable();
     const snap = await this.snapshot();
     const features = snap.projection.features;
-    const changeId = snap.changes.active?.changeId ?? null;
     const checks: CheckSpec[] = features.flatMap((f) =>
       f.examples.map((x) => ({
         exampleId: x.exampleId,
@@ -331,6 +448,23 @@ export class StagentService {
     );
     if (checks.length === 0) throw new HttpError(400, '还没有锁定的例子');
     const names = new Map(features.flatMap((f) => f.examples.map((x) => [x.exampleId, `${f.name}：${x.then}`])));
+    return this.startRun({ purpose: 'regression', checks, names, changeId: snap.changes.active?.changeId ?? null });
+  }
+
+  /**
+   * 启动一轮运行（回归 / 基线 / 先失败检查）。同一时间只有一轮；异步执行，进度经 SSE 推送。
+   * 先失败检查（red_check）的结果不参与例子状态判定（Invariant 7），由投影负责忽略。
+   */
+  async startRun(req: {
+    purpose: RunPurpose;
+    checks: CheckSpec[];
+    names: Map<string, string>;
+    changeId: string | null;
+  }): Promise<{ total: number }> {
+    if (this.run) throw new HttpError(409, '已有检查在运行');
+    this.assertWritable();
+    const { checks, names, changeId, purpose } = req;
+    if (checks.length === 0) throw new HttpError(400, '没有要运行的检查');
 
     const controller = new AbortController();
     const config = await this.config();
@@ -353,7 +487,7 @@ export class StagentService {
       projectRoot: this.root,
       ledger: this.ledger,
       checks,
-      purpose: 'regression',
+      purpose,
       ...(changeId ? { changeId } : {}),
       config,
       signal: controller.signal,
@@ -372,8 +506,10 @@ export class StagentService {
     })
       .then((outcome) => {
         for (const r of outcome.runs) this.bus.publish('ledger.appended', { seq: r.seq, type: r.event.type });
-        this.bus.publish('run.finished', { runId: outcome.final.event.runId, valid: outcome.final.event.valid, changeId });
+        this.bus.publish('run.finished', { runId: outcome.final.event.runId, valid: outcome.final.event.valid, changeId, purpose });
         this.lastSeenWorkTreeHash = outcome.final.event.endWorkTreeHash;
+        this.lastRunResults = { runId: outcome.final.event.runId, purpose, results: outcome.final.event.results };
+        this.trackBackground(this.afterRun(outcome.runs.map((r) => r.event)).catch(() => undefined));
       })
       .catch((err: Error) => {
         this.lastRunError = err.message;
@@ -387,6 +523,15 @@ export class StagentService {
         }
       });
     return { total: checks.length };
+  }
+
+  /** 最近一轮运行的结果（流程模块用：先失败检查的返回值）。 */
+  lastRunResults: { runId: string; purpose: RunPurpose; results: CheckResult[] } | null = null;
+
+  /** 一轮运行结束后：埋点、为进行中的改动更新文件归属（§4.5）。 */
+  private async afterRun(runs: EventOf<'run.completed'>[]): Promise<void> {
+    const { afterRunHooks } = await import('./flows/hooks.js');
+    await afterRunHooks(this, runs);
   }
 
   cancelRun(): void {
@@ -491,16 +636,35 @@ export class StagentService {
   // ---- 授权与合并门（§6） ----
 
   async authorize(req: AuthRequest): Promise<AuthResult> {
+    let result: AuthResult;
     try {
-      return await this.authorizer.authorize(req);
+      await this.beforeAuthorize(req);
+      result = await this.authorizer.authorize(req);
     } catch (err) {
       throw err instanceof AuthError ? new HttpError(err.statusCode, err.message) : err;
     }
+    await this.afterAuthorize(req, result).catch(() => undefined);
+    return result;
   }
 
   /** POST /api/changes/:id/merge：合并（服务端合并门 + 授权三段式，免填原因）。 */
   merge(changeId: string): Promise<AuthResult> {
     return this.authorize({ action: 'merge', changeId });
+  }
+
+  /** 授权之前：合并类动作先写好文件归属（§4.5：到达可合并前由服务端写 change.files_attributed）。 */
+  private async beforeAuthorize(req: AuthRequest): Promise<void> {
+    if ((req.action === 'merge' || req.action === 'merge_override') && typeof req.changeId === 'string') {
+      const { ensureAttribution } = await import('./flows/map-flow.js');
+      await ensureAttribution(this, req.changeId).catch(() => undefined);
+    }
+  }
+
+  /** 授权完成之后：合并后起草记录卡（§10）。 */
+  private async afterAuthorize(req: AuthRequest, result: AuthResult): Promise<void> {
+    if (!result.ok) return;
+    const { afterAuthHooks } = await import('./flows/hooks.js');
+    await afterAuthHooks(this, req, result);
   }
 
   async abandonPreview(changeId: string) {
@@ -585,9 +749,49 @@ export class StagentService {
     this.bus.publish('ledger.appended', { seq: line.seq, type: line.event.type });
   }
 
+  /** POST /api/ledger/recover（§4.1、M6）。 */
+  async recoverLedger(mode: unknown, reason: string): Promise<void> {
+    if (mode === 'accept_current') return this.acceptLedger(reason);
+    if (mode === 'establish_trust') {
+      try {
+        const line = await this.ledger.establishTrust(reason.trim() || '用户确认当前账本可信');
+        this.bus.publish('ledger.appended', { seq: line.seq, type: line.event.type });
+      } catch (err) {
+        throw new HttpError(409, (err as Error).message);
+      }
+      return;
+    }
+    if (mode === 'from_git') {
+      try {
+        const line = await this.ledger.restoreFromGit(this.root, reason.trim() || '从 git 历史恢复');
+        await cleanOrphanSnapshots(this.root, this.ledger.events());
+        this.bus.publish('ledger.appended', { seq: line.seq, type: line.event.type });
+      } catch (err) {
+        throw new HttpError(409, (err as Error).message);
+      }
+      return;
+    }
+    throw new HttpError(400, 'mode 必须是 accept_current、establish_trust 或 from_git');
+  }
+
+  /** 「修改启动命令」：写回 .stagent/config.json 的 devServer（config 在 workTreeHash 范围内，证据会过期——这是预期行为）。 */
+  async setDevServer(body: { command?: unknown; url?: unknown }): Promise<{ ok: true }> {
+    this.assertWritable();
+    const command = typeof body.command === 'string' ? body.command.trim() : '';
+    const url = typeof body.url === 'string' ? body.url.trim() : '';
+    if (!command || !/^https?:\/\//.test(url)) throw new HttpError(400, '请填写启动命令和以 http(s):// 开头的健康检查地址');
+    const path = join(this.root, '.stagent', 'config.json');
+    const raw = JSON.parse(await readFile(path, 'utf8').catch(() => '{}')) as Record<string, unknown>;
+    const prev = (raw.devServer ?? {}) as Record<string, unknown>;
+    raw.devServer = { ...prev, command, url };
+    const { writeFile } = await import('node:fs/promises');
+    await writeFile(path, JSON.stringify(raw, null, 2) + '\n');
+    return { ok: true };
+  }
+
   // ---- 内部 ----
 
-  private async activeChange(changeId: string): Promise<ChangeView> {
+  async activeChange(changeId: string): Promise<ChangeView> {
     this.assertWritable();
     const { changes } = await this.snapshot();
     const c = changes.changes.find((x) => x.changeId === changeId);
@@ -596,11 +800,11 @@ export class StagentService {
     return c;
   }
 
-  private assertWritable(): void {
+  assertWritable(): void {
     if (this.ledger.state === 'locked') throw new HttpError(423, '账本被修改，写操作已禁用');
   }
 
-  private async write<T>(fn: () => Promise<T>): Promise<T> {
+  async write<T>(fn: () => Promise<T>): Promise<T> {
     this.assertWritable();
     try {
       const before = this.ledger.report.nextSeq;
@@ -626,15 +830,27 @@ async function currentBranch(root: string): Promise<string | null> {
   }
 }
 
+function publicTask(t: AgentTaskView): AgentTaskView {
+  return {
+    kind: t.kind,
+    label: t.label,
+    changeId: t.changeId,
+    line: t.line,
+    log: t.log.slice(-200),
+    startedAt: t.startedAt,
+    sessionId: t.sessionId,
+  };
+}
+
 function publicRun(r: RunProgressView): RunProgressView {
   return { runId: r.runId, done: r.done, total: r.total, current: r.current, startedAt: r.startedAt };
 }
 
-function newId(prefix: string): string {
+export function newId(prefix: string): string {
   return `${prefix}-${randomBytes(4).toString('hex')}`;
 }
 
-function checkPathInput(p: string): string {
+export function checkPathInput(p: string): string {
   if (!p) throw new HttpError(400, '缺少检查文件路径');
   const n = normalize(p);
   const prefix = normalize(CHECKS_RELATIVE_DIR) + sep;

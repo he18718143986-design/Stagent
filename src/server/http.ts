@@ -1,13 +1,23 @@
 /**
- * 本地 HTTP + SSE 接口（规格 §12，M1-3 范围）。
+ * 本地 HTTP + SSE 接口（规格 §12）。业务流程在 src/server/flows/，这里只做路由。
  */
 import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { extname, join, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { LedgerVersionError } from '../ledger/verify.js';
 import { registerGuardRoutes } from './guard-routes.js';
 import { HttpError, type StagentService } from './service.js';
+import * as agentFlow from './flows/agent-flow.js';
+import * as examplesFlow from './flows/examples-flow.js';
+import * as mapFlow from './flows/map-flow.js';
+import * as planFlow from './flows/plan-flow.js';
+import * as recordsFlow from './flows/records-flow.js';
+import { report } from './flows/report-flow.js';
+import { recordMetric } from '../metrics/metrics.js';
+import { RUNS_RELATIVE_DIR } from '../executor/executor.js';
 
 /** 打包后的前端（vite build 输出）。src/server 与 dist/server 都在包根目录下两级。 */
 export const WEB_DIST = fileURLToPath(new URL('../../web/dist/', import.meta.url));
@@ -57,14 +67,22 @@ export async function buildServer(service: StagentService, opts: BuildServerOpti
     await service.acceptLedger(typeof req.body?.reason === 'string' ? req.body.reason : '');
     return { ok: true };
   });
+  // 账本恢复（§4.1、M6）：accept_current → integrity_override；establish_trust → TOFU；from_git → 从 git 历史恢复。
+  app.post<{ Body: { mode?: unknown; reason?: unknown } }>('/api/ledger/recover', async (req) => {
+    await service.recoverLedger(req.body?.mode, typeof req.body?.reason === 'string' ? req.body.reason : '');
+    return { ok: true };
+  });
 
   registerGuardRoutes(app, service);
 
   // 改动（§5）
   app.get('/api/changes', () => service.changes());
-  app.post<{ Body: { description?: unknown; track?: unknown } }>('/api/changes', async (req, reply) =>
-    reply.status(201).send(await service.createChange(req.body ?? {})),
-  );
+  // 建改动：AI 判断档位；需求应拆成计划时返回 { suggestPlan: true }，前端询问后调 /api/plans 或带 force: true 重试。
+  app.post<{ Body: { description?: unknown; track?: unknown; force?: unknown } }>('/api/changes', async (req, reply) => {
+    const r = await agentFlow.createChangeFlow(service, { description: req.body?.description, track: req.body?.track, force: req.body?.force });
+    if (r.kind === 'suggest_plan') return reply.status(200).send({ suggestPlan: true, rationale: r.rationale, targetFeatureIds: r.targetFeatureIds });
+    return reply.status(201).send(r.change);
+  });
   app.get<{ Params: { id: string } }>('/api/changes/:id', (req) => service.change(req.params.id));
   app.post<{ Params: { id: string }; Body: { track?: unknown; reason?: unknown } }>('/api/changes/:id/track', (req) =>
     service.setTrack(req.params.id, req.body ?? {}),
@@ -78,6 +96,126 @@ export async function buildServer(service: StagentService, opts: BuildServerOpti
   app.post<{ Params: { id: string } }>('/api/changes/:id/check', async (req, reply) =>
     reply.status(202).send(await service.startCheck(req.params.id)),
   );
+
+  // Claude Code 驱动（§5、§8）
+  app.post<{ Params: { id: string } }>('/api/changes/:id/draft', async (req, reply) =>
+    reply.status(202).send(await examplesFlow.startDraftExamples(service, req.params.id)),
+  );
+  app.post<{ Params: { id: string } }>('/api/changes/:id/implement', async (req, reply) =>
+    reply.status(202).send(await agentFlow.startAgentChain(service, req.params.id, 'implement')),
+  );
+  app.post<{ Params: { id: string } }>('/api/changes/:id/fix', async (req, reply) =>
+    reply.status(202).send(await agentFlow.startAgentChain(service, req.params.id, 'fix')),
+  );
+  app.post<{ Params: { id: string } }>('/api/changes/:id/resume', async (req, reply) =>
+    reply.status(202).send(await agentFlow.resumeAgent(service, req.params.id)),
+  );
+  app.post('/api/agent/cancel', async () => {
+    agentFlow.cancelAgent(service);
+    return { ok: true };
+  });
+
+  // 先失败检查（§5.1）
+  app.post<{ Params: { id: string }; Body: { exampleIds?: unknown } }>('/api/changes/:id/red-check', (req) =>
+    examplesFlow.runRedCheck(service, req.params.id, req.body ?? {}),
+  );
+  app.post<{ Params: { id: string; exampleId: string }; Body: { reason?: unknown } }>('/api/changes/:id/examples/:exampleId/red-waive', (req) =>
+    examplesFlow.redWaive(service, req.params.id, req.params.exampleId, req.body ?? {}),
+  );
+  app.post<{ Params: { id: string; exampleId: string } }>('/api/changes/:id/examples/:exampleId/rewrite', async (req, reply) =>
+    reply.status(202).send(await examplesFlow.rewriteExample(service, req.params.id, req.params.exampleId)),
+  );
+  app.post<{ Params: { id: string; exampleId: string }; Body: { reason?: unknown } }>('/api/changes/:id/examples/:exampleId/discard', (req) =>
+    examplesFlow.discardExample(service, req.params.id, req.params.exampleId, req.body ?? {}),
+  );
+
+  // 「改了什么」与文件归属（§4.5、D20）
+  app.get<{ Params: { id: string } }>('/api/changes/:id/diff', (req) => mapFlow.changeDiff(service, req.params.id));
+  app.put<{ Params: { id: string }; Body: unknown }>('/api/changes/:id/attributions', (req) => mapFlow.setAttributions(service, req.params.id, req.body));
+  app.get('/api/map', () => mapFlow.mapView(service));
+  app.get<{ Querystring: { path?: string } }>('/api/map/files', (req) => mapFlow.fileQuery(service, req.query.path ?? ''));
+  app.post<{ Body: unknown }>('/api/map/files', (req) => mapFlow.reassignFile(service, req.body));
+
+  // 需求计划（§5.5）
+  app.get('/api/plans', () => planFlow.plans(service));
+  app.post<{ Body: { requirement?: unknown } }>('/api/plans', async (req, reply) => reply.status(201).send(await planFlow.draftPlan(service, req.body ?? {})));
+  app.get<{ Params: { id: string } }>('/api/plans/:id', (req) => planFlow.plan(service, req.params.id));
+  app.post<{ Params: { id: string }; Body: { steps?: unknown } }>('/api/plans/:id/confirm', (req) => planFlow.confirmPlan(service, req.params.id, req.body ?? {}));
+  app.post<{ Params: { id: string }; Body: { steps?: unknown; reason?: unknown } }>('/api/plans/:id/revise', (req) =>
+    planFlow.revisePlan(service, req.params.id, req.body ?? {}),
+  );
+  app.post<{ Params: { id: string }; Body: { outcome?: unknown; reason?: unknown } }>('/api/plans/:id/close', (req) =>
+    planFlow.closePlan(service, req.params.id, req.body ?? {}),
+  );
+  app.post<{ Params: { id: string; stepId: string } }>('/api/plans/:id/steps/:stepId/start', async (req, reply) =>
+    reply.status(201).send(await planFlow.startStep(service, req.params.id, req.params.stepId)),
+  );
+
+  // 外观确认（§7）与决策卡追问（D17）
+  app.post<{ Params: { exampleId: string }; Body: { ok?: unknown; note?: unknown } }>('/api/visual/:exampleId', (req) =>
+    examplesFlow.confirmVisual(service, req.params.exampleId, req.body ?? {}),
+  );
+  app.post<{ Params: { cardId: string }; Body: unknown }>('/api/decisions/:cardId/ask', (req) => examplesFlow.askDecision(service, req.params.cardId, req.body));
+
+  // 接入（§9）
+  app.post('/api/scan', async (_req, reply) => reply.status(202).send(await examplesFlow.startScan(service)));
+  app.get('/api/baseline', () => examplesFlow.listBaseline(service));
+  app.post<{ Params: { id: string } }>('/api/features/:id/baseline', async (req, reply) =>
+    reply.status(202).send(await examplesFlow.startBaselineDraft(service, req.params.id)),
+  );
+  app.post<{ Params: { id: string }; Body: Record<string, unknown> }>('/api/features/:id/baseline/manual', async (req, reply) =>
+    reply.status(201).send(await examplesFlow.addBaselineDraft(service, req.params.id, req.body ?? {})),
+  );
+  app.put<{ Params: { id: string }; Body: Record<string, unknown> }>('/api/examples/:id/draft', (req) =>
+    examplesFlow.editBaselineDraft(service, req.params.id, req.body ?? {}),
+  );
+  app.post<{ Body: { exampleIds?: unknown } }>('/api/baseline/lock', async (req, reply) =>
+    reply.status(202).send(await examplesFlow.lockBaseline(service, req.body ?? {})),
+  );
+  app.post<{ Params: { id: string }; Body: { reason?: unknown } }>('/api/examples/:id/known-inconsistent', (req) =>
+    examplesFlow.acceptKnownInconsistent(service, req.params.id, req.body ?? {}),
+  );
+
+  // 记录、规则与个人通用库（§10）
+  app.get('/api/records', () => recordsFlow.recordsView(service));
+  app.post<{ Body: Record<string, unknown> }>('/api/records', async (req, reply) => reply.status(201).send(await recordsFlow.saveRecord(service, req.body ?? {})));
+  app.post<{ Params: { id: string } }>('/api/records/drafts/:id/dismiss', (req) => recordsFlow.dismissRecordDraft(service, req.params.id));
+  app.get('/api/rules', async () => (await recordsFlow.recordsView(service)).rules);
+  app.post<{ Params: { id: string }; Body: Record<string, unknown> }>('/api/rules/:id/accept', (req) => recordsFlow.acceptRule(service, req.params.id, req.body ?? {}));
+  app.post<{ Params: { id: string } }>('/api/rules/:id/retire', (req) => recordsFlow.retireRule(service, req.params.id));
+  app.post('/api/rules/regenerate', () => recordsFlow.regenerateRules(service));
+  app.post('/api/rules/keep', () => recordsFlow.keepRulesDrift(service));
+  app.get('/api/library', () => recordsFlow.libraryView(service));
+  app.post<{ Params: { id: string } }>('/api/library/:id/import', (req) => recordsFlow.importLibraryRule(service, req.params.id));
+
+  // 交付报告（§11、D26）
+  app.get<{ Querystring: { format?: string } }>('/api/report', async (req, reply) => {
+    const r = await report(service, req.query.format ?? 'html');
+    if (r.note) reply.header('X-Stagent-Report-Note', encodeURIComponent(r.note));
+    if (r.type === 'pdf') return reply.type('application/pdf').header('Content-Disposition', 'inline; filename="stagent-report.pdf"').send(r.body);
+    return reply.type('text/html; charset=utf-8').send(r.body);
+  });
+
+  // 运行产物（截图、日志）：只允许 .stagent/runs/ 下的文件。
+  app.get<{ Querystring: { path?: string } }>('/api/files', async (req, reply) => {
+    const rel = normalize(req.query.path ?? '');
+    const prefix = normalize(RUNS_RELATIVE_DIR) + sep;
+    if (!rel.startsWith(prefix) || rel.includes(`..${sep}`)) throw new HttpError(400, '只能读取 .stagent/runs/ 下的运行产物');
+    const body = await readFile(join(service.root, rel)).catch(() => null);
+    if (body === null) throw new HttpError(404, '文件不存在');
+    const types: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.log': 'text/plain; charset=utf-8' };
+    return reply.type(types[extname(rel)] ?? 'text/plain; charset=utf-8').send(body);
+  });
+
+  // 开发服务器起不来时「修改启动命令」（§11）
+  app.post<{ Body: { command?: unknown; url?: unknown } }>('/api/config/dev-server', (req) => service.setDevServer(req.body ?? {}));
+
+  // 界面埋点（§14）
+  app.post<{ Body: { name?: unknown; data?: unknown } }>('/api/metrics', async (req) => {
+    const name = typeof req.body?.name === 'string' && /^[a-z_.]{1,60}$/.test(req.body.name) ? req.body.name : null;
+    if (name) await recordMetric(service.ledger.projectId, `ui.${name}`, typeof req.body?.data === 'object' && req.body.data ? (req.body.data as Record<string, unknown>) : {});
+    return { ok: true };
+  });
 
   // 授权与合并门（§6）：所有不可逆动作都走授权三段式。
   app.post<{ Params: { id: string } }>('/api/changes/:id/merge', (req) => service.merge(req.params.id));
@@ -95,6 +233,17 @@ export async function buildServer(service: StagentService, opts: BuildServerOpti
     await service.relockExample(req.params.id, req.body ?? {});
     return { ok: true };
   });
+  // §12 的专用授权入口：与 POST /api/auth 等价，走同一条三段式事务。
+  app.post<{ Params: { id: string }; Body: { reason?: unknown } }>('/api/changes/:id/abandon', (req) =>
+    service.authorize({ action: 'abandon', changeId: req.params.id, reason: req.body?.reason }),
+  );
+  app.post<{ Params: { id: string; exampleId: string }; Body: { reason?: unknown } }>('/api/changes/:id/examples/:exampleId/unlock', (req) =>
+    service.authorize({ action: 'modify_locked', exampleId: req.params.exampleId, reason: req.body?.reason }),
+  );
+  app.post<{ Params: { id: string }; Body: { reason?: unknown } }>('/api/features/:id/retire', (req) =>
+    service.authorize({ action: 'delete', featureId: req.params.id, reason: req.body?.reason }),
+  );
+  app.post<{ Body: { reason?: unknown } }>('/api/release', (req) => service.authorize({ action: 'release', reason: req.body?.reason }));
 
   app.get<{ Querystring: { lastEventId?: string } }>('/api/events/stream', (req, reply) => {
     const header = req.headers['last-event-id'];

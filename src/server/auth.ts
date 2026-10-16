@@ -90,6 +90,7 @@ export interface AuthRequest {
   reason?: unknown;
   featureId?: unknown;
   exampleId?: unknown;
+  recordId?: unknown;
   amount?: unknown;
 }
 
@@ -234,7 +235,15 @@ export class Authorizer {
     // 第 2 步：授权与消费一起落盘，先于任何副作用。
     await this.host.write(() =>
       this.host.ledger.transaction(async (tx) => {
-        await tx.append({ type: 'auth.granted', authId, action, ...(changeId ? { changeId } : {}), reason });
+        await tx.append({
+          type: 'auth.granted',
+          authId,
+          action,
+          ...(changeId ? { changeId } : {}),
+          reason,
+          ...(plan.targetId ? { targetId: plan.targetId } : {}),
+          ...(plan.amount ? { amount: plan.amount } : {}),
+        });
         await tx.append({ type: 'auth.consumed', authId, action, ...(changeId ? { changeId } : {}) });
         if (action !== 'merge') {
           await tx.append({
@@ -289,6 +298,8 @@ export class Authorizer {
   ): Promise<{
     changeId?: string;
     subject?: string;
+    targetId?: string;
+    amount?: number;
     run: (authId: string) => Promise<{ events: Event[]; ok: boolean; detail?: string; result: Partial<AuthResult> }>;
     after?: () => Promise<void>;
   }> {
@@ -353,6 +364,7 @@ export class Authorizer {
         return {
           ...(state.active ? { changeId: state.active.changeId } : {}),
           subject: x.then,
+          targetId: exampleId,
           run: async (authId) => ({
             events: [{ type: 'example.unlocked', exampleId, reason: String(req.reason).trim(), by: 'user', authId }],
             ok: true,
@@ -362,12 +374,28 @@ export class Authorizer {
       }
 
       case 'delete': {
+        // delete 的对象：功能退役（featureId）或记录删除（recordId）。
+        if (typeof req.recordId === 'string' && req.recordId) {
+          const recordId = req.recordId;
+          const live = new Set<string>();
+          for (const { event: e } of state.lines) {
+            if (e.type === 'record.saved') live.add(e.recordId);
+            else if (e.type === 'record.deleted') live.delete(e.recordId);
+          }
+          if (!live.has(recordId)) throw new AuthError(404, `记录 ${recordId} 不存在`);
+          return {
+            subject: `记录 ${recordId}`,
+            targetId: recordId,
+            run: async (authId) => ({ events: [{ type: 'record.deleted', recordId, authId }], ok: true, result: {} }),
+          };
+        }
         const featureId = typeof req.featureId === 'string' ? req.featureId : '';
         const f = state.features.find((x) => x.featureId === featureId);
         if (!f) throw new AuthError(404, `功能 ${featureId || '（未指定）'} 不存在`);
         const reason = String(req.reason).trim();
         return {
           subject: f.name,
+          targetId: featureId,
           run: async (authId) => ({
             events: [
               ...f.examples.map(
@@ -410,12 +438,15 @@ export class Authorizer {
       }
 
       case 'budget_raise': {
-        // M3-1 触发；这里只记录授权本身。
-        const amount = typeof req.amount === 'number' && req.amount > 0 ? req.amount : null;
+        // 费用达到上限时由结论卡发起（M3-1）：额度记在 auth.granted.amount，带 changeId 时提高本改动的上限，
+        // 同时提高当日上限（src/agent/usage.ts）。
+        const amount = typeof req.amount === 'number' && Number.isFinite(req.amount) && req.amount > 0 ? req.amount : null;
+        if (!amount) throw new AuthError(400, '请填写要提高的额度（美元，正数）');
         return {
           ...(state.active ? { changeId: state.active.changeId } : {}),
-          ...(amount ? { subject: `上限提高到 ${amount}` } : {}),
-          run: async () => ({ events: [], ok: true, ...(amount ? { detail: `amount=${amount}` } : {}), result: {} }),
+          subject: `费用上限提高 $${amount}`,
+          amount,
+          run: async () => ({ events: [], ok: true, detail: `amount=${amount}`, result: {} }),
         };
       }
     }

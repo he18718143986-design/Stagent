@@ -11,7 +11,7 @@ import { gitProject, nodeConfig } from './project.js';
 const apps: FastifyInstance[] = [];
 const services: StagentService[] = [];
 afterEach(async () => {
-  await Promise.all(services.splice(0).map((s) => s.stopWatching().then(() => s.waitForRun())));
+  await Promise.all(services.splice(0).map((s) => s.dispose()));
   await Promise.all(apps.splice(0).map((a) => a.close()));
 });
 
@@ -21,12 +21,12 @@ export async function serverProject(
   options: Omit<ServiceOptions, 'config'> = {},
 ) {
   const { root } = await gitProject({ 'src/app.js': 'export const x = 1;\n', 'README.md': '# app\n' });
-  const service = await StagentService.open(root, { config, ...options });
+  const service = await StagentService.open(root, { config, agent: null, docsDebounceMs: 0, ...options });
   const app = await buildServer(service, { serveWeb: false, heartbeatMs: 50 });
   apps.push(app);
   services.push(service);
 
-  const call = async <T = unknown>(method: 'GET' | 'POST', url: string, payload?: object) => {
+  const call = async <T = unknown>(method: 'GET' | 'POST' | 'PUT', url: string, payload?: object) => {
     const res = await app.inject({ method, url, payload });
     return { status: res.statusCode, body: res.json() as T };
   };
@@ -42,7 +42,7 @@ export async function serverProject(
     await writeCheck(checkPath, source);
     let change = (await call<ChangesProjection>('GET', '/api/changes')).body.active;
     if (!change) {
-      change = (await call<ChangeView>('POST', '/api/changes', { description: `新增 ${featureName}`, track: 'feature' })).body;
+      change = (await call<ChangeView>('POST', '/api/changes', { description: `新增 ${featureName}`, track: 'feature', force: true })).body;
     } else if (change.track === 'small') {
       await call('POST', `/api/changes/${change.changeId}/track`, { track: 'feature' });
     }
@@ -54,6 +54,9 @@ export async function serverProject(
       checkPath,
     });
     if (d.status !== 201) throw new Error(JSON.stringify(d.body));
+    // 新功能档锁定前必须有合格的先失败检查或豁免（Invariant 7）。这里的检查是手写的已知行为，按「确认行为已存在」豁免。
+    const w = await call('POST', `/api/changes/${change.changeId}/examples/${d.body.exampleId}/red-waive`, { reason: '测试：手写检查，行为已知' });
+    if (w.status !== 200) throw new Error(JSON.stringify(w.body));
     const l = await call('POST', `/api/changes/${change.changeId}/examples/lock`, { exampleIds: [d.body.exampleId] });
     if (l.status !== 200) throw new Error(JSON.stringify(l.body));
     return { featureId: d.body.featureId, exampleId: d.body.exampleId, changeId: change.changeId };

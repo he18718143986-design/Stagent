@@ -14,6 +14,7 @@ import {
   type LedgerLine,
 } from '../../src/ledger/index.js';
 import { tmpProject } from '../helpers/tmp.js';
+import { Anchor } from '../../src/ledger/anchor.js';
 
 const feature = (n: number): Event => ({ type: 'feature.created', featureId: `f${n}`, name: `功能 ${n}`, origin: 'new' });
 
@@ -259,7 +260,11 @@ describe('账本：末尾半行（规则 2a）', () => {
     const { root } = await seeded(2);
     const full = await readFile(Ledger.pathFor(root), 'utf8');
     const lastLineStart = full.lastIndexOf('\n', full.length - 2) + 1;
-    // 模拟崩溃：最后一行只写了一半，没有换行。
+    // 模拟崩溃：最后一行只写了一半，没有换行。按原子写入协议（M6），此时 head 仍是上一行、head.tmp 是这次 append 的意图。
+    const lines = full.trimEnd().split('\n').map((l) => JSON.parse(l) as { hash: string });
+    const anchor = Anchor.forProject('p-test');
+    await anchor.writeIntent(lines[2]!.hash);
+    await writeFile(anchor.headPath, lines[1]!.hash + '\n');
     await writeFile(Ledger.pathFor(root), full.slice(0, lastLineStart + 20));
 
     const ledger = await Ledger.open(root);

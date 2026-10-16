@@ -85,7 +85,7 @@
 
 服务端接口 `POST /api/guard/pre-tool-use`（`src/server/guard-routes.ts`）：请求体就是 hook 的 stdin，返回 `{ decision: 'allow' | 'deny', reason?, ruleId? }`；拒绝时写 `guard.blocked { changeId?, path, tool, detail }`，`changeId` 取 `GuardHost.activeChangeId()`。文件工具的 `path` 是相对项目根目录的路径，Bash 的 `path` 是命令原文（截断到 200 字），`detail` 是给 AI 的原因。这个接口只可能写 `guard.blocked`，不可能产生已验证（`test/invariants/` 的伪造请求循环覆盖它）。
 
-`GuardHost` 由 `StagentService` 实现：`activeChangeId()` 暂时恒为 `null`（M2-2 接上改动流程），`isDraftingSession()` 暂时恒为 `false`（M3-2 接上起草会话），所以现阶段草稿目录对所有会话都关闭。
+`GuardHost` 由 `StagentService` 实现：`activeChangeId()` 取进行中的改动（M2-2）；`isDraftingSession(session_id)` 只在 Claude Code 正在起草例子 / 重写检查 / 起草基线、且 hook 的 `session_id` 就是这个起草会话时为真（M3-2），其它会话与其它时候草稿目录一律关闭。
 
 ## pre-merge-commit 提醒
 

@@ -22,7 +22,7 @@ describe('stagent init', () => {
     const ledger = await Ledger.open(root);
     expect(ledger.events()[0]).toMatchObject({ type: 'ledger.meta', ledgerVersion: 3, projectId: r.projectId });
     const gi = await readFile(join(root, '.gitignore'), 'utf8');
-    expect(gi).toBe('node_modules/\n# stagent\n.stagent/runs/\n.stagent/service.lock\n');
+    expect(gi).toBe('node_modules/\n# stagent\n.stagent/runs/\n.stagent/docs/\n.stagent/service.lock\n');
     const config = JSON.parse(await readFile(join(root, '.stagent/config.json'), 'utf8')) as Record<string, unknown>;
     expect(config).toMatchObject({ checkCommand: 'npx playwright test {path}', devServer: null });
   });

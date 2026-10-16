@@ -12,4 +12,6 @@ export {
   assertReason,
   type LedgerOptions,
   type LedgerTx,
+  type AnchorStatus,
 } from './ledger.js';
+export { Anchor, type AnchorCheck, type AnchorState } from './anchor.js';

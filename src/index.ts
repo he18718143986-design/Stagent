@@ -9,3 +9,6 @@ export * from './init/init.js';
 export { StagentService, HttpError } from './server/service.js';
 export { buildServer } from './server/http.js';
 export { startService, DEFAULT_PORT, type RunningService } from './server/start.js';
+export { ClaudeCodeExecutor } from './agent/claude-code.js';
+export { ScriptedExecutor, writeProjectFile } from './agent/scripted.js';
+export type * from './agent/types.js';

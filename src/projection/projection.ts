@@ -59,7 +59,15 @@ export interface ResultRef {
   logPath: string;
   detail?: string;
   attempts: number;
+  /** 每次尝试（结果不稳定时展开看日志）。 */
+  attemptLogs: { status: string; logPath: string; durationMs: number }[];
+  /** 外观例子的截图（相对项目根目录）。 */
+  screenshot?: string;
+  purpose: EventOf<'run.completed'>['purpose'];
 }
+
+/** 锁定前的先失败检查结果或豁免原因（§5.1，交付报告逐条列出）。 */
+export type RedCheckInfo = { kind: 'failed'; runId: string } | { kind: 'waived'; reason: string } | { kind: 'baseline' } | { kind: 'none' };
 
 export interface ExampleView {
   exampleId: string;
@@ -78,13 +86,24 @@ export interface ExampleView {
   explanation: string;
   lastResult: ResultRef | null;
   claims: { text: string; at: IsoTime }[];
+  /** 检查代码的大白话摘要。 */
+  summary?: string;
+  redCheck: RedCheckInfo;
+  /** 基线失败后你选择「接受现状」：失败不阻塞账本，交付报告中显式列出。 */
+  knownInconsistent: { reason: string; at: IsoTime } | null;
+  /** 最近 10 次回归中结果不稳定的次数（≥ 2 标「不稳定检查」）。 */
+  flakyCount: number;
 }
+
+export type FeatureTag = '新功能' | '已验收' | '接入扫描发现' | '已知不一致' | '不稳定检查';
 
 export interface FeatureView {
   featureId: string;
   name: string;
   origin: FeatureOrigin;
   tag: '新功能' | '已验收' | '接入扫描发现';
+  /** 全部标签（tag 之外还可能有「已知不一致」「不稳定检查」）。 */
+  tags: FeatureTag[];
   state: FeatureState;
   stateLabel: string;
   examples: ExampleView[];
@@ -110,7 +129,11 @@ interface LockedExample {
   checkPath: string;
   checkHash: Sha256Hex;
   at: IsoTime;
+  redCheck: RedCheckInfo;
 }
+
+export const FLAKY_WINDOW = 10;
+export const FLAKY_CHECK_THRESHOLD = 2;
 
 interface StoredResult {
   run: EventOf<'run.completed'>;
@@ -126,6 +149,9 @@ export function project(lines: readonly LedgerLine[], current: CurrentWorkTree):
   const claims = new Map<string, { text: string; at: IsoTime }[]>();
   const authActions = new Map<string, string>();
   const unlocked = new Map<string, { reason: string; at: IsoTime; authId?: string }>();
+  const discarded = new Set<string>();
+  const known = new Map<string, { reason: string; at: IsoTime }>();
+  const flakyHistory = new Map<string, CheckResult['status'][]>();
   let lastGuardBlock: LedgerProjection['lastGuardBlock'] = null;
   let lastRun: LedgerProjection['lastRun'] = null;
 
@@ -143,8 +169,25 @@ export function project(lines: readonly LedgerLine[], current: CurrentWorkTree):
         drafts.set(e.exampleId, e);
         break;
       case 'example.locked':
-        locked.set(e.exampleId, { checkPath: e.checkPath, checkHash: e.checkHash, at });
+        locked.set(e.exampleId, {
+          checkPath: e.checkPath,
+          checkHash: e.checkHash,
+          at,
+          redCheck: !e.redCheck
+            ? { kind: 'none' }
+            : 'waived' in e.redCheck
+              ? { kind: 'waived', reason: e.redCheck.reason }
+              : 'baseline' in e.redCheck
+                ? { kind: 'baseline' }
+                : { kind: 'failed', runId: e.redCheck.runId },
+        });
         unlocked.delete(e.exampleId);
+        break;
+      case 'example.discarded':
+        discarded.add(e.exampleId);
+        break;
+      case 'example.known_inconsistent':
+        known.set(e.exampleId, { reason: e.reason, at });
         break;
       case 'example.unlocked':
         locked.delete(e.exampleId);
@@ -165,6 +208,9 @@ export function project(lines: readonly LedgerLine[], current: CurrentWorkTree):
         for (const r of e.results) {
           const snap = e.snapshots[r.exampleId];
           if (snap) results.set(`${r.exampleId}\0${snap}`, { run: e, result: r, at });
+          // 通过之后「已知不一致」自然解除。
+          if (e.valid && r.status === 'passed') known.delete(r.exampleId);
+          if (e.purpose === 'regression' && e.valid) flakyHistory.set(r.exampleId, [...(flakyHistory.get(r.exampleId) ?? []), r.status].slice(-FLAKY_WINDOW));
         }
         lastRun = {
           runId: e.runId,
@@ -189,7 +235,10 @@ export function project(lines: readonly LedgerLine[], current: CurrentWorkTree):
     const draft = drafts.get(exampleId);
     if (!draft) continue; // 没有起草记录的锁定无法归属功能
     const stored = results.get(`${exampleId}\0${lock.checkHash}`) ?? null;
-    const view = judgeExample(exampleId, draft, lock, stored, claims.get(exampleId) ?? [], current);
+    const view = judgeExample(exampleId, draft, lock, stored, claims.get(exampleId) ?? [], current, {
+      knownInconsistent: known.get(exampleId) ?? null,
+      flakyCount: (flakyHistory.get(exampleId) ?? []).filter((s) => s === 'flaky').length,
+    });
     const list = examplesByFeature.get(draft.featureId) ?? [];
     list.push(view);
     examplesByFeature.set(draft.featureId, list);
@@ -198,7 +247,7 @@ export function project(lines: readonly LedgerLine[], current: CurrentWorkTree):
   const draftCounts = new Map<string, number>();
   const relock = new Map<string, FeatureView['unlockedForEdit']>();
   for (const d of drafts.values()) {
-    if (locked.has(d.exampleId)) continue;
+    if (locked.has(d.exampleId) || discarded.has(d.exampleId)) continue;
     const u = unlocked.get(d.exampleId);
     if (u?.authId && authActions.get(u.authId) === 'modify_locked') {
       const list = relock.get(d.featureId) ?? [];
@@ -227,6 +276,7 @@ function judgeExample(
   stored: StoredResult | null,
   claims: { text: string; at: IsoTime }[],
   current: CurrentWorkTree,
+  extra: { knownInconsistent: ExampleView['knownInconsistent']; flakyCount: number },
 ): ExampleView {
   const fresh =
     stored !== null &&
@@ -243,6 +293,9 @@ function judgeExample(
         logPath: stored.result.logPath,
         ...(stored.result.detail ? { detail: stored.result.detail } : {}),
         attempts: stored.result.attempts?.length ?? 1,
+        attemptLogs: (stored.result.attempts ?? []).map((a) => ({ status: a.status, logPath: a.logPath, durationMs: a.durationMs })),
+        ...(stored.result.screenshot ? { screenshot: stored.result.screenshot } : {}),
+        purpose: stored.run.purpose,
       }
     : null;
 
@@ -258,6 +311,10 @@ function judgeExample(
     lockedAt: lock.at,
     lastResult,
     claims,
+    ...(draft.summary ? { summary: draft.summary } : {}),
+    redCheck: lock.redCheck,
+    knownInconsistent: extra.knownInconsistent,
+    flakyCount: extra.flakyCount,
   };
 
   const trusted = stored !== null && stored.run.valid && fresh;
@@ -322,7 +379,9 @@ function judgeFeature(
 ): Omit<FeatureView, 'unlockedForEdit'> {
   const lockedCount = examples.length;
   const verifiedCount = examples.filter((x) => x.state === 'verified').length;
-  const failedCount = examples.filter((x) => x.state === 'failed').length;
+  // 「已知不一致」的失败不让功能变成被破坏（§9：接受现状，不阻塞账本），但功能也不是已验证。
+  const failedCount = examples.filter((x) => x.state === 'failed' && !x.knownInconsistent).length;
+  const knownCount = examples.filter((x) => x.state === 'failed' && x.knownInconsistent).length;
   const state: FeatureState =
     failedCount > 0 ? 'broken' : lockedCount > 0 && verifiedCount === lockedCount ? 'verified' : 'unverified';
   const stateLabel =
@@ -332,7 +391,9 @@ function judgeFeature(
         ? `被破坏（${failedCount} 个例子失败）`
         : lockedCount === 0
           ? '未验证（尚无例子）'
-          : '未验证';
+          : knownCount > 0
+            ? '未验证（已知不一致）'
+            : '未验证';
   const weak =
     lockedCount < 2
       ? { weak: true, reason: lockedCount === 0 ? '尚无锁定例子' : '锁定例子少于 2 个' }
@@ -340,11 +401,16 @@ function judgeFeature(
         ? { weak: true, reason: '只有外观类例子' }
         : { weak: false };
   const runTimes = examples.map((x) => x.lastResult?.at).filter((t): t is string => !!t);
+  const tag = e.origin === 'scan' ? '接入扫描发现' : state === 'verified' ? '已验收' : '新功能';
+  const tags: FeatureTag[] = [tag];
+  if (examples.some((x) => x.knownInconsistent)) tags.push('已知不一致');
+  if (examples.some((x) => x.flakyCount >= FLAKY_CHECK_THRESHOLD)) tags.push('不稳定检查');
   return {
     featureId: e.featureId,
     name: e.name,
     origin: e.origin,
-    tag: e.origin === 'scan' ? '接入扫描发现' : state === 'verified' ? '已验收' : '新功能',
+    tag,
+    tags,
     state,
     stateLabel,
     examples,

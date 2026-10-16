@@ -36,7 +36,16 @@ export type ActionId =
   | 'abandon'
   | 'restore_locked'
   | 'modify_locked'
-  | 'release';
+  | 'release'
+  | 'draft_examples'
+  | 'run_red_check'
+  | 'implement'
+  | 'cancel_agent'
+  | 'resume_agent'
+  | 'budget_raise'
+  | 'establish_trust'
+  | 'restore_from_git'
+  | 'close_plan';
 
 export interface CardAction {
   id: ActionId;
@@ -77,6 +86,29 @@ export interface Overview {
   ledger: { state: 'ok' | 'locked'; brokenLinks: BrokenLink[] };
   /** 进行中的改动（同一时间最多一个）。 */
   change: ChangeView | null;
+  /** 有进行中的需求计划时，结论卡下方的一行（§11）。 */
+  planLine: PlanLine | null;
+  /** 首页的规则提案卡、记录卡与规则区块偏离提示（§10）。 */
+  ruleProposals: { ruleId: string; text: string; appliesWhen: string; expiresWhen: string; tags: string[] }[];
+  recordDraftCount: number;
+  rulesDrift: { file: string; problem: string; fingerprint: string }[];
+  scan: { running: boolean; found: string[]; error: string | null } | null;
+}
+
+export interface PlanLine {
+  planId: string;
+  title: string;
+  current: number;
+  total: number;
+  statusLabel: string;
+  allDone: boolean;
+}
+
+/** 外部锚点（M6）的状态：trust_needed = head 缺失待你确认（TOFU）；conflict = head 与链对不上。 */
+export interface AnchorSummary {
+  enabled: boolean;
+  state: 'ok' | 'trust_needed' | 'conflict' | 'disabled';
+  detail?: string;
 }
 
 export const SLOW_RUN_MS = 5 * 60 * 1000;
@@ -104,10 +136,17 @@ export interface AuthSummary {
 
 export interface OverviewInput {
   projection: LedgerProjection;
-  ledger: { state: 'ok' | 'locked'; brokenLinks: BrokenLink[] };
+  ledger: { state: 'ok' | 'locked'; brokenLinks: BrokenLink[]; anchor?: AnchorSummary };
   run: RunProgressView | null;
   change?: ChangeView | null;
   auth?: AuthSummary;
+  agent?: { available: boolean; reason?: string; busy: boolean; kind: string | null };
+  budget?: { exceeded: null | { scope: 'perChange' | 'perDay'; limit: number; spent: number } };
+  planLine?: PlanLine | null;
+  ruleProposals?: Overview['ruleProposals'];
+  recordDraftCount?: number;
+  rulesDrift?: Overview['rulesDrift'];
+  scan?: Overview['scan'];
 }
 
 const DANGLING_LABELS: Record<string, string> = {
@@ -121,7 +160,25 @@ const DANGLING_LABELS: Record<string, string> = {
 };
 
 export function buildOverview(input: OverviewInput): Overview {
-  const base = buildCard(input);
+  let base = buildCard(input);
+  const exceeded = input.budget?.exceeded;
+  if (exceeded && base.status !== 'ledger_modified') {
+    // 费用达到上限：暂停 AI 任务，显示授权卡「提高上限 / 停止」（budget_raise）。
+    const scope = exceeded.scope === 'perChange' ? '本改动' : '今日';
+    base = {
+      ...base,
+      reasons: [
+        { severity: 0, text: `${scope}费用 $${exceeded.spent.toFixed(2)} 已达到上限 $${exceeded.limit.toFixed(2)}，Claude Code 已暂停`, featureIds: [] },
+        ...base.reasons,
+      ].slice(0, 3),
+      actions: [
+        { id: 'budget_raise', label: '提高上限（需授权）', enabled: true, primary: true },
+        ...base.actions.map((a) =>
+          AGENT_ACTIONS.has(a.id) ? { ...a, enabled: false, primary: false, disabledReason: '费用达到上限' } : { ...a, primary: false },
+        ),
+      ],
+    };
+  }
   const dangling = input.auth?.dangling ?? [];
   if (dangling.length === 0) return base;
   // 悬挂授权放在最前：它说明上次有个不可逆动作做到一半，系统不会自己重试。
@@ -129,7 +186,38 @@ export function buildOverview(input: OverviewInput): Overview {
   return { ...base, reasons: [{ severity: 0, text, featureIds: [] }, ...base.reasons].slice(0, 3) };
 }
 
-function buildCard({ projection, ledger, run, change = null, auth }: OverviewInput): Overview {
+/** 需要 Claude Code 的动作（不可用 / 忙 / 超预算时禁用）。 */
+const AGENT_ACTIONS: ReadonlySet<ActionId> = new Set(['draft_examples', 'implement', 'fix', 'resume_agent', 'scan']);
+
+function buildCard(input: OverviewInput): Overview {
+  const card = buildCardInner(input);
+  const agent = input.agent;
+  if (!agent) return card;
+  // Claude Code 未安装 / 未登录 / 忙：相关按钮禁用并写明原因（§11 空、加载与错误状态）。
+  return {
+    ...card,
+    actions: card.actions.map((a) => {
+      if (!AGENT_ACTIONS.has(a.id) || !a.enabled) return a;
+      if (!agent.available) return { ...a, enabled: false, disabledReason: agent.reason ?? 'Claude Code 不可用' };
+      if (agent.busy) return { ...a, enabled: false, disabledReason: 'Claude Code 正在处理另一项任务' };
+      return a;
+    }),
+  };
+}
+
+function buildCardInner({
+  projection,
+  ledger,
+  run,
+  change = null,
+  auth,
+  agent,
+  planLine = null,
+  ruleProposals = [],
+  recordDraftCount = 0,
+  rulesDrift = [],
+  scan = null,
+}: OverviewInput): Overview {
   const features = projection.features;
   const examples = features.flatMap((f) => f.examples);
   const stats = {
@@ -146,7 +234,20 @@ function buildCard({ projection, ledger, run, change = null, auth }: OverviewInp
     projection.lastRun && projection.lastRun.durationMs > SLOW_RUN_MS
       ? { durationMs: projection.lastRun.durationMs, slowest: projection.lastRun.slowest }
       : null;
-  const common = { stats, run, slowRunHint, lastGuardBlock: projection.lastGuardBlock, ledger, change };
+  const common = {
+    stats,
+    run,
+    slowRunHint,
+    lastGuardBlock: projection.lastGuardBlock,
+    ledger: { state: ledger.state, brokenLinks: ledger.brokenLinks },
+    change,
+    planLine,
+    ruleProposals,
+    recordDraftCount,
+    rulesDrift,
+    scan,
+  };
+  const anchor = ledger.anchor;
 
   const mergeCounts = [failed.length ? `${failed.length} 失败` : '', unverified.length ? `${unverified.length} 未验证` : '']
     .filter(Boolean)
@@ -170,7 +271,29 @@ function buildCard({ projection, ledger, run, change = null, auth }: OverviewInp
       ? { id: 'run_regression', label: '运行全量回归', enabled: true, primary }
       : { id: 'run_regression', label: '运行全量回归', enabled: false, disabledReason: '还没有锁定的例子', primary };
 
+  if (anchor?.state === 'trust_needed' && ledger.brokenLinks.length === 0) {
+    return {
+      ...common,
+      status: 'ledger_modified',
+      ...CARD_STATUS_LABELS.ledger_modified,
+      title: '无法核对历史锚点',
+      canContinue: false,
+      reasons: [
+        {
+          severity: 0,
+          text: `本机没有这个账本的链头锚点（新机器或被删除）${anchor.detail ? `：${anchor.detail}` : ''}。请确认当前账本可信；确认前所有写操作已禁用`,
+          featureIds: [],
+        },
+      ],
+      actions: [
+        { id: 'establish_trust', label: '我确认当前账本可信', enabled: true, primary: true },
+        { id: 'restore_from_git', label: '从 git 历史恢复', enabled: true },
+      ],
+    };
+  }
+
   if (ledger.state === 'locked') {
+    const conflict = anchor?.state === 'conflict' && ledger.brokenLinks.length === 0;
     return {
       ...common,
       status: 'ledger_modified',
@@ -179,11 +302,14 @@ function buildCard({ projection, ledger, run, change = null, auth }: OverviewInp
       reasons: [
         {
           severity: 0,
-          text: `events.jsonl 第 ${ledger.brokenLinks.map((b) => b.seq).join('、')} 行与事件链不符，所有写操作已禁用`,
+          text: conflict
+            ? `检测到完整性冲突：${anchor?.detail ?? '本机记录的链头与 events.jsonl 对不上'}，所有写操作已禁用`
+            : `events.jsonl 第 ${ledger.brokenLinks.map((b) => b.seq).join('、')} 行与事件链不符，所有写操作已禁用`,
           featureIds: [],
         },
       ],
       actions: [
+        ...(anchor?.enabled ? [{ id: 'restore_from_git' as const, label: '从 git 历史恢复', enabled: true }] : []),
         { id: 'accept_ledger', label: '我确认，接受当前状态', enabled: true, primary: true },
         { ...runAction(false), enabled: false, disabledReason: '账本被修改，写操作已禁用' },
       ],
@@ -230,7 +356,9 @@ function buildCard({ projection, ledger, run, change = null, auth }: OverviewInp
     };
   }
 
-  if (change) return changeCard(change, { common, reasons, merge, runAction });
+  if (change) return changeCard(change, { common, reasons, merge, runAction, agent });
+
+  const closePlan: CardAction[] = planLine?.allDone ? [{ id: 'close_plan', label: '关闭计划', enabled: true, primary: true }] : [];
 
   if (features.length === 0) {
     return {
@@ -238,9 +366,11 @@ function buildCard({ projection, ledger, run, change = null, auth }: OverviewInp
       status: 'empty',
       ...CARD_STATUS_LABELS.empty,
       canContinue: false,
-      reasons: [],
+      reasons: scan?.running ? [{ severity: 0, text: `正在扫描现有代码，已发现 ${scan.found.length} 个功能`, featureIds: [] }] : [],
       actions: [
-        { id: 'scan', label: '扫描现有代码', enabled: false, disabledReason: '扫描接入在 M4-1 提供' },
+        scan?.running
+          ? { id: 'scan', label: '扫描中…', enabled: false, disabledReason: '扫描进行中' }
+          : { id: 'scan', label: '扫描现有代码', enabled: true },
         { id: 'add_feature', label: '描述第一个功能', enabled: true, primary: true },
       ],
     };
@@ -255,7 +385,7 @@ function buildCard({ projection, ledger, run, change = null, auth }: OverviewInp
       ...CARD_STATUS_LABELS.blocked,
       canContinue: false,
       reasons,
-      actions: [runAction(needsRun || failed.length === 0), newChange(false), merge],
+      actions: [...closePlan, runAction(!closePlan.length && (needsRun || failed.length === 0)), newChange(false), merge],
     };
   }
 
@@ -265,7 +395,7 @@ function buildCard({ projection, ledger, run, change = null, auth }: OverviewInp
     ...CARD_STATUS_LABELS.ok,
     canContinue: true,
     reasons,
-    actions: [newChange(true), runAction(false), ...(auth?.releaseConfigured ? [releaseAction()] : []), merge],
+    actions: [...closePlan, newChange(!closePlan.length), runAction(false), ...(auth?.releaseConfigured ? [releaseAction()] : []), merge],
   };
 }
 
@@ -289,15 +419,47 @@ function changeCard(
     reasons: CardReason[];
     merge: CardAction;
     runAction: (primary: boolean) => CardAction;
+    agent?: OverviewInput['agent'];
   },
 ): Overview {
   const { common, merge } = ctx;
   const head: CardReason[] = change.blockers.slice(0, 3).map((text, i) => ({ severity: i === 0 ? 1 : 2, text, featureIds: [] }));
   const top3 = (extra: CardReason[]) => [...extra, ...ctx.reasons.filter((r) => !extra.some((e) => e.text === r.text))].slice(0, 3);
   const name = change.description ? `「${change.description}」` : '';
+  const aiWorking = ctx.agent?.busy && ctx.agent.kind !== 'ask';
+  if (aiWorking) {
+    // Claude Code 正在起草 / 实现 / 修复：⏳，可以取消。
+    const label: Record<string, string> = { draft: '起草例子', rewrite: '重写检查', implement: '实现', fix: '修复', baseline: '起草基线例子', classify: '判断档位' };
+    return {
+      ...common,
+      status: 'checking',
+      ...CARD_STATUS_LABELS.checking,
+      title: `Claude Code ${label[ctx.agent?.kind ?? ''] ?? '处理'}中`,
+      canContinue: false,
+      reasons: top3([{ severity: 0, text: `Claude Code 正在${label[ctx.agent?.kind ?? ''] ?? '处理'}${name}；它的回报只算声称，系统会亲自运行检查`, featureIds: [] }]),
+      actions: [{ id: 'cancel_agent', label: '停止 Claude Code', enabled: true, primary: true }, abandonAction(), merge],
+    };
+  }
+  if (change.interrupted) {
+    return {
+      ...common,
+      status: 'needs_you',
+      ...CARD_STATUS_LABELS.needs_you,
+      canContinue: false,
+      reasons: top3([{ severity: 0, text: `实现中断：${change.interrupted.reason}`, featureIds: [] }, ...head]),
+      actions: [
+        { id: 'resume_agent', label: '续接 Claude Code 会话', enabled: true, primary: true },
+        { id: 'implement', label: '重新发起（携带例子与日志）', enabled: true },
+        abandonAction(),
+        merge,
+      ],
+    };
+  }
+  const isAgentChange = change.source === 'claude-code';
   switch (change.phase) {
-    case 'confirm_examples':
-    case 'red_check':
+    case 'confirm_examples': {
+      const drafts = change.pendingDrafts;
+      const needRed = drafts.filter((d) => !d.waiver && !d.redCheck);
       return {
         ...common,
         status: 'needs_you',
@@ -305,13 +467,35 @@ function changeCard(
         canContinue: false,
         reasons: top3(head),
         actions: [
-          change.pendingDraftIds.length > 0
-            ? { id: 'lock_examples', label: `确认并锁定 ${change.pendingDraftIds.length} 个例子`, enabled: true, primary: true }
-            : { id: 'lock_examples', label: '确认并锁定例子', enabled: false, disabledReason: '先起草至少一个例子', primary: true },
+          drafts.length === 0
+            ? { id: 'draft_examples', label: '让 Claude Code 起草例子', enabled: true, primary: true }
+            : needRed.length > 0
+              ? { id: 'run_red_check', label: `确认例子，跑先失败检查（${needRed.length} 条）`, enabled: true, primary: true }
+              : { id: 'lock_examples', label: `确认并锁定 ${drafts.length} 个例子`, enabled: true, primary: true },
+          ...(drafts.length > 0 ? [{ id: 'lock_examples' as const, label: '确认并锁定', enabled: false, disabledReason: needRed.length ? '新例子要先跑一次先失败检查（实现前必须失败）' : '' }].filter((a) => a.disabledReason) : []),
           abandonAction(),
           merge,
         ],
       };
+    }
+    case 'red_check': {
+      const bad = change.pendingDrafts.filter((d) => !d.waiver && d.redCheck?.status !== 'failed');
+      return {
+        ...common,
+        status: 'needs_you',
+        ...CARD_STATUS_LABELS.needs_you,
+        canContinue: false,
+        reasons: top3(head),
+        actions: [
+          bad.length === 0
+            ? { id: 'lock_examples', label: `确认并锁定 ${change.pendingDraftIds.length} 个例子`, enabled: true, primary: true }
+            : { id: 'lock_examples', label: '确认并锁定例子', enabled: false, disabledReason: `${bad.length} 条检查没测到新行为：在改动面板里重写、豁免或删除`, primary: true },
+          { id: 'run_red_check', label: '重跑先失败检查', enabled: true },
+          abandonAction(),
+          merge,
+        ],
+      };
+    }
     case 'implementing':
       return {
         ...common,
@@ -319,7 +503,12 @@ function changeCard(
         ...CARD_STATUS_LABELS.blocked,
         canContinue: false,
         reasons: top3(head.length ? head : [{ severity: 1, text: `改动${name}实现中`, featureIds: [] }]),
-        actions: [{ id: 'start_check', label: '开始检查（全量回归）', enabled: true, primary: true }, abandonAction(), merge],
+        actions: [
+          ...(isAgentChange && !change.lastRun ? [{ id: 'implement' as const, label: '让 Claude Code 实现', enabled: true, primary: true }] : []),
+          { id: 'start_check', label: '开始检查（全量回归）', enabled: true, primary: !(isAgentChange && !change.lastRun) },
+          abandonAction(),
+          merge,
+        ],
       };
     case 'blocked':
       return {
@@ -329,7 +518,7 @@ function changeCard(
         canContinue: false,
         reasons: top3(head),
         actions: [
-          { id: 'fix', label: '交给 Claude Code 修复', enabled: false, disabledReason: 'Claude Code 驱动在 M3 提供；你自己修改后会回到「实现中」' },
+          { id: 'fix', label: change.fixRounds >= 3 ? '继续修复（Claude Code）' : '交给 Claude Code 修复', enabled: true, primary: true },
           { id: 'merge_override', label: '授权强行合并', enabled: true },
           ctx.runAction(false),
           abandonAction(),
@@ -344,7 +533,7 @@ function changeCard(
         canContinue: false,
         reasons: top3(head),
         actions: [
-          { id: 'confirm_visual', label: '确认外观', enabled: false, disabledReason: '截图确认在 M4-2 提供', primary: true },
+          { id: 'confirm_visual', label: '确认外观', enabled: true, primary: true },
           { id: 'merge_override', label: '授权强行合并', enabled: true },
           abandonAction(),
           merge,

@@ -40,7 +40,7 @@ describe('Invariant 2：不存在任何 API 能直接把功能写成已验证', 
 
     for (const r of writeRoutes) {
       const url = r.url.replace(':id', r.url.startsWith('/api/changes') ? changeId : featureId).replace(':exampleId', exampleId);
-      await p.app.inject({ method: r.method as 'POST', url, payload: { ...FORGED, exampleId, featureId, checkPath: '.stagent/checks/a.mjs' } });
+      await p.app.inject({ method: r.method as 'POST' | 'PUT', url, payload: { ...FORGED, exampleId, featureId, checkPath: '.stagent/checks/a.mjs' } });
       await p.service.waitForRun();
     }
 
@@ -62,20 +62,58 @@ describe('Invariant 2：不存在任何 API 能直接把功能写成已验证', 
       .map((r) => `${r.method} ${r.url}`)
       .sort();
     expect(writes).toEqual([
+      'POST /api/agent/cancel',
       'POST /api/auth',
       'POST /api/auth/:authId/dismiss',
+      'POST /api/baseline/lock',
       'POST /api/changes',
+      'POST /api/changes/:id/abandon',
       'POST /api/changes/:id/check',
+      'POST /api/changes/:id/draft',
       'POST /api/changes/:id/examples',
+      'POST /api/changes/:id/examples/:exampleId/discard',
+      'POST /api/changes/:id/examples/:exampleId/red-waive',
+      'POST /api/changes/:id/examples/:exampleId/rewrite',
+      'POST /api/changes/:id/examples/:exampleId/unlock',
       'POST /api/changes/:id/examples/lock',
+      'POST /api/changes/:id/fix',
+      'POST /api/changes/:id/implement',
       'POST /api/changes/:id/merge',
+      'POST /api/changes/:id/red-check',
+      'POST /api/changes/:id/resume',
       'POST /api/changes/:id/track',
+      'POST /api/config/dev-server',
+      'POST /api/decisions/:cardId/ask',
+      'POST /api/examples/:id/known-inconsistent',
       'POST /api/examples/:id/relock',
       'POST /api/examples/:id/restore',
+      'POST /api/features/:id/baseline',
+      'POST /api/features/:id/baseline/manual',
+      'POST /api/features/:id/retire',
       'POST /api/guard/pre-tool-use',
       'POST /api/ledger/accept',
+      'POST /api/ledger/recover',
+      'POST /api/library/:id/import',
+      'POST /api/map/files',
+      'POST /api/metrics',
+      'POST /api/plans',
+      'POST /api/plans/:id/close',
+      'POST /api/plans/:id/confirm',
+      'POST /api/plans/:id/revise',
+      'POST /api/plans/:id/steps/:stepId/start',
+      'POST /api/records',
+      'POST /api/records/drafts/:id/dismiss',
+      'POST /api/release',
+      'POST /api/rules/:id/accept',
+      'POST /api/rules/:id/retire',
+      'POST /api/rules/keep',
+      'POST /api/rules/regenerate',
       'POST /api/runs',
       'POST /api/runs/current/cancel',
+      'POST /api/scan',
+      'POST /api/visual/:exampleId',
+      'PUT /api/changes/:id/attributions',
+      'PUT /api/examples/:id/draft',
     ]);
   });
 });

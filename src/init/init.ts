@@ -13,7 +13,7 @@ import { isGitRepo } from '../git/git.js';
 import { Ledger } from '../ledger/ledger.js';
 
 /** 需要写进项目 .gitignore 的条目：运行产物与服务锁不提交。 */
-export const GITIGNORE_ENTRIES = ['.stagent/runs/', '.stagent/service.lock'];
+export const GITIGNORE_ENTRIES = ['.stagent/runs/', '.stagent/docs/', '.stagent/service.lock'];
 
 export interface InitResult {
   projectId: string;

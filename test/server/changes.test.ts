@@ -75,7 +75,11 @@ describe('改动接口', () => {
     await p.call('POST', `/api/changes/${small.changeId}/track`, { track: 'feature' });
     expect((await p.call('POST', `/api/changes/${small.changeId}/check`)).status).toBe(409);
     expect((await p.call('POST', `/api/changes/${small.changeId}/examples/lock`, {})).status).toBe(400);
-    expect((await p.call('POST', `/api/changes/${small.changeId}/examples`, draft)).status).toBe(201);
+    const drafted = await p.call<{ exampleId: string }>('POST', `/api/changes/${small.changeId}/examples`, draft);
+    expect(drafted.status).toBe(201);
+    // 新功能档：没有先失败检查也没有豁免，不能锁定（Invariant 7）。
+    expect((await p.call('POST', `/api/changes/${small.changeId}/examples/lock`, {})).status).toBe(422);
+    await p.call('POST', `/api/changes/${small.changeId}/examples/${drafted.body.exampleId}/red-waive`, { reason: '行为已经存在' });
     const locked = await p.call<ChangeView>('POST', `/api/changes/${small.changeId}/examples/lock`, {});
     expect(locked.body).toMatchObject({ phase: 'implementing', pendingDraftIds: [] });
     expect((await p.call('POST', `/api/changes/${small.changeId}/examples/lock`, { exampleIds: ['e-nope'] })).status).toBe(409);

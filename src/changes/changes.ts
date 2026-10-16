@@ -85,13 +85,43 @@ export interface ChangeView {
   lockedExampleIds: string[];
   pendingDraftIds: string[];
   /** 待锁定草稿的内容，供「确认例子」决策卡展示。 */
-  pendingDrafts: { exampleId: string; featureId: string; given: string; when: string; then: string; kind: 'behavior' | 'visual'; checkPath?: string }[];
+  pendingDrafts: PendingDraft[];
+  planId?: string;
+  stepId?: string;
+  /** 本改动意图触及的功能（§4.5「超出本功能的改动」）：change.started.targetFeatureIds + 本改动新建的功能。 */
+  targetFeatureIds: string[];
+  /** 本改动起草时新建的功能。 */
+  createdFeatureIds: string[];
+  /** AI 回报（仅声称）：round 0 为实现，n 为第 n 轮修复。 */
+  claims: { text: string; at: IsoTime; round: number; malformed: boolean }[];
+  /** 已经做过的修复轮数。 */
+  fixRounds: number;
+  /** Claude Code 会话中断（服务重启时有进行中的 AI 任务）。之后又有回报或运行则清除。 */
+  interrupted: { reason: string; at: IsoTime } | null;
+  /** 等你确认截图的外观例子（运行之后还没确认）。 */
+  visualPending: { exampleId: string; then: string; runId: string; screenshot?: string }[];
   lastRun: { runId: string; at: IsoTime; valid: boolean; fresh: boolean } | null;
   /** 被阻止 / 等待的原因（给人看的句子），最严重的在前。 */
   blockers: string[];
   /** 本改动期间检测到的、未经 Stagent 合并的提交。 */
   unmanagedCommits: { fromCommit: string; toCommit: string; at: IsoTime }[];
   endedAt: IsoTime | null;
+}
+
+export interface PendingDraft {
+  exampleId: string;
+  featureId: string;
+  given: string;
+  when: string;
+  then: string;
+  kind: 'behavior' | 'visual';
+  checkPath?: string;
+  summary?: string;
+  baseline?: boolean;
+  /** 最近一次先失败检查（purpose: red_check）对这条草稿的结果；checkHash 是当时所跑内容的 sha256。 */
+  redCheck: { runId: string; status: string; checkHash: string; logPath: string; at: IsoTime } | null;
+  /** 「确认行为已存在」的豁免（只对同一内容有效）。 */
+  waiver: { reason: string; checkHash: string } | null;
 }
 
 export interface ChangeContext {
@@ -116,6 +146,11 @@ interface Acc {
   runs: { event: EventOf<'run.completed'>; at: IsoTime; seq: number }[];
   redCheckDrafts: Set<string>;
   unmanaged: ChangeView['unmanagedCommits'];
+  claims: ChangeView['claims'];
+  interrupted: { reason: string; at: IsoTime; seq: number } | null;
+  lastActivitySeq: number;
+  startSeq: number;
+  createdFeatures: string[];
   ended: { phase: 'merged' | 'abandoned'; at: IsoTime } | null;
 }
 
@@ -124,6 +159,10 @@ export function projectChanges(lines: readonly LedgerLine[], ctx: ChangeContext)
   const visualConfirms = new Map<string, { ok: boolean; seq: number }>();
   const lockedKind = new Map<string, EventOf<'example.drafted'>['kind']>();
   const draftEvents = new Map<string, EventOf<'example.drafted'>>();
+  const redResults = new Map<string, NonNullable<PendingDraft['redCheck']>>();
+  const waivers = new Map<string, { reason: string; checkHash: string }>();
+  const discarded = new Set<string>();
+  const featureCreatedSeq = new Map<string, number>();
   let activeId: string | null = null;
 
   for (const { event: e, at, seq } of lines) {
@@ -140,9 +179,36 @@ export function projectChanges(lines: readonly LedgerLine[], ctx: ChangeContext)
           redCheckDrafts: new Set(),
           unmanaged: [],
           ended: null,
+          claims: [],
+          interrupted: null,
+          lastActivitySeq: seq,
+          startSeq: seq,
+          createdFeatures: [],
         });
         activeId = e.changeId;
         break;
+      case 'feature.created':
+        featureCreatedSeq.set(e.featureId, seq);
+        break;
+      case 'example.red_waived':
+        waivers.set(e.exampleId, { reason: e.reason, checkHash: e.checkHash });
+        break;
+      case 'example.discarded':
+        discarded.add(e.exampleId);
+        break;
+      case 'claim.reported': {
+        const c = changes.get(e.changeId);
+        if (c && (!e.exampleId || !c.claims.some((x) => x.text === e.text && x.round === (e.round ?? 0)))) {
+          c.claims.push({ text: e.text, at, round: e.round ?? 0, malformed: e.malformed === true });
+          c.lastActivitySeq = seq;
+        }
+        break;
+      }
+      case 'change.interrupted': {
+        const c = changes.get(e.changeId);
+        if (c) c.interrupted = { reason: e.reason, at, seq };
+        break;
+      }
       case 'change.track_upgraded':
       case 'change.track_downgraded': {
         const c = changes.get(e.changeId);
@@ -155,7 +221,16 @@ export function projectChanges(lines: readonly LedgerLine[], ctx: ChangeContext)
       case 'example.drafted':
         lockedKind.set(e.exampleId, e.kind);
         draftEvents.set(e.exampleId, e);
-        if (e.changeId) changes.get(e.changeId)?.drafted.push(e.exampleId);
+        discarded.delete(e.exampleId);
+        if (e.changeId) {
+          const c = changes.get(e.changeId);
+          if (c && !c.drafted.includes(e.exampleId)) c.drafted.push(e.exampleId);
+          // 起草时同一事务里新建的功能（feature.created 紧挨在前）算本改动新建的功能。
+          const fseq = featureCreatedSeq.get(e.featureId);
+          if (c && fseq !== undefined && fseq > c.startSeq && !c.createdFeatures.includes(e.featureId)) {
+            c.createdFeatures.push(e.featureId);
+          }
+        }
         break;
       case 'example.locked':
         if (e.changeId) changes.get(e.changeId)?.locked.push(e.exampleId);
@@ -164,8 +239,15 @@ export function projectChanges(lines: readonly LedgerLine[], ctx: ChangeContext)
         if (!e.changeId) break;
         const c = changes.get(e.changeId);
         if (!c) break;
-        if (e.purpose === 'red_check') for (const id of Object.keys(e.snapshots)) c.redCheckDrafts.add(id);
-        else c.runs.push({ event: e, at, seq });
+        if (e.purpose === 'red_check') {
+          for (const id of Object.keys(e.snapshots)) c.redCheckDrafts.add(id);
+          for (const r of e.results) {
+            redResults.set(r.exampleId, { runId: e.runId, status: r.status, checkHash: r.checkSnapshotId ?? e.snapshots[r.exampleId] ?? '', logPath: r.logPath, at });
+          }
+        } else {
+          c.runs.push({ event: e, at, seq });
+          c.lastActivitySeq = seq;
+        }
         break;
       }
       case 'visual.confirmed':
@@ -187,7 +269,10 @@ export function projectChanges(lines: readonly LedgerLine[], ctx: ChangeContext)
   }
 
   const examples = new Map(ctx.projection.features.flatMap((f) => f.examples.map((x) => [x.exampleId, { x, feature: f.name }])));
-  const views = [...changes.values()].map((c) => judgeChange(c, ctx, examples, visualConfirms, lockedKind, draftEvents));
+  for (const c of changes.values()) c.drafted = c.drafted.filter((id) => !discarded.has(id) || c.locked.includes(id));
+  const views = [...changes.values()].map((c) =>
+    judgeChange(c, ctx, examples, visualConfirms, lockedKind, draftEvents, { redResults, waivers }),
+  );
   const active = views.find((v) => v.changeId === activeId && !TERMINAL_PHASES.has(v.phase)) ?? null;
   return { changes: views, active };
 }
@@ -199,6 +284,7 @@ function judgeChange(
   visualConfirms: Map<string, { ok: boolean; seq: number }>,
   kinds: Map<string, EventOf<'example.drafted'>['kind']>,
   draftEvents: Map<string, EventOf<'example.drafted'>>,
+  red: { redResults: Map<string, NonNullable<PendingDraft['redCheck']>>; waivers: Map<string, { reason: string; checkHash: string }> },
 ): ChangeView {
   const lockedSet = new Set(c.locked);
   const pendingDraftIds = c.drafted.filter((id) => !lockedSet.has(id));
@@ -213,7 +299,15 @@ function judgeChange(
     if (c.ended) return c.ended.phase;
     if (ctx.runningChangeId === c.started.changeId) return 'checking';
     if (c.track === 'feature' && (c.locked.length === 0 || pendingDraftIds.length > 0)) {
-      if (pendingDraftIds.length > 0 && pendingDraftIds.every((id) => c.redCheckDrafts.has(id))) return 'red_check';
+      if (pendingDraftIds.length > 0 && pendingDraftIds.every((id) => c.redCheckDrafts.has(id) || red.waivers.has(id))) {
+        const bad = pendingDraftIds.filter((id) => !red.waivers.has(id) && red.redResults.get(id)?.status !== 'failed');
+        blockers.push(
+          bad.length
+            ? `先失败检查：${bad.length} 条检查在实现前没有失败，没测到新行为——重写、确认行为已存在（填原因）或删掉`
+            : `先失败检查合格：确认并锁定 ${pendingDraftIds.length} 个例子`,
+        );
+        return 'red_check';
+      }
       blockers.push(
         c.drafted.length === 0
           ? '新功能档：先起草验收例子'
@@ -239,7 +333,7 @@ function judgeChange(
     }
     if (!last.event.valid) blockers.push('检查运行期间代码有变化，结果无效');
     for (const { x, feature } of examples.values()) {
-      if (x.state === 'failed') blockers.push(`「${feature}」的例子失败：${x.then}`);
+      if (x.state === 'failed' && !x.knownInconsistent) blockers.push(`「${feature}」的例子失败：${x.then}`);
     }
     for (const { x, feature } of examples.values()) {
       if (x.state === 'unverified') blockers.push(`「${feature}」的例子未验证（${x.explanation}）`);
@@ -257,6 +351,22 @@ function judgeChange(
     return 'mergeable';
   })();
 
+  const lastRunEvent = last?.event ?? null;
+  const visualPending =
+    phase === 'awaiting_visual' && lastRunEvent
+      ? c.locked
+          .filter((id) => kinds.get(id) === 'visual')
+          .filter((id) => {
+            const v = visualConfirms.get(id);
+            return !(v && last && v.seq > last.seq && v.ok);
+          })
+          .map((id) => {
+            const shot = lastRunEvent.results.find((r) => r.exampleId === id)?.screenshot;
+            return { exampleId: id, then: draftEvents.get(id)?.then ?? '', runId: lastRunEvent.runId, ...(shot ? { screenshot: shot } : {}) };
+          })
+      : [];
+  const interrupted = c.interrupted && c.interrupted.seq > c.lastActivitySeq && !c.ended ? { reason: c.interrupted.reason, at: c.interrupted.at } : null;
+
   return {
     changeId: c.started.changeId,
     description: c.started.description ?? '',
@@ -273,12 +383,34 @@ function judgeChange(
     draftedExampleIds: c.drafted,
     lockedExampleIds: c.locked,
     pendingDraftIds,
-    pendingDrafts: pendingDraftIds.flatMap((id) => {
+    pendingDrafts: pendingDraftIds.flatMap((id): PendingDraft[] => {
       const d = draftEvents.get(id);
       return d
-        ? [{ exampleId: id, featureId: d.featureId, given: d.given, when: d.when, then: d.then, kind: d.kind, ...(d.checkPath ? { checkPath: d.checkPath } : {}) }]
+        ? [
+            {
+              exampleId: id,
+              featureId: d.featureId,
+              given: d.given,
+              when: d.when,
+              then: d.then,
+              kind: d.kind,
+              ...(d.checkPath ? { checkPath: d.checkPath } : {}),
+              ...(d.summary ? { summary: d.summary } : {}),
+              ...(d.baseline ? { baseline: true } : {}),
+              redCheck: red.redResults.get(id) ?? null,
+              waiver: red.waivers.get(id) ?? null,
+            },
+          ]
         : [];
     }),
+    ...(c.started.planId ? { planId: c.started.planId } : {}),
+    ...(c.started.stepId ? { stepId: c.started.stepId } : {}),
+    targetFeatureIds: [...new Set([...(c.started.targetFeatureIds ?? []), ...c.createdFeatures])],
+    createdFeatureIds: c.createdFeatures,
+    claims: c.claims,
+    fixRounds: c.claims.reduce((m, x) => Math.max(m, x.round), 0),
+    interrupted,
+    visualPending,
     lastRun: last ? { runId: last.event.runId, at: last.at, valid: last.event.valid, fresh } : null,
     blockers,
     unmanagedCommits: c.unmanaged,

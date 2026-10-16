@@ -12,7 +12,7 @@
  * 6. 追加 run.completed（四个起止值 + 快照集合，Invariant 3）。valid=false 时自动重跑一次。
  */
 import { randomBytes } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, normalize, relative, sep } from 'node:path';
 import { loadConfig, type StagentConfig } from '../config/config.js';
 import { computeWorkTreeHash } from '../evidence/worktree-hash.js';
@@ -202,6 +202,9 @@ async function executeCheck(
   const base = { exampleId: p.spec.exampleId, checkSnapshotId: p.snapshotId };
   const command = renderCommand(config.checkCommand, p);
   const logBase = join(runDir, 'logs', safeFileName(p.spec.exampleId));
+  // 外观例子（§7 visual）：检查把截图写到这里（Playwright：page.screenshot({ path: process.env.STAGENT_SCREENSHOT_PATH })）。
+  const screenshotAbs = join(runDir, 'screenshots', `${safeFileName(p.spec.exampleId)}.png`);
+  await mkdir(dirname(screenshotAbs), { recursive: true });
 
   const attempt = async (): Promise<{ attempt: CheckAttempt; detail?: string; aborted: boolean }> => {
     const n = attempts.length + 1;
@@ -216,7 +219,7 @@ async function executeCheck(
     }
     const r = await runCommand(command, {
       cwd: root,
-      env: { ...env, STAGENT_EXAMPLE_ID: p.spec.exampleId, STAGENT_ATTEMPT: String(n) },
+      env: { ...env, STAGENT_EXAMPLE_ID: p.spec.exampleId, STAGENT_ATTEMPT: String(n), STAGENT_SCREENSHOT_PATH: screenshotAbs },
       logPath,
       timeoutMs: config.checkTimeoutMs,
       signal,
@@ -246,24 +249,27 @@ async function executeCheck(
     return { attempt: a, detail, aborted: r.aborted };
   };
 
+  const screenshot = async (): Promise<string | undefined> =>
+    (await stat(screenshotAbs).then((st) => st.isFile() && st.size > 0, () => false)) ? rel(root, screenshotAbs) : undefined;
+
   const first = await attempt();
   let status: CheckResult['status'] = first.attempt.status;
   let detail = first.detail;
 
   if (first.aborted) {
-    return finish('not_run', '运行已取消');
+    return finish('not_run', '运行已取消', undefined);
   }
   if (first.attempt.status === 'errored') {
     // errored 自动重试 1 次，以重试结果为准。
     const retry = await attempt();
-    if (retry.aborted) return finish('not_run', '运行已取消');
+    if (retry.aborted) return finish('not_run', '运行已取消', undefined);
     status = retry.attempt.status;
     detail = retry.detail;
   } else if (first.attempt.status === 'failed') {
     // failed 同轮复跑：任何一次通过 → flaky（结果不稳定，不作为通过的证据）。
     for (let i = 0; i < config.flakyRetries; i++) {
       const again = await attempt();
-      if (again.aborted) return finish('not_run', '运行已取消');
+      if (again.aborted) return finish('not_run', '运行已取消', undefined);
       if (again.attempt.status === 'passed') {
         status = 'flaky';
         detail = undefined;
@@ -271,9 +277,9 @@ async function executeCheck(
       }
     }
   }
-  return finish(status, detail);
+  return finish(status, detail, await screenshot());
 
-  function finish(s: CheckResult['status'], d: string | undefined): CheckResult {
+  function finish(s: CheckResult['status'], d: string | undefined, shot: string | undefined): CheckResult {
     const last = attempts[attempts.length - 1]!;
     return {
       ...base,
@@ -282,6 +288,7 @@ async function executeCheck(
       logPath: last.logPath,
       attempts: [...attempts],
       ...(d ? { detail: d } : {}),
+      ...(shot ? { screenshot: shot } : {}),
     };
   }
 }

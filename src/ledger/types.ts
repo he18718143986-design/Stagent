@@ -53,10 +53,11 @@ export interface CheckResult {
   detail?: string;
 }
 
-/** 文件归属：某个文件承载哪些功能（M4-3）。 */
+/** 文件归属：某个文件承载哪些功能（M4-3）。source：ai 自动给出 / user 手动修改 / target 新功能档默认归属目标功能。 */
 export interface FileAttribution {
   path: string;
   featureIds: string[];
+  source?: 'ai' | 'user' | 'target';
 }
 
 export interface ChangedFile {
@@ -65,12 +66,15 @@ export interface ChangedFile {
   from?: string;
 }
 
+/** 需求计划的一步（§5.5）：合并后系统可用、能用 1–4 个例子验收。 */
 export interface PlanStep {
   stepId: string;
   title: string;
-  dependsOn: string[];
+  /** 做什么（大白话）。 */
+  intent: string;
   track: Track;
-  targetFeatureIds?: string[];
+  featureIds?: string[];
+  dependsOn?: string[];
 }
 
 /** 每个事件体都带 type；账本行在其外再包一层信封（见 LedgerLine）。 */
@@ -86,9 +90,12 @@ export type Event =
       reason: string;
       by: 'user';
     }
-  | { type: 'ledger.head_recovered'; previousHead: Sha256Hex | null; recoveredHead: Sha256Hex; by: 'user' } // M6
-  | { type: 'ledger.trust_established'; head: Sha256Hex; by: 'user' } // M6 TOFU
-  | { type: 'ledger.restored'; fromCommit: string; discardedLines: number; by: 'user' } // M6
+  /** M6 规则 4：崩在 append 与 head.tmp rename 之间，自动完成 rename（无需人工）。 */
+  | { type: 'ledger.head_recovered'; previousHead: Sha256Hex | null; recoveredHead: Sha256Hex; detail: string }
+  /** M6 规则 6（TOFU）：head 缺失后由你确认信任当前账本。 */
+  | { type: 'ledger.trust_established'; head: Sha256Hex; detail: string; by: 'user' }
+  /** M6 规则 7：从 git 历史恢复 events.jsonl 与 snapshots/ 后重算。 */
+  | { type: 'ledger.restored'; fromCommit: string; discardedLines: number; detail: string; by: 'user' }
 
   // ---- 功能与例子 ----
   | { type: 'feature.created'; featureId: string; name: string; origin: FeatureOrigin; entryFiles?: string[] }
@@ -106,6 +113,8 @@ export type Event =
       summary?: string;
       /** 起草它的改动（新功能档）。 */
       changeId?: string;
+      /** 接入时的基线例子草稿（§9，不做先失败检查）。 */
+      baseline?: boolean;
     }
   | {
       type: 'example.locked';
@@ -121,6 +130,8 @@ export type Event =
   | { type: 'example.unlocked'; exampleId: string; reason: string; by: 'user'; authId?: string }
   | { type: 'example.red_waived'; exampleId: string; checkHash: Sha256Hex; reason: string; by: 'user' }
   | { type: 'example.known_inconsistent'; exampleId: string; runId: string; reason: string; by: 'user' }
+  /** 删掉一条尚未锁定的例子草稿（先失败检查不合格时的选项之一，§5.1）。 */
+  | { type: 'example.discarded'; exampleId: string; reason: string; by: 'user' }
 
   // ---- 改动 ----
   | {
@@ -140,7 +151,13 @@ export type Event =
   | { type: 'change.interrupted'; changeId: string; reason: string }
   | { type: 'change.unmanaged_commit'; fromCommit: string; toCommit: string }
   | { type: 'change.files_attributed'; changeId: string; attributions: FileAttribution[]; by: 'ai' | 'user' | 'target' }
-  | { type: 'claim.reported'; changeId: string; exampleId?: string; text: string; malformed?: boolean }
+  /** 在系统地图里手动纠正归属（§4.5）。 */
+  | { type: 'feature.files_reassigned'; path: string; featureIds: string[]; by: 'user'; note?: string }
+  /**
+   * AI 的回报，永远只是"声称"（D10）。round：implement 为 0，第 n 轮修复为 n。
+   * 回报格式解析失败时原文入库并标 malformed。
+   */
+  | { type: 'claim.reported'; changeId: string; exampleId?: string; text: string; malformed?: boolean; round?: number }
   | {
       type: 'run.completed';
       runId: string;
@@ -165,7 +182,17 @@ export type Event =
   | { type: 'guard.blocked'; changeId?: string; path: string; tool: string; detail: string }
 
   // ---- 授权三段式（v2.2）----
-  | { type: 'auth.granted'; authId: string; action: AuthAction; changeId?: string; reason: string }
+  | {
+      type: 'auth.granted';
+      authId: string;
+      action: AuthAction;
+      changeId?: string;
+      reason: string;
+      /** delete / modify_locked 等动作的对象（功能、记录、例子）。 */
+      targetId?: string;
+      /** budget_raise：本次提高的额度（美元）。 */
+      amount?: number;
+    }
   | { type: 'auth.consumed'; authId: string; action: AuthAction; changeId?: string }
   | { type: 'auth.settled'; authId: string; ok: boolean; detail?: string }
 
@@ -193,11 +220,11 @@ export type Event =
       tags?: string[];
     }
 
-  // ---- 需求计划（v2.2 M4-4）----
-  | { type: 'plan.drafted'; planId: string; title: string; steps: PlanStep[] }
-  | { type: 'plan.confirmed'; planId: string; by: 'user' }
+  // ---- 需求计划（v2.2 §5.5）----
+  | { type: 'plan.drafted'; planId: string; requirement: string; steps: PlanStep[]; rationale?: string }
+  | { type: 'plan.confirmed'; planId: string; steps: PlanStep[]; by: 'user' }
   | { type: 'plan.revised'; planId: string; steps: PlanStep[]; reason: string; by: 'user' }
-  | { type: 'plan.closed'; planId: string; reason: string }
+  | { type: 'plan.closed'; planId: string; outcome: 'completed' | 'cancelled'; reason?: string; by: 'user' }
 
   // ---- 发布 ----
   | { type: 'release.executed'; command: string; exitCode: number; by: 'user'; authId?: string };

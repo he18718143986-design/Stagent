@@ -8,6 +8,7 @@ import { isGitRepo } from '../git/git.js';
 import { buildServer } from './http.js';
 import { acquireServiceLock, type ServiceLock } from './service-lock.js';
 import { StagentService } from './service.js';
+import type { AgentExecutor } from '../agent/types.js';
 
 export const DEFAULT_PORT = 4310;
 const MAX_PORT_TRIES = 20;
@@ -20,6 +21,8 @@ export interface StartOptions {
   serveWeb?: boolean;
   /** 监听工作区与 HEAD（默认 true）。 */
   watch?: boolean;
+  /** AI 执行器；默认 Claude Code（演示与测试可注入桩执行器）。 */
+  agent?: AgentExecutor | null;
 }
 
 export interface RunningService {
@@ -36,7 +39,7 @@ export async function startService(opts: StartOptions): Promise<RunningService> 
   let app: FastifyInstance | null = null;
   let service: StagentService | null = null;
   try {
-    service = await StagentService.open(opts.root);
+    service = await StagentService.open(opts.root, opts.agent !== undefined ? { agent: opts.agent } : {});
     // 启动时补查：上次关闭后有没有在 Stagent 之外直接 git commit（§5.3）。
     await service.checkHead().catch(() => false);
     if (opts.watch !== false) await service.startWatching();
@@ -44,6 +47,7 @@ export async function startService(opts: StartOptions): Promise<RunningService> 
     const host = opts.host ?? '127.0.0.1';
     const port = await listenFrom(app, opts.port ?? DEFAULT_PORT, host);
     await lock.setPort(port);
+    service.port = port;
     const url = `http://${host === '0.0.0.0' ? 'localhost' : host}:${port}`;
     if (opts.open) openBrowser(url);
     const running: RunningService = {
@@ -84,7 +88,8 @@ function portFree(port: number, host: string): Promise<boolean> {
 async function shutdown(app: FastifyInstance, service: StagentService, lock: ServiceLock): Promise<void> {
   await service.stopWatching();
   if (service.running) service.cancelRun();
-  await service.waitForRun();
+  service.agentTask?.controller.abort();
+  await service.dispose();
   await app.close();
   await lock.release();
 }
